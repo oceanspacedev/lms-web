@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::define('viewLogViewer', function (?User $user): bool {
-            return $user?->hasRole('super_admin') ?? false;
+            return $user?->can('View:LogViewer') ?? false;
         });
     }
 }

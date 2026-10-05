@@ -12,6 +12,7 @@ use Database\Seeders\CompanySeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class CompanyResourceTest extends TestCase
@@ -105,8 +106,10 @@ class CompanyResourceTest extends TestCase
 
     public function test_permissions_can_be_seeded_repeatedly(): void
     {
+        $permissionCount = Permission::count();
         $this->seed(CompanySeeder::class);
-        $this->assertDatabaseCount('permissions', 12);
+        $this->assertDatabaseCount('permissions', $permissionCount);
+        $this->assertSame(12, Permission::where('name', 'like', '%:Company')->count());
         $this->assertDatabaseHas('permissions', ['name' => 'Update:Company', 'guard_name' => 'web']);
     }
 }
