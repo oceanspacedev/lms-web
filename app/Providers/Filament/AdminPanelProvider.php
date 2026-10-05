@@ -40,6 +40,11 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
+            ->navigationGroups([
+                'Data Master',
+                'Shield',
+                'Monitoring',
+            ])
             ->navigationItems([
                 NavigationItem::make('Horizon')
                     ->group('Monitoring')
@@ -69,7 +74,7 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make(),
+                FilamentShieldPlugin::make()->navigationGroup('Shield'),
             ])
             ->authMiddleware([
                 Authenticate::class,
