@@ -12,6 +12,7 @@
         "laravel/framework": "^13.17",
         "laravel/horizon": "^5.50",
         "laravel/tinker": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.35",
         "opcodesio/log-viewer": "^3.24"
     },
     "require-dev": {

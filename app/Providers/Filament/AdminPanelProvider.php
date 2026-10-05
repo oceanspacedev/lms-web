@@ -43,6 +43,7 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Shield',
                 'Monitoring',
+                'Arsip',
                 'Data Master',
             ])
             ->navigationItems([

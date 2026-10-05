@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         $this->call(CompanySeeder::class);
         $this->call(MonitoringPermissionSeeder::class);
         $this->call(DocumentTypeSeeder::class);
+        $this->call(DocumentSeeder::class);
 
         // User::factory(10)->create();
 
