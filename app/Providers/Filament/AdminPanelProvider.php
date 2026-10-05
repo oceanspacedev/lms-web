@@ -41,9 +41,9 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->navigationGroups([
-                'Data Master',
                 'Shield',
                 'Monitoring',
+                'Data Master',
             ])
             ->navigationItems([
                 NavigationItem::make('Horizon')
