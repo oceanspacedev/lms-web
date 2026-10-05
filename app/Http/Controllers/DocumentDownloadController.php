@@ -18,8 +18,14 @@ class DocumentDownloadController extends Controller
     public function __invoke(Request $request, Document $document): RedirectResponse
     {
         Gate::authorize('view', $document);
-        $version = $document->currentVersion;
-        abort_unless($version && $version->document_id === $document->id && $version->is_current, 404);
+        $versionId = $request->query('version');
+        if ($versionId !== null) {
+            abort_unless(is_string($versionId) && ctype_digit($versionId), 404);
+            $version = $document->versions()->findOrFail($versionId);
+        } else {
+            $version = $document->currentVersion;
+            abort_unless($version && $version->document_id === $document->id && $version->is_current, 404);
+        }
         abort_unless(Storage::disk('s3')->exists($version->file_path), 404);
 
         $inline = $request->boolean('preview') && in_array($version->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true);

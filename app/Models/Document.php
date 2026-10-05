@@ -63,9 +63,7 @@ class Document extends Model
             'counterparty' => ['nullable', 'string', 'max:255'],
             'pic_user_id' => ['required', 'exists:users,id'],
             'notes' => ['nullable', 'string', 'max:10000'],
-            'issued_date' => ['nullable', 'date'],
-            'expiry_date' => [Rule::requiredIf($documentType->has_expiry), 'nullable', 'date', ...(! empty($data['issued_date']) ? ['after_or_equal:issued_date'] : [])],
-            'file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))],
+            ...self::versionValidationRules($documentType->has_expiry, $data['issued_date'] ?? null),
         ])->validate();
 
         $path = null;
@@ -75,25 +73,7 @@ class Document extends Model
                 $document = self::create(Arr::only($validated, [
                     'company_id', 'document_type_id', 'document_number', 'title', 'counterparty', 'pic_user_id', 'notes',
                 ]));
-                $directory = "lms/documents/{$document->company_id}/{$document->id}/v1";
-                $filename = Str::uuid().'.'.strtolower($file->getClientOriginalExtension());
-                $path = $directory.'/'.$filename;
-
-                if ($file->storeAs($directory, $filename, ['disk' => 's3', 'visibility' => 'private']) === false) {
-                    throw new \RuntimeException('Penyimpanan file gagal.');
-                }
-
-                $version = $document->versions()->create([
-                    'version_number' => 1,
-                    'file_path' => $path,
-                    'file_name' => basename(str_replace('\\', '/', $file->getClientOriginalName())),
-                    'file_size' => $file->getSize(),
-                    'mime_type' => $file->getMimeType(),
-                    'issued_date' => $validated['issued_date'] ?? null,
-                    'expiry_date' => $validated['expiry_date'] ?? null,
-                    'is_current' => true,
-                    'uploaded_by' => $uploader->id,
-                ]);
+                $version = $document->storeVersion($validated, $file, $uploader, 1, $path);
                 $document->current_version_id = $version->id;
                 $document->save();
 
@@ -110,5 +90,79 @@ class Document extends Model
 
             throw $exception;
         }
+    }
+
+    /** @param array<string, mixed> $data */
+    public function appendVersion(array $data, UploadedFile $file, User $uploader): DocumentVersion
+    {
+        $path = null;
+
+        try {
+            $version = DB::transaction(function () use ($data, $file, $uploader, &$path): DocumentVersion {
+                $document = self::whereKey($this->getKey())->lockForUpdate()->firstOrFail();
+                $type = $document->documentType()->firstOrFail();
+                $data['expiry_date'] = $type->has_expiry ? ($data['expiry_date'] ?? null) : null;
+                $validated = Validator::make([...$data, 'file' => $file], [
+                    ...self::versionValidationRules($type->has_expiry, $data['issued_date'] ?? null),
+                    'change_note' => ['required', 'string', 'max:10000'],
+                ])->validate();
+                $document->versions()->where('is_current', true)->update(['is_current' => false]);
+                $number = (int) $document->versions()->max('version_number') + 1;
+                $version = $document->storeVersion($validated, $file, $uploader, $number, $path);
+                $document->current_version_id = $version->id;
+                $document->save();
+
+                return $version;
+            });
+        } catch (Throwable $exception) {
+            if ($path !== null) {
+                try {
+                    Storage::disk('s3')->delete($path);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            throw $exception;
+        }
+
+        $this->refresh();
+
+        return $version;
+    }
+
+    /** @return array<string, array<mixed>> */
+    private static function versionValidationRules(bool $hasExpiry, ?string $issuedDate): array
+    {
+        return [
+            'issued_date' => ['nullable', 'date'],
+            'expiry_date' => [Rule::requiredIf($hasExpiry), 'nullable', 'date', ...(! empty($issuedDate) ? ['after_or_equal:issued_date'] : [])],
+            'file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))],
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    private function storeVersion(array $data, UploadedFile $file, User $uploader, int $number, ?string &$path): DocumentVersion
+    {
+        $directory = "lms/documents/{$this->company_id}/{$this->id}/v{$number}";
+        $filename = Str::uuid().'.'.strtolower($file->getClientOriginalExtension());
+        $path = $directory.'/'.$filename;
+
+        if ($file->storeAs($directory, $filename, ['disk' => 's3', 'visibility' => 'private']) === false) {
+            throw new \RuntimeException('Penyimpanan file gagal.');
+        }
+
+        return $this->versions()->create([
+            'version_number' => $number,
+            'file_path' => $path,
+            'file_name' => basename(str_replace('\\', '/', $file->getClientOriginalName())),
+            'file_size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+            'issued_date' => $data['issued_date'] ?? null,
+            'expiry_date' => $data['expiry_date'] ?? null,
+            'is_current' => true,
+            'change_note' => $data['change_note'] ?? null,
+            'uploaded_by' => $uploader->id,
+        ]);
     }
 }

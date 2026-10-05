@@ -30,7 +30,7 @@ class S3StorageTest extends TestCase
         $this->assertNotEmpty(config('filesystems.disks.s3.key'), 'AWS_ACCESS_KEY_ID belum diisi.');
         $this->assertNotEmpty(config('filesystems.disks.s3.secret'), 'AWS_SECRET_ACCESS_KEY belum diisi.');
         $disk = Storage::disk('s3');
-        $path = null;
+        $paths = [];
         $content = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n";
 
         try {
@@ -41,6 +41,7 @@ class S3StorageTest extends TestCase
                 'title' => 'Uji koneksi S3 Work 5',
             ], UploadedFile::fake()->createWithContent('uji-lms.pdf', $content), User::factory()->create());
             $path = $document->currentVersion->file_path;
+            $paths[] = $path;
             $this->assertTrue($disk->exists($path));
             $url = $disk->temporaryUrl($path, now()->addMinutes(5));
             $response = Http::timeout(20)->get($url);
@@ -50,14 +51,24 @@ class S3StorageTest extends TestCase
             $unsignedUrl = strtok($url, '?');
             $publicResponse = Http::timeout(20)->get($unsignedUrl);
             $this->assertContains($publicResponse->status(), [401, 403, 404], 'File dapat diakses tanpa signature; periksa akses public bucket.');
+            $newContent = $content."\n% Version 2\n";
+            $new = $document->appendVersion(['change_note' => 'Uji pembaruan S3 Work 6'], UploadedFile::fake()->createWithContent('uji-lms-v2.pdf', $newContent), User::factory()->create());
+            $paths[] = $new->file_path;
+            $this->assertSame(2, $new->version_number);
+            $this->assertSame(1, $document->versions()->where('is_current', true)->count());
+            foreach ([$path => $content, $new->file_path => $newContent] as $versionPath => $expectedContent) {
+                $download = Http::timeout(20)->get($disk->temporaryUrl($versionPath, now()->addMinutes(5)));
+                $this->assertSame(200, $download->status());
+                $this->assertTrue($download->body() === $expectedContent, 'Isi versi dokumen tidak cocok.');
+            }
         } catch (AssertionFailedError $exception) {
             throw $exception;
         } catch (Throwable $exception) {
             $this->fail('Uji S3 nyata gagal ('.$exception::class.'). Periksa kredensial, izin bucket, koneksi, dan sertifikat.');
         } finally {
-            if ($path !== null) {
+            if ($paths !== []) {
                 try {
-                    $this->assertTrue($disk->delete($path), 'File uji S3 belum dapat dibersihkan.');
+                    $this->assertTrue($disk->delete($paths), 'File uji S3 belum dapat dibersihkan.');
                 } catch (Throwable $exception) {
                     $this->fail('File uji S3 belum dapat dibersihkan ('.$exception::class.').');
                 }

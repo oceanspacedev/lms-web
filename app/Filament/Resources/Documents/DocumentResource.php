@@ -6,6 +6,7 @@ use App\Filament\Resources\Documents\Pages\CreateDocument;
 use App\Filament\Resources\Documents\Pages\EditDocument;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Filament\Resources\Documents\Pages\ViewDocument;
+use App\Filament\Resources\Documents\RelationManagers\VersionsRelationManager;
 use App\Filament\Resources\Documents\Schemas\DocumentForm;
 use App\Filament\Resources\Documents\Schemas\DocumentInfolist;
 use App\Filament\Resources\Documents\Tables\DocumentsTable;
@@ -67,7 +68,7 @@ class DocumentResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            VersionsRelationManager::class,
         ];
     }
 
