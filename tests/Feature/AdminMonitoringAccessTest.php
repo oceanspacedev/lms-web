@@ -134,4 +134,16 @@ class AdminMonitoringAccessTest extends TestCase
         $this->assertDatabaseHas('permissions', ['name' => 'View:Horizon', 'guard_name' => 'web']);
         $this->assertDatabaseHas('permissions', ['name' => 'View:LogViewer', 'guard_name' => 'web']);
     }
+
+    public function test_production_panel_accepts_assigned_roles_and_permissions_but_rejects_unassigned_users(): void
+    {
+        $this->app['env'] = 'production';
+        $user = User::factory()->create();
+        $this->actingAs($user)->get(route('filament.admin.pages.dashboard'))->assertForbidden();
+        $user->assignRole(Role::findOrCreate('legal', 'web'));
+        $this->get(route('filament.admin.pages.dashboard'))->assertOk();
+        $user->syncRoles([]);
+        $user->givePermissionTo('View:Horizon');
+        $this->get(route('filament.admin.pages.dashboard'))->assertOk();
+    }
 }

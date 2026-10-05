@@ -127,6 +127,18 @@ class DocumentResourceTest extends TestCase
             ->assertCanSeeTableRecords([$second])->assertCanNotSeeTableRecords([$first]);
     }
 
+    public function test_metadata_can_be_edited_after_linked_master_data_is_deactivated(): void
+    {
+        $user = $this->signInWithPermissions(['ViewAny:Document', 'Update:Document']);
+        $document = Document::archive($this->documentData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), $user);
+        $document->company->update(['is_active' => false]);
+        $document->documentType->update(['is_active' => false]);
+        Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])
+            ->fillForm(['title' => 'Judul Setelah Nonaktif'])->call('save')->assertHasNoFormErrors();
+        $this->assertSame('Judul Setelah Nonaktif', $document->fresh()->title);
+        $this->assertDatabaseCount('document_versions', 1);
+    }
+
     public function test_viewer_can_view_but_cannot_create_or_edit(): void
     {
         $user = $this->signInWithPermissions(['ViewAny:Document', 'View:Document']);

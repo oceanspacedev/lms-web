@@ -22,12 +22,12 @@ class DocumentForm
                 Select::make('company_id')
                     ->label('Perusahaan')
                     ->relationship('company', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('is_active', true))
-                    ->searchable()->preload()->required()->disabledOn('edit')
+                    ->searchable()->preload()->required()->disabledOn('edit')->validatedWhenNotDehydrated(false)
                     ->rules([Rule::exists('companies', 'id')->where('is_active', true)]),
                 Select::make('document_type_id')
                     ->label('Jenis Dokumen')
                     ->relationship('documentType', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('is_active', true))
-                    ->searchable()->preload()->required()->live()->disabledOn('edit')
+                    ->searchable()->preload()->required()->live()->disabledOn('edit')->validatedWhenNotDehydrated(false)
                     ->rules([Rule::exists('document_types', 'id')->where('is_active', true)]),
                 TextInput::make('title')->label('Judul')->required()->maxLength(255),
                 TextInput::make('document_number')->label('Nomor Dokumen')->maxLength(255),
