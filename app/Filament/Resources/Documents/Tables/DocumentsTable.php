@@ -9,6 +9,7 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 
 class DocumentsTable
@@ -22,11 +23,17 @@ class DocumentsTable
                 TextColumn::make('company.name')->label('Perusahaan')->sortable(),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable(),
                 TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa Masa Berlaku')->sortable(),
+                TextColumn::make('expiry_status')->label('Status')->badge()
+                    ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
+                    ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
                 TextColumn::make('pic.name')->label('PIC'),
             ])
             ->filters([
                 SelectFilter::make('company')->label('Perusahaan')->relationship('company', 'name')->searchable()->preload(),
                 SelectFilter::make('document_type')->label('Jenis Dokumen')->relationship('documentType', 'name')->searchable()->preload(),
+                SelectFilter::make('expiry_status')->label('Status')->options(Document::EXPIRY_STATUSES)
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
+                        ? $query->withExpiryStatus($data['value']) : $query),
             ])
             ->recordActions([
                 ViewAction::make()->label('Lihat'),

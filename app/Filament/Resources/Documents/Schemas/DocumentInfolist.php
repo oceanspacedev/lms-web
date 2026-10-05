@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Schemas;
 
+use App\Models\Document;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -12,6 +13,9 @@ class DocumentInfolist
         return $schema
             ->components([
                 TextEntry::make('title')->label('Judul'),
+                TextEntry::make('expiry_status')->label('Status')->badge()
+                    ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
+                    ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
                 TextEntry::make('document_number')->label('Nomor Dokumen')->placeholder('Belum diisi'),
                 TextEntry::make('company.name')->label('Perusahaan'),
                 TextEntry::make('documentType.name')->label('Jenis Dokumen'),

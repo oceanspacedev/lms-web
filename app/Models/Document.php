@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +24,17 @@ use Throwable;
 #[Fillable(['company_id', 'document_type_id', 'document_number', 'title', 'counterparty', 'pic_user_id', 'notes'])]
 class Document extends Model
 {
+    public const EXPIRY_STATUSES = [
+        'active' => 'Aktif',
+        'expiring' => 'Segera Berakhir',
+        'expired' => 'Kedaluwarsa',
+        'no_expiry' => 'Tanpa Masa Tenggang',
+    ];
+
+    public const EXPIRY_STATUS_COLORS = [
+        'active' => 'success', 'expiring' => 'warning', 'expired' => 'danger', 'no_expiry' => 'gray',
+    ];
+
     /** @use HasFactory<DocumentFactory> */
     use HasFactory, SoftDeletes;
 
@@ -48,6 +61,77 @@ class Document extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(DocumentVersion::class);
+    }
+
+    protected function expiryStatus(): Attribute
+    {
+        return Attribute::get(function (): string {
+            $expiryDate = $this->currentVersion?->expiry_date;
+            if (! $this->documentType?->has_expiry || $expiryDate === null) {
+                return 'no_expiry';
+            }
+
+            $today = today();
+            if ($expiryDate->lt($today)) {
+                return 'expired';
+            }
+
+            $threshold = max([0, ...($this->documentType->reminder_days ?? [])]);
+
+            return $threshold > 0 && $expiryDate->lte($today->addDays($threshold)) ? 'expiring' : 'active';
+        });
+    }
+
+    public function scopeWithExpiryStatus(Builder $query, string $status): Builder
+    {
+        if ($status === 'no_expiry') {
+            return $query->where(function (Builder $query): void {
+                $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', false))
+                    ->orWhereDoesntHave('currentVersion')
+                    ->orWhereHas('currentVersion', fn (Builder $version): Builder => $version->whereNull('expiry_date'));
+            });
+        }
+
+        $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', true));
+        if ($status === 'expired') {
+            return $query->whereHas('currentVersion', fn (Builder $version): Builder => $version->whereDate('expiry_date', '<', today()->toDateString()));
+        }
+
+        if (! in_array($status, ['active', 'expiring'], true)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $typesByThreshold = DocumentType::query()->where('has_expiry', true)->get(['id', 'reminder_days'])
+            ->groupBy(fn (DocumentType $type): int => max([0, ...($type->reminder_days ?? [])]));
+
+        return $query->where(function (Builder $query) use ($status, $typesByThreshold): void {
+            $query->whereRaw('1 = 0');
+            foreach ($typesByThreshold as $threshold => $types) {
+                $query->orWhere(function (Builder $query) use ($status, $threshold, $types): void {
+                    $query->whereIn('document_type_id', $types->modelKeys())
+                        ->whereHas('currentVersion', function (Builder $version) use ($status, $threshold): void {
+                            $cutoff = today()->addDays((int) $threshold)->toDateString();
+                            if ($status === 'expiring') {
+                                if ((int) $threshold === 0) {
+                                    $version->whereRaw('1 = 0');
+                                } else {
+                                    $version->whereDate('expiry_date', '>=', today()->toDateString())->whereDate('expiry_date', '<=', $cutoff);
+                                }
+                            } else {
+                                $version->whereDate('expiry_date', (int) $threshold === 0 ? '>=' : '>', $cutoff);
+                            }
+                        });
+                });
+            }
+        });
+    }
+
+    public function scopeExpiringWithin(Builder $query, int $days): Builder
+    {
+        return $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', true))
+            ->whereHas('currentVersion', fn (Builder $version): Builder => $version
+                ->whereDate('expiry_date', '>=', today()->toDateString())
+                ->whereDate('expiry_date', '<=', today()->addDays($days)->toDateString()));
     }
 
     /** @param array<string, mixed> $data */
