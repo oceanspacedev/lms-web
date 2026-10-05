@@ -41,19 +41,19 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->navigationGroups([
-                'Shield',
-                'Monitoring',
-                'Arsip',
-                'Data Master',
+                'Administrasi',
+                'Manajemen Dokumen',
             ])
             ->navigationItems([
                 NavigationItem::make('Horizon')
-                    ->group('Monitoring')
+                    ->group('Administrasi')
+                    ->sort(2)
                     ->icon(Heroicon::OutlinedQueueList)
                     ->url(fn (): string => route('horizon.index'), shouldOpenInNewTab: true)
                     ->visible(fn (): bool => Gate::allows('viewHorizon')),
                 NavigationItem::make('Log Laravel')
-                    ->group('Monitoring')
+                    ->group('Administrasi')
+                    ->sort(3)
                     ->icon(Heroicon::OutlinedDocumentText)
                     ->url(fn (): string => route('log-viewer.index'), shouldOpenInNewTab: true)
                     ->visible(fn (): bool => config('log-viewer.enabled') && Gate::allows('viewLogViewer')),
@@ -75,7 +75,10 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make()->navigationGroup('Shield'),
+                FilamentShieldPlugin::make()
+                    ->navigationGroup('Administrasi')
+                    ->navigationLabel('Hak Akses')
+                    ->navigationSort(1),
             ])
             ->authMiddleware([
                 Authenticate::class,

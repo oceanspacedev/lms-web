@@ -28,7 +28,9 @@ class DocumentResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Dokumen';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Arsip';
+    protected static string|\UnitEnum|null $navigationGroup = 'Manajemen Dokumen';
+
+    protected static ?int $navigationSort = 1;
 
     public static function getEloquentQuery(): Builder
     {
