@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\ReminderLogs\ReminderLogResource;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
 use App\Filament\Resources\Users\UserResource;
@@ -189,6 +190,7 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
+            DocumentRequestResource::class => ['viewAny', 'view', 'create', 'update'],
             ReminderTemplateResource::class => ['viewAny', 'view', 'create', 'update'],
             UserResource::class => ['viewAny', 'view', 'create', 'update'],
             ReminderLogResource::class => ['viewAny', 'view'],
@@ -259,6 +261,9 @@ return [
     */
 
     'custom_permissions' => [
+        'ViewAll:DocumentRequest' => 'Lihat semua pengajuan',
+        'Review:DocumentRequest' => 'Periksa pengajuan',
+        'Approve:DocumentRequest' => 'Setujui pengajuan',
         'View:Horizon' => 'Horizon',
         'View:LogViewer' => 'Log Laravel',
         'receive_reminder' => 'Penerima cadangan pengingat WhatsApp',

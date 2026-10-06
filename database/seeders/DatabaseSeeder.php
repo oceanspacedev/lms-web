@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
         $this->call(MonitoringPermissionSeeder::class);
         $this->call(UserPermissionSeeder::class);
         $this->call(DocumentMasterPermissionSeeder::class);
+        $this->call(DocumentRequestPermissionSeeder::class);
         $this->call(DocumentTypeSeeder::class);
         $this->call(DocumentSeeder::class);
         $this->call(ReminderLogSeeder::class);
