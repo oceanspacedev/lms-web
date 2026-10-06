@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -76,7 +77,8 @@ class Document extends Model
                 return 'no_expiry';
             }
 
-            $today = today();
+            $today = today(config('lms.reminder_timezone'));
+            $expiryDate = CarbonImmutable::parse($expiryDate->toDateString(), config('lms.reminder_timezone'));
             if ($expiryDate->lt($today)) {
                 return 'expired';
             }
@@ -99,7 +101,7 @@ class Document extends Model
 
         $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', true));
         if ($status === 'expired') {
-            return $query->whereHas('currentVersion', fn (Builder $version): Builder => $version->whereDate('expiry_date', '<', today()->toDateString()));
+            return $query->whereHas('currentVersion', fn (Builder $version): Builder => $version->whereDate('expiry_date', '<', today(config('lms.reminder_timezone'))->toDateString()));
         }
 
         if (! in_array($status, ['active', 'expiring'], true)) {
@@ -115,12 +117,12 @@ class Document extends Model
                 $query->orWhere(function (Builder $query) use ($status, $threshold, $types): void {
                     $query->whereIn('document_type_id', $types->modelKeys())
                         ->whereHas('currentVersion', function (Builder $version) use ($status, $threshold): void {
-                            $cutoff = today()->addDays((int) $threshold)->toDateString();
+                            $cutoff = today(config('lms.reminder_timezone'))->addDays((int) $threshold)->toDateString();
                             if ($status === 'expiring') {
                                 if ((int) $threshold === 0) {
                                     $version->whereRaw('1 = 0');
                                 } else {
-                                    $version->whereDate('expiry_date', '>=', today()->toDateString())->whereDate('expiry_date', '<=', $cutoff);
+                                    $version->whereDate('expiry_date', '>=', today(config('lms.reminder_timezone'))->toDateString())->whereDate('expiry_date', '<=', $cutoff);
                                 }
                             } else {
                                 $version->whereDate('expiry_date', (int) $threshold === 0 ? '>=' : '>', $cutoff);
@@ -135,8 +137,8 @@ class Document extends Model
     {
         return $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', true))
             ->whereHas('currentVersion', fn (Builder $version): Builder => $version
-                ->whereDate('expiry_date', '>=', today()->toDateString())
-                ->whereDate('expiry_date', '<=', today()->addDays($days)->toDateString()));
+                ->whereDate('expiry_date', '>=', today(config('lms.reminder_timezone'))->toDateString())
+                ->whereDate('expiry_date', '<=', today(config('lms.reminder_timezone'))->addDays($days)->toDateString()));
     }
 
     /** @param array<string, mixed> $data */

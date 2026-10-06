@@ -133,3 +133,54 @@ Tes memakai database terpisah dan HTTP/storage fake. Uji S3 nyata bersifat opt-i
 Cadangkan database SQLite dan bucket bersama-sama; file histori versi harus dipertahankan. Untuk produksi gunakan `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, sertifikat storage valid, lalu `php artisan config:cache`. Setelah mengganti `.env` pada development, jalankan `php artisan config:clear`. Jika tampilan asset belum diperbarui, bangun kembali Vite dan asset Filament.
 
 Pengembangan proyek dilakukan pada branch lokal `ahtar-dev`; push ke remote hanya jika diminta.
+
+## UAT dummy dan pemeriksaan produksi
+
+UAT memakai database SQLite terisolasi, file dummy melalui storage fake, serta HTTP fake. Akun editor, viewer, dan pengguna tanpa izin hanya hidup di database tes. Nomor telepon dummy tidak dihubungi dan data aplikasi lokal tidak ditambahkan atau diganti.
+
+```bash
+php artisan test --compact tests/Feature/DummyAcceptanceTest.php tests/Feature/DummyBackupRestoreTest.php tests/Feature/ProductionReadinessTest.php
+php artisan lms:check-production --no-interaction
+```
+
+Pemeriksaan produksi bersifat read-only dan tidak menampilkan secret. Exit code nonzero menandakan konfigurasi perlu diatur. Pada development, kegagalan pemeriksaan `APP_ENV`, debug, URL HTTPS, secure cookie, atau config cache adalah wajar. Simulasi konfigurasi produksi yang aman dan penolakan konfigurasi tidak aman dicakup tes.
+
+Di server produksi, gunakan pengaturan berikut dengan domain dan kredensial server yang benar:
+
+```dotenv
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://lms.example.com
+APP_LOCALE=id
+SESSION_SECURE_COOKIE=true
+SESSION_HTTP_ONLY=true
+SESSION_DRIVER=database
+CACHE_STORE=database
+AWS_VERIFY_SSL=true
+DEBUGBAR_ENABLED=false
+```
+
+Jalankan migrasi dengan `--force --no-interaction`, `npm ci` (lockfile telah tersedia), `npm run build`, `php artisan filament:assets --no-interaction`, dan `php artisan config:cache`. Jalankan pemeriksaan produksi lagi. Pembatasan akses resource tetap berlaku di produksi; tidak ada bypass otomatis untuk role tanpa permission. Status masa berlaku, filter, dashboard, dan pengingat menggunakan hari kalender Asia/Jakarta, sementara timestamp database mengikuti zona aplikasi.
+
+Tes scheduler mengevaluasi bahwa command jatuh pada 08.00 WIB, bukan 07.59, dan pengiriman command memakai HTTP fake. Aktivasi cron/Task Scheduler, koneksi bucket privat, sertifikat/domain, serta penerimaan WhatsApp pada perangkat harus diverifikasi pada server tujuan. UAT dummy tidak menyatakan layanan produksi tersebut telah diuji nyata.
+
+### Prosedur backup dan restore
+
+Rehearsal otomatis memulihkan snapshot database dummy, dua versi file, audit, dan log pengingat. Pemeriksaan mencakup referensi versi aktif, `integrity_check`, `foreign_key_check`, serta kecocokan SHA-256 setiap file. Storage S3 disimulasikan; tes tidak mengakses bucket nyata.
+
+Untuk backup operasional, hentikan sementara penulisan aplikasi, scheduler, dan worker agar database serta file bucket memiliki titik pemulihan yang sama. Buat snapshot SQLite di luar transaksi dengan target baru atau kosong:
+
+```sql
+VACUUM INTO '/direktori-backup/lms-snapshot.sqlite';
+```
+
+`VACUUM INTO` menghasilkan snapshot konsisten tanpa mengganti database sumber; target tidak boleh berisi database lama. Lihat [dokumentasi SQLite](https://www.sqlite.org/lang_vacuum.html). Salin semua objek dalam prefix `lms/documents/`, termasuk versi arsip, dengan path utuh. Buat manifest path, ukuran, dan SHA-256; simpan bersama snapshot. Kredensial dan APP_KEY dicadangkan secara terpisah di penyimpanan terbatas, bukan di Git. Tetapkan jadwal, retensi, kapasitas, dan lokasi backup terpisah sesuai kebutuhan operasional.
+
+Untuk restore, gunakan lingkungan terisolasi terlebih dahulu. Pulihkan snapshot database dan file ke path asal dari backup yang sama, kemudian jalankan:
+
+```sql
+PRAGMA integrity_check;
+PRAGMA foreign_key_check;
+```
+
+Hasil integrity harus `ok`, dan foreign key check harus kosong. Cocokkan jumlah versi, referensi versi aktif, dan hash setiap file dengan manifest. Uji login role, detail, serta unduhan versi aktif dan arsip. Aktifkan penulisan dan scheduler setelah validasi; jangan menjalankan scheduler pada salinan UAT dengan token WhatsApp produksi.
