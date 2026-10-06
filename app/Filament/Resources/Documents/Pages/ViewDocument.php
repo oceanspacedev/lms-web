@@ -18,11 +18,28 @@ class ViewDocument extends ViewRecord
 {
     protected static string $resource = DocumentResource::class;
 
+    public function getTitle(): string
+    {
+        return $this->getRecord()->title;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return collect([$this->getRecord()->company?->name, $this->getRecord()->documentType?->name])
+            ->filter()->implode(' · ');
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make()->label('Ubah Informasi'),
-            Action::make('updateVersion')->label('Perbarui Dokumen')->icon('heroicon-o-arrow-path')
+            Action::make('download')->label('Unduh File')->icon('heroicon-o-arrow-down-tray')
+                ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab()
+                ->visible(fn (): bool => $this->getRecord()->currentVersion !== null),
+            Action::make('preview')->label('Pratinjau')->icon('heroicon-o-eye')->color('gray')
+                ->url(fn (): string => route('documents.download', ['document' => $this->getRecord(), 'preview' => 1]))->openUrlInNewTab()
+                ->visible(fn (): bool => in_array($this->getRecord()->currentVersion?->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true)),
+            EditAction::make()->label('Ubah Informasi')->icon('heroicon-o-pencil-square')->color('gray'),
+            Action::make('updateVersion')->label('Unggah Versi Baru')->icon('heroicon-o-arrow-path')->color('gray')
                 ->authorize('update', $this->getRecord())
                 ->modalHeading('Perbarui Dokumen')->modalSubmitActionLabel('Simpan Versi Baru')
                 ->schema(fn (): array => DocumentVersionForm::components($this->getRecord()->documentType->has_expiry))
@@ -47,11 +64,6 @@ class ViewDocument extends ViewRecord
                     $this->dispatch('document-version-updated');
                     Notification::make()->title('Versi baru berhasil disimpan')->success()->send();
                 }),
-            Action::make('download')->label('Unduh')->icon('heroicon-o-arrow-down-tray')
-                ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab(),
-            Action::make('preview')->label('Pratinjau')->icon('heroicon-o-eye')
-                ->url(fn (): string => route('documents.download', ['document' => $this->getRecord(), 'preview' => 1]))->openUrlInNewTab()
-                ->visible(fn (): bool => in_array($this->getRecord()->currentVersion?->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true)),
         ];
     }
 }

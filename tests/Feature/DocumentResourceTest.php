@@ -17,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DocumentResourceTest extends TestCase
@@ -112,12 +113,19 @@ class DocumentResourceTest extends TestCase
         $this->assertDatabaseCount('document_versions', 1);
     }
 
-    public function test_list_searches_title_and_number_and_filters_company_and_type(): void
+    public static function documentViews(): array
+    {
+        return ['table' => ['table'], 'grid' => ['grid']];
+    }
+
+    #[DataProvider('documentViews')]
+    public function test_list_searches_title_and_number_and_filters_company_and_type(string $view): void
     {
         $user = $this->signInWithPermissions(['ViewAny:Document', 'View:Document']);
         $first = Document::archive($this->documentData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), $user);
         $second = Document::archive([...$this->documentData(), 'title' => 'Akta Perusahaan', 'document_number' => 'AKTA-009'], UploadedFile::fake()->create('akta.pdf', 1, 'application/pdf'), $user);
         Livewire::test(ListDocuments::class)
+            ->call('setDocumentView', $view)
             ->assertCanSeeTableRecords([$first, $second])
             ->searchTable('Kemitraan')->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
             ->searchTable('AKTA-009')->assertCanSeeTableRecords([$second])->assertCanNotSeeTableRecords([$first])
@@ -125,6 +133,67 @@ class DocumentResourceTest extends TestCase
             ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
             ->filterTable('company', null)->filterTable('document_type', $second->document_type_id)
             ->assertCanSeeTableRecords([$second])->assertCanNotSeeTableRecords([$first]);
+    }
+
+    #[DataProvider('documentViews')]
+    public function test_document_browser_filters_pic_and_file_format_and_searches_file_names(string $view): void
+    {
+        $user = $this->signInWithPermissions(['ViewAny:Document', 'View:Document']);
+        $firstData = $this->documentData();
+        $first = Document::archive($firstData, UploadedFile::fake()->create('kemitraan-final.pdf', 1, 'application/pdf'), $user);
+        $second = Document::archive($this->documentData(), UploadedFile::fake()->create('akta.docx', 1, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'), $user);
+
+        Livewire::test(ListDocuments::class)
+            ->call('setDocumentView', $view)
+            ->searchTable('kemitraan-final.pdf')
+            ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
+            ->searchTable('')->filterTable('pic', $firstData['pic_user_id'])
+            ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
+            ->filterTable('pic', null)->filterTable('file_format', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            ->assertCanSeeTableRecords([$second])->assertCanNotSeeTableRecords([$first])
+            ->filterTable('file_format', 'application/pdf')
+            ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second]);
+    }
+
+    public function test_switching_views_preserves_search_filters_sort_and_pagination(): void
+    {
+        $this->signInWithPermissions(['ViewAny:Document', 'View:Document']);
+        $data = $this->documentData();
+        $documents = Document::factory()->count(13)->create([
+            'company_id' => $data['company_id'],
+            'title' => 'Arsip Kemitraan',
+        ]);
+
+        $component = Livewire::test(ListDocuments::class)
+            ->searchTable('Kemitraan')->filterTable('company', $data['company_id'])
+            ->sortTable('title')->set('tableRecordsPerPage', 5)->call('gotoPage', 2)
+            ->callTableAction('gridView')
+            ->assertSet('documentView', 'grid')->assertSet('tableSearch', 'Kemitraan')
+            ->assertSeeHtml('class="document-grid"')->assertSeeHtml('class="document-card__menu"')
+            ->assertDontSeeHtml('class="document-card__details"')->assertDontSee('Versi 1')
+            ->assertCountTableRecords(13);
+
+        $this->assertSame(2, $component->instance()->getTablePage());
+        $this->assertSame('title', $component->instance()->getTableSortColumn());
+        $this->assertSame((string) $data['company_id'], (string) $component->instance()->tableFilters['company']['value']);
+        $this->assertCount(5, $component->instance()->getTableRecords());
+
+        $component->callTableAction('tableView')->assertSet('documentView', 'table')
+            ->assertDontSeeHtml('class="document-grid"')->assertCountTableRecords($documents->count());
+        $this->assertSame(2, $component->instance()->getTablePage());
+    }
+
+    public function test_grid_respects_record_permissions_and_handles_empty_search_results(): void
+    {
+        $user = $this->signInWithPermissions(['ViewAny:Document']);
+        $document = Document::archive($this->documentData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), $user);
+
+        Livewire::test(ListDocuments::class)->callTableAction('gridView')
+            ->assertCanSeeTableRecords([$document])->assertSee('test.pdf')
+            ->assertDontSeeHtml('href="'.DocumentResource::getUrl('view', ['record' => $document]).'"')
+            ->assertDontSeeHtml('href="'.route('documents.download', $document).'"')
+            ->searchTable('TidakAdaDokumenIni')->assertCanNotSeeTableRecords([$document])
+            ->assertSee('Belum ada dokumen');
     }
 
     public function test_metadata_can_be_edited_after_linked_master_data_is_deactivated(): void
@@ -143,7 +212,10 @@ class DocumentResourceTest extends TestCase
     {
         $user = $this->signInWithPermissions(['ViewAny:Document', 'View:Document']);
         $document = Document::archive($this->documentData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), $user);
-        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])->assertSuccessful()->assertSee('test.pdf');
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
+            ->assertSuccessful()->assertSee('test.pdf')
+            ->assertSee('Informasi Dokumen')->assertSee('File Aktif')
+            ->assertSee($document->title)->assertSee('Tidak ada catatan');
         Livewire::test(CreateDocument::class)->assertForbidden();
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->assertForbidden();
         $this->assertFalse(DocumentResource::canForceDelete($document));
