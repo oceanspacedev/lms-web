@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Document;
 use App\Models\ReminderLog;
+use App\Models\ReminderTemplate;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,7 +31,7 @@ class DocumentReminderSender
             ->whereHas('currentVersion', fn (Builder $query): Builder => $query->where('is_current', true)->whereNotNull('expiry_date'))
             ->each(function (Document $document) use ($today, $dryRun, &$result): void {
                 $offset = (int) $today->diffInDays(CarbonImmutable::parse($document->currentVersion->expiry_date->toDateString(), $today->timezone), false);
-                if (! in_array($offset, $document->documentType->reminder_days, true)) {
+                if (! in_array($offset, $document->documentType->effectiveReminderDays(), true)) {
                     return;
                 }
                 $result['due']++;
@@ -54,7 +55,7 @@ class DocumentReminderSender
                 if (! $document || ! $version->is_current || $document->current_version_id !== $version->id
                     || ! $document->documentType->has_expiry || ! $version->expiry_date
                     || $version->expiry_date->toDateString() < $today->toDateString()
-                    || ! in_array($log->offset_days, $document->documentType->reminder_days, true)) {
+                    || ! in_array($log->offset_days, $document->documentType->effectiveReminderDays(), true)) {
                     $log->update(['status' => 'cancelled', 'error_message' => 'Versi atau jadwal pengingat sudah tidak berlaku.']);
                     $result['cancelled']++;
 
@@ -108,10 +109,17 @@ class DocumentReminderSender
         }
         $expiry = $document->currentVersion->expiry_date->toDateString();
         $remaining = (int) $today->diffInDays(CarbonImmutable::parse($expiry, $today->timezone), false);
+        $template = ReminderTemplate::globalSetting();
+        $text = ReminderTemplate::renderBody($template?->is_active ? $template->body : ReminderTemplate::DEFAULT_BODY, [
+            'dokumen' => $document->title, 'nomor' => $document->document_number ?? '-',
+            'perusahaan' => $document->company->name, 'jenis_dokumen' => $document->documentType->name,
+            'tanggal_berakhir' => $expiry,
+            'sisa_hari' => (string) $remaining, 'pic' => $document->pic?->name ?? '-',
+        ]);
 
         return [
             'recipient' => ['type' => 'phone', 'value' => $phone],
-            'message' => ['type' => 'text', 'text' => "Pengingat masa berlaku dokumen\nDokumen: {$document->title}\nPerusahaan: {$document->company->name}\nBerakhir: {$expiry}\nSisa waktu: {$remaining} hari\nPIC: ".($document->pic?->name ?? '-')],
+            'message' => ['type' => 'text', 'text' => $text],
             'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'),
             'route_key' => config('services.waghub.route_key'),
             'expires_at' => CarbonImmutable::parse($expiry, $today->timezone)->endOfDay()->toIso8601String(),

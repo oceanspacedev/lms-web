@@ -83,7 +83,7 @@ class Document extends Model
                 return 'expired';
             }
 
-            $threshold = max([0, ...($this->documentType->reminder_days ?? [])]);
+            $threshold = max([0, ...($this->documentType->effectiveReminderDays() ?? [])]);
 
             return $threshold > 0 && $expiryDate->lte($today->addDays($threshold)) ? 'expiring' : 'active';
         });
@@ -108,8 +108,8 @@ class Document extends Model
             return $query->whereRaw('1 = 0');
         }
 
-        $typesByThreshold = DocumentType::query()->where('has_expiry', true)->get(['id', 'reminder_days'])
-            ->groupBy(fn (DocumentType $type): int => max([0, ...($type->reminder_days ?? [])]));
+        $typesByThreshold = DocumentType::query()->where('has_expiry', true)->get()
+            ->groupBy(fn (DocumentType $type): int => max([0, ...$type->effectiveReminderDays()]));
 
         return $query->where(function (Builder $query) use ($status, $typesByThreshold): void {
             $query->whereRaw('1 = 0');

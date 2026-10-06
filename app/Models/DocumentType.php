@@ -6,11 +6,27 @@ use Database\Factories\DocumentTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Validator;
 
-#[Fillable(['name', 'has_expiry', 'reminder_days', 'is_active'])]
+#[Fillable(['name', 'has_expiry', 'reminder_days', 'is_active', 'reminder_template_id'])]
 class DocumentType extends Model
 {
+    /** @return list<int> */
+    public function effectiveReminderDays(): array
+    {
+        if (! $this->has_expiry) {
+            return [];
+        }
+
+        return ReminderTemplate::globalReminderDays();
+    }
+
+    public function reminderTemplate(): BelongsTo
+    {
+        return $this->belongsTo(ReminderTemplate::class);
+    }
+
     /** @use HasFactory<DocumentTypeFactory> */
     use HasFactory;
 
