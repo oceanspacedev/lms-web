@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 use App\Filament\Resources\ReminderLogs\ReminderLogResource;
+use App\Filament\Resources\Users\UserResource;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -187,6 +188,7 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
+            UserResource::class => ['viewAny', 'view', 'create', 'update'],
             ReminderLogResource::class => ['viewAny', 'view'],
             RoleResource::class => [
                 'viewAny',

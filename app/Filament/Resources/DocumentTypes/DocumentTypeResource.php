@@ -25,9 +25,9 @@ class DocumentTypeResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Jenis Dokumen';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Manajemen Dokumen';
+    protected static string|\UnitEnum|null $navigationGroup = 'Data Master';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $recordTitleAttribute = 'name';
 

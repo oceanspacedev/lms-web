@@ -49,8 +49,8 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->navigationGroups([
+                'Data Master',
                 'Administrasi',
-                'Manajemen Dokumen',
             ])
             ->navigationItems([
                 NavigationItem::make('Horizon')
@@ -80,9 +80,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentShieldPlugin::make()
-                    ->navigationGroup('Administrasi')
+                    ->navigationGroup('Data Master')
                     ->navigationLabel('Hak Akses')
-                    ->navigationSort(1),
+                    ->navigationSort(4),
             ])
             ->authMiddleware([
                 Authenticate::class,
