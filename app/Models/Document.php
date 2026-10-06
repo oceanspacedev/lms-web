@@ -63,6 +63,11 @@ class Document extends Model
         return $this->hasMany(DocumentVersion::class);
     }
 
+    public function activities(): HasMany
+    {
+        return $this->hasMany(DocumentActivity::class);
+    }
+
     protected function expiryStatus(): Attribute
     {
         return Attribute::get(function (): string {
@@ -236,7 +241,7 @@ class Document extends Model
             throw new \RuntimeException('Penyimpanan file gagal.');
         }
 
-        return $this->versions()->create([
+        $version = $this->versions()->create([
             'version_number' => $number,
             'file_path' => $path,
             'file_name' => basename(str_replace('\\', '/', $file->getClientOriginalName())),
@@ -248,5 +253,13 @@ class Document extends Model
             'change_note' => $data['change_note'] ?? null,
             'uploaded_by' => $uploader->id,
         ]);
+
+        $this->activities()->create([
+            'document_version_id' => $version->id,
+            'user_id' => $uploader->id,
+            'event' => $number === 1 ? 'uploaded' : 'version_updated',
+        ]);
+
+        return $version;
     }
 }

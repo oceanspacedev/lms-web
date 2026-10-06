@@ -16,6 +16,11 @@ class CreateDocument extends CreateRecord
 {
     protected static string $resource = DocumentResource::class;
 
+    protected function getCreatedNotificationTitle(): ?string
+    {
+        return 'Dokumen berhasil diarsipkan';
+    }
+
     protected function handleRecordCreation(array $data): Model
     {
         if (! ($data['file'] ?? null) instanceof UploadedFile) {

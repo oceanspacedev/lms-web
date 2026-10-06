@@ -36,11 +36,11 @@ class DocumentsTable
                     'records' => $livewire->getTableRecords(),
                     'table' => $livewire->getTable(),
                 ]) : null)
-            ->searchPlaceholder('Cari judul, nomor, atau nama file')
+            ->searchPlaceholder('Cari judul, nomor, perusahaan, atau file')
             ->columns([
                 TextColumn::make('title')->label('Judul')->searchable()->sortable(),
                 TextColumn::make('document_number')->label('Nomor Dokumen')->searchable()->toggleable(),
-                TextColumn::make('company.name')->label('Perusahaan')->sortable(),
+                TextColumn::make('company.name')->label('Perusahaan')->searchable()->sortable(),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable(),
                 TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa Masa Berlaku')->sortable(),
                 TextColumn::make('expiry_status')->label('Status')->badge()
@@ -78,7 +78,9 @@ class DocumentsTable
                     ->visible(fn (Document $record): bool => Gate::allows('view', $record)),
             ])
             ->defaultSort('created_at', 'desc')
-            ->emptyStateHeading('Belum ada dokumen')
-            ->emptyStateDescription('Tambahkan dokumen legal untuk mulai mengarsipkan.');
+            ->emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
+                ? 'Dokumen tidak ditemukan' : 'Belum ada dokumen')
+            ->emptyStateDescription(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
+                ? 'Ubah kata pencarian atau reset filter untuk melihat dokumen lainnya.' : 'Tambahkan dokumen legal untuk mulai mengarsipkan.');
     }
 }

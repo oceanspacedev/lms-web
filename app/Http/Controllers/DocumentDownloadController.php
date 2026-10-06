@@ -36,6 +36,12 @@ class DocumentDownloadController extends Controller
             'ResponseContentType' => $version->mime_type,
         ]);
 
+        $document->activities()->create([
+            'document_version_id' => $version->id,
+            'user_id' => $request->user()->id,
+            'event' => $request->boolean('preview') ? 'previewed' : 'downloaded',
+        ]);
+
         return redirect()->away($url)->withHeaders(['Cache-Control' => 'no-store, private']);
     }
 }

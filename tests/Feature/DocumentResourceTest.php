@@ -193,7 +193,7 @@ class DocumentResourceTest extends TestCase
             ->assertDontSeeHtml('href="'.DocumentResource::getUrl('view', ['record' => $document]).'"')
             ->assertDontSeeHtml('href="'.route('documents.download', $document).'"')
             ->searchTable('TidakAdaDokumenIni')->assertCanNotSeeTableRecords([$document])
-            ->assertSee('Belum ada dokumen');
+            ->assertSee('Dokumen tidak ditemukan');
     }
 
     public function test_metadata_can_be_edited_after_linked_master_data_is_deactivated(): void

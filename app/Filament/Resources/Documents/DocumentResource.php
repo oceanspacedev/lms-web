@@ -6,6 +6,7 @@ use App\Filament\Resources\Documents\Pages\CreateDocument;
 use App\Filament\Resources\Documents\Pages\EditDocument;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Filament\Resources\Documents\Pages\ViewDocument;
+use App\Filament\Resources\Documents\RelationManagers\ActivitiesRelationManager;
 use App\Filament\Resources\Documents\RelationManagers\VersionsRelationManager;
 use App\Filament\Resources\Documents\Schemas\DocumentForm;
 use App\Filament\Resources\Documents\Schemas\DocumentInfolist;
@@ -50,6 +51,16 @@ class DocumentResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['title', 'document_number', 'company.name'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return ['Perusahaan' => $record->company?->name ?? '-', 'Nomor' => $record->document_number ?? '-', 'Jenis Dokumen' => $record->documentType?->name ?? '-'];
+    }
+
     public static function form(Schema $schema): Schema
     {
         return DocumentForm::configure($schema);
@@ -69,6 +80,7 @@ class DocumentResource extends Resource
     {
         return [
             VersionsRelationManager::class,
+            ActivitiesRelationManager::class,
         ];
     }
 

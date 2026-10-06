@@ -1,58 +1,135 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# LMS — Arsip Dokumen Legal
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi Laravel 13, PHP 8.4, Filament 5, Livewire 4, dan SQLite untuk mengarsipkan dokumen perusahaan. File disimpan secara privat di S3-compatible storage.
 
-## About Laravel
+## Fitur
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Master perusahaan dan jenis dokumen dengan konfigurasi hari pengingat.
+- Tampilan dokumen tabel/grid, pencarian dan filter perusahaan, jenis, status, PIC, serta format file.
+- Pencarian global berdasarkan judul, nomor dokumen, dan perusahaan.
+- Versi file immutable; unggah versi baru mempertahankan file lama. Penghapusan dokumen memakai soft delete.
+- Status masa berlaku, dashboard, dan pengingat WhatsApp WagHub.
+- Riwayat aktivitas pada detail dokumen: unggah, versi baru, perubahan informasi, permintaan unduhan, dan pratinjau.
+- Hak akses per resource melalui Filament Shield.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Persiapan dan instalasi
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Diperlukan PHP 8.4 dengan SQLite, Composer, Node.js/npm, serta bucket S3 privat. Redis diperlukan jika menjalankan Horizon; pengingat harian saat ini dikirim langsung oleh command, tanpa antrean.
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+npm install
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Salin `.env.example` ke `.env` (PowerShell: `Copy-Item .env.example .env`). Buat file kosong `database/database.sqlite` jika belum tersedia. Jangan menimpa `.env` atau database instalasi yang sudah berjalan.
 
-## Contributing
+```bash
+php artisan key:generate --no-interaction
+php artisan migrate --no-interaction
+npm run build
+php artisan filament:assets --no-interaction
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Isi `.env` untuk aplikasi dan storage:
 
-## Code of Conduct
+```dotenv
+APP_NAME="LMS Legal"
+APP_URL=http://127.0.0.1:8000
+APP_LOCALE=id
+DB_CONNECTION=sqlite
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=lms
+AWS_ENDPOINT=https://storage.example.com
+AWS_USE_PATH_STYLE_ENDPOINT=true
+AWS_VERIFY_SSL=true
+LMS_MAX_UPLOAD_SIZE_KB=20480
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Kredensial hanya di `.env`. File dokumen menggunakan disk `s3` secara eksplisit dan prefix `lms/documents/{company}/{document}/v{versi}/`. Bucket harus menolak akses publik. Signed URL berlaku lima menit. Batas unggah default 20 MB; tipe yang diterima PDF, DOC, DOCX, JPG, dan PNG. Sesuaikan pula batas upload PHP/server.
 
-## Security Vulnerabilities
+## Akun dan permission
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Buat permission tanpa menambahkan data contoh:
 
-## License
+```bash
+php artisan db:seed --class=CompanySeeder --no-interaction
+php artisan db:seed --class=DocumentTypeSeeder --no-interaction
+php artisan db:seed --class=DocumentSeeder --no-interaction
+php artisan db:seed --class=MonitoringPermissionSeeder --no-interaction
+php artisan db:seed --class=ReminderLogSeeder --no-interaction
+php artisan shield:generate --resource=RoleResource --panel=admin --option=permissions --no-interaction
+php artisan make:filament-user --panel=admin
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Perintah terakhir meminta nama, email, dan password secara interaktif. Setelah mengetahui ID pengguna, jalankan `php artisan shield:super-admin --user=ID --panel=admin --no-interaction` untuk menyinkronkan role admin dengan permission yang tersedia. Di instalasi yang sudah berjalan, atur permission baru melalui menu Hak Akses sesuai kebutuhan.
+
+`ViewAny:Document` mengizinkan daftar/pencarian; `View:Document` mengizinkan detail, riwayat, pratinjau, dan unduhan. `Create:Document`, `Update:Document`, dan `Delete:Document` mengatur perubahan. Log Pengingat hanya memakai `ViewAny:ReminderLog` dan `View:ReminderLog`. `receive_reminder` menentukan penerima cadangan jika PIC tidak memiliki nomor WhatsApp valid. Isi nomor melalui menu profil. Horizon dan Log Laravel memiliki permission tersendiri.
+
+## Menjalankan aplikasi
+
+```bash
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+Buka `http://127.0.0.1:8000/admin`. Untuk pengembangan frontend, jalankan `npm run dev` pada terminal terpisah. Setelah mengubah CSS dokumen, jalankan `php artisan filament:assets --no-interaction`.
+
+## WhatsApp dan scheduler
+
+```dotenv
+WAGHUB_URL=https://waghub.mekayastudio.com
+WAGHUB_TOKEN=
+WAGHUB_PURPOSE=otp
+WAGHUB_MODE=sync
+WAGHUB_ROUTE_KEY=default
+LMS_REMINDER_MAX_ATTEMPTS=3
+```
+
+`otp` adalah nilai dari contoh API yang telah diterima WagHub pada uji integrasi; konfirmasikan purpose yang sesuai untuk pesan pengingat kepada pengelola WagHub sebelum penggunaan operasional. Token tidak boleh masuk kode, README, log, atau Git.
+
+Scheduler mengirim pukul 08.00 Asia/Jakarta. Pastikan scheduler Laravel dijalankan oleh server:
+
+```bash
+php artisan schedule:work
+```
+
+Pada produksi, jalankan `php artisan schedule:run` setiap menit melalui cron atau Task Scheduler Windows dengan direktori kerja aplikasi dan PHP yang benar. `php artisan schedule:list` menampilkan jadwal; waktu pada daftar dapat ditampilkan dalam zona aplikasi (UTC).
+
+```bash
+php artisan lms:send-reminders --dry-run --no-interaction
+```
+
+Dry run memeriksa jumlah dokumen yang jatuh pada jadwal tanpa membuat log atau mengirim pesan. `php artisan lms:send-reminders --no-interaction` benar-benar mengirim semua pengingat yang memenuhi syarat dan retry yang tersedia; gunakan hanya setelah penerima dan konfigurasi siap.
+
+PIC menjadi penerima utama. Jika nomornya tidak valid, dipilih pengguna berizin `receive_reminder` dengan nomor valid, berdasarkan ID terkecil. Nomor `08...` dan `+62...` dinormalisasi menjadi `62...`. Setiap versi dan offset memiliki satu log serta Idempotency-Key tetap. Retry dilakukan pada hari berikutnya hingga batas percobaan; payload dan kunci tetap sama. Pengingat versi lama dibatalkan setelah pembaruan. Status `accepted` berarti permintaan diterima WagHub, bukan bukti pesan telah diterima di perangkat.
+
+Contoh isi pesan:
+
+```text
+Pengingat masa berlaku dokumen
+Dokumen: Perjanjian Kerja Sama
+Perusahaan: PT Contoh
+Berakhir: 2026-11-05
+Sisa waktu: 30 hari
+PIC: Budi
+```
+
+## Riwayat dan batas pencatatan
+
+Riwayat aktivitas tersedia pada tab Riwayat Aktivitas di detail dokumen, mengikuti izin melihat dokumen. Pencatatan unggah/versi dan perubahan informasi melalui UI bersifat transaksional. Kegagalan penyimpanan tidak menghasilkan aktivitas sukses. Permintaan file yang ditolak atau file yang tidak ditemukan tidak dicatat sebagai unduhan.
+
+`Unduhan diminta` mencatat bahwa pengguna telah memperoleh redirect ke signed URL. Transfer selesai di S3 tidak dapat dipastikan oleh aplikasi. Aktivitas sebelum fitur audit diaktifkan tidak direkonstruksi. Perubahan melalui SQL atau skrip di luar alur aplikasi tidak otomatis dicatat. Riwayat tidak memiliki aksi edit/hapus di UI dan model menolak mutasi melalui Eloquent.
+
+## Pengujian dan pemeliharaan
+
+```bash
+php artisan test --compact --exclude-group=s3-live
+php vendor/bin/pint --dirty --format agent
+```
+
+Tes memakai database terpisah dan HTTP/storage fake. Uji S3 nyata bersifat opt-in dengan `LMS_TEST_REAL_S3=1` dan grup `s3-live`; uji ini menulis lalu membersihkan file uji pada bucket terkonfigurasi. Tidak ada pengiriman WhatsApp nyata pada suite otomatis.
+
+Cadangkan database SQLite dan bucket bersama-sama; file histori versi harus dipertahankan. Untuk produksi gunakan `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, sertifikat storage valid, lalu `php artisan config:cache`. Setelah mengganti `.env` pada development, jalankan `php artisan config:clear`. Jika tampilan asset belum diperbarui, bangun kembali Vite dan asset Filament.
+
+Pengembangan proyek dilakukan pada branch lokal `ahtar-dev`; push ke remote hanya jika diminta.
