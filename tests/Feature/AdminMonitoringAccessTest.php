@@ -130,9 +130,10 @@ class AdminMonitoringAccessTest extends TestCase
     public function test_custom_permission_seeder_is_idempotent(): void
     {
         $this->seed(MonitoringPermissionSeeder::class);
-        $this->assertDatabaseCount('permissions', 2);
+        $this->assertDatabaseCount('permissions', 3);
         $this->assertDatabaseHas('permissions', ['name' => 'View:Horizon', 'guard_name' => 'web']);
         $this->assertDatabaseHas('permissions', ['name' => 'View:LogViewer', 'guard_name' => 'web']);
+        $this->assertDatabaseHas('permissions', ['name' => 'receive_reminder', 'guard_name' => 'web']);
     }
 
     public function test_production_panel_accepts_assigned_roles_and_permissions_but_rejects_unassigned_users(): void

@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use App\Filament\Resources\ReminderLogs\ReminderLogResource;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -120,7 +121,7 @@ return [
         'separator' => ':',
         'case' => 'pascal',
         'generate' => true,
-        'format_custom_permission_keys' => true,
+        'format_custom_permission_keys' => false,
     ],
 
     /*
@@ -186,6 +187,7 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
+            ReminderLogResource::class => ['viewAny', 'view'],
             RoleResource::class => [
                 'viewAny',
                 'view',
@@ -255,6 +257,7 @@ return [
     'custom_permissions' => [
         'View:Horizon' => 'Horizon',
         'View:LogViewer' => 'Log Laravel',
+        'receive_reminder' => 'Penerima cadangan pengingat WhatsApp',
     ],
 
     /*

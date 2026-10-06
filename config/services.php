@@ -2,6 +2,15 @@
 
 return [
 
+    'waghub' => [
+        'url' => env('WAGHUB_URL'),
+        'token' => env('WAGHUB_TOKEN'),
+        'purpose' => env('WAGHUB_PURPOSE'),
+        'mode' => env('WAGHUB_MODE', 'sync'),
+        'route_key' => env('WAGHUB_ROUTE_KEY', 'default'),
+        'timeout' => 20,
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
