@@ -25,7 +25,7 @@ class EditDocumentRequest extends EditRecord
 
     public function getTitle(): string
     {
-        return $this->record->editableBy(auth()->user()) ? 'Edit Pengajuan #'.$this->record->id : 'Pengajuan #'.$this->record->id;
+        return $this->record->title;
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model
