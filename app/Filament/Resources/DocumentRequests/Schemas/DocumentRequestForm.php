@@ -136,8 +136,15 @@ class DocumentRequestForm
                         if (! $required && ! $path) {
                             continue;
                         }
+                        $previewable = $path && in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), ['pdf', 'jpg', 'jpeg', 'png'], true);
                         $component = Actions::make([
-                            Action::make('download_'.$item['key'])->label($item['label'])->color('gray')->icon('heroicon-o-arrow-down-tray')->disabled(! $path)
+                            Action::make('preview_'.$item['key'])->label($item['label'])->color('gray')->icon('heroicon-o-eye')->visible((bool) $previewable)
+                                ->modalHeading($item['label'])->modalWidth('7xl')->modalSubmitAction(false)->modalCancelActionLabel('Tutup')
+                                ->modalContent(fn () => view('requests.attachment-preview', [
+                                    'url' => route('requests.attachment', ['documentRequest' => $record, 'key' => $item['key'], 'preview' => 1]),
+                                    'label' => $item['label'], 'isImage' => strtolower(pathinfo($path, PATHINFO_EXTENSION)) !== 'pdf',
+                                ])),
+                            Action::make('download_'.$item['key'])->label($previewable ? 'Unduh' : $item['label'])->color('gray')->icon('heroicon-o-arrow-down-tray')->disabled(! $path)
                                 ->url($path ? route('requests.attachment', ['documentRequest' => $record, 'key' => $item['key']]) : null)->openUrlInNewTab(),
                         ]);
                     }
