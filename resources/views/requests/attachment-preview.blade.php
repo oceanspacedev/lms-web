@@ -3,4 +3,6 @@
 @else
     <iframe src="{{ $url }}" title="{{ $label }}" style="display: block; width: 100%; height: 70vh; border: 0;"></iframe>
 @endif
-<a href="{{ $url }}" target="_blank" rel="noopener" style="display: inline-block; margin-top: 12px; text-decoration: underline;">Buka di tab baru</a>
+@if($showNewTabLink ?? true)
+    <a href="{{ $url }}" target="_blank" rel="noopener" style="display: inline-block; margin-top: 12px; text-decoration: underline;">Buka di tab baru</a>
+@endif

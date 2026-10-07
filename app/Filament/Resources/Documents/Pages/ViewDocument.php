@@ -35,9 +35,6 @@ class ViewDocument extends ViewRecord
             Action::make('download')->label('Unduh File')->icon('heroicon-o-arrow-down-tray')
                 ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab()
                 ->visible(fn (): bool => $this->getRecord()->currentVersion !== null),
-            Action::make('preview')->label('Pratinjau')->icon('heroicon-o-eye')->color('gray')
-                ->url(fn (): string => route('documents.download', ['document' => $this->getRecord(), 'preview' => 1]))->openUrlInNewTab()
-                ->visible(fn (): bool => in_array($this->getRecord()->currentVersion?->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true)),
             EditAction::make()->label('Ubah Informasi')->icon('heroicon-o-pencil-square')->color('gray'),
             Action::make('updateVersion')->label('Unggah Versi Baru')->icon('heroicon-o-arrow-path')->color('gray')
                 ->authorize('update', $this->getRecord())

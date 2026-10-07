@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Documents\Schemas;
 use App\Models\Document;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Number;
 
@@ -15,6 +16,16 @@ class DocumentInfolist
         return $schema
             ->columns(['default' => 1, 'xl' => 3])
             ->components([
+                Section::make('Preview dokumen')->compact()->columnSpanFull()
+                    ->visible(fn (Document $record): bool => in_array($record->currentVersion?->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true))
+                    ->schema([
+                        View::make('requests.attachment-preview')->viewData(fn (Document $record): array => [
+                            'url' => route('documents.download', ['document' => $record, 'preview' => 1]),
+                            'label' => $record->currentVersion?->file_name ?? $record->title,
+                            'isImage' => $record->currentVersion?->mime_type !== 'application/pdf',
+                            'showNewTabLink' => false,
+                        ]),
+                    ]),
                 Section::make('Informasi Dokumen')
                     ->columnSpan(['default' => 1, 'xl' => 2])
                     ->columns(['default' => 1, 'sm' => 2])
