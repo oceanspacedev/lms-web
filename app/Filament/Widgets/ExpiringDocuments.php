@@ -42,7 +42,7 @@ class ExpiringDocuments extends TableWidget
             })
             ->columns([
                 TextColumn::make('title')->label('Judul')->searchable(),
-                TextColumn::make('company.name')->label('Perusahaan'),
+                TextColumn::make('company.name')->label('Badan Usaha'),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen'),
                 TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y'),
                 TextColumn::make('expiry_status')->label('Status')->badge()

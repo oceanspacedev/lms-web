@@ -13,7 +13,7 @@ class ListCompanies extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Tambah Perusahaan'),
+            CreateAction::make()->label('Tambah Badan Usaha'),
         ];
     }
 }

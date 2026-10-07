@@ -14,7 +14,7 @@ class ReminderLogsTable
     {
         return $table->defaultSort('id', 'desc')->columns([
             TextColumn::make('documentVersion.document.title')->label('Dokumen')->searchable()->limit(45),
-            TextColumn::make('documentVersion.document.company.name')->label('Perusahaan')->searchable(),
+            TextColumn::make('documentVersion.document.company.name')->label('Badan Usaha')->searchable(),
             TextColumn::make('documentVersion.version_number')->label('Versi')->prefix('v'),
             TextColumn::make('offset_days')->label('Pengingat')->prefix('H-'),
             TextColumn::make('recipient_phone')->label('WhatsApp')->placeholder('-'),

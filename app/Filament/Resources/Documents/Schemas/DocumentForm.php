@@ -20,7 +20,7 @@ class DocumentForm
         return $schema
             ->components([
                 Select::make('company_id')
-                    ->label('Perusahaan')
+                    ->label('Badan Usaha')
                     ->relationship('company', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('is_active', true))
                     ->searchable()->preload()->required()->disabledOn('edit')->validatedWhenNotDehydrated(false)
                     ->rules([Rule::exists('companies', 'id')->where('is_active', true)]),

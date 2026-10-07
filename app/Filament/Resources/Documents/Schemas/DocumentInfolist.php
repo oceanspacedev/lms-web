@@ -23,7 +23,7 @@ class DocumentInfolist
                             ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
                             ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
                         TextEntry::make('document_number')->label('Nomor Dokumen')->placeholder('Belum diisi')->wrap(),
-                        TextEntry::make('company.name')->label('Perusahaan')->wrap(),
+                        TextEntry::make('company.name')->label('Badan Usaha')->wrap(),
                         TextEntry::make('documentType.name')->label('Jenis Dokumen')->wrap(),
                         TextEntry::make('pic.name')->label('Penanggung Jawab (PIC)')->wrap(),
                         TextEntry::make('counterparty')->label('Pihak Lawan')->placeholder('Belum diisi')->wrap(),

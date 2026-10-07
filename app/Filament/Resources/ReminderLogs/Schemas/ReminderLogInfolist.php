@@ -14,7 +14,7 @@ class ReminderLogInfolist
         return $schema->components([
             Section::make('Pengingat Dokumen')->columns(2)->columnSpanFull()->schema([
                 TextEntry::make('documentVersion.document.title')->label('Dokumen'),
-                TextEntry::make('documentVersion.document.company.name')->label('Perusahaan'),
+                TextEntry::make('documentVersion.document.company.name')->label('Badan Usaha'),
                 TextEntry::make('documentVersion.version_number')->label('Versi')->prefix('v'),
                 TextEntry::make('offset_days')->label('Jadwal')->prefix('H-'),
                 TextEntry::make('recipient_phone')->label('WhatsApp')->placeholder('-'),

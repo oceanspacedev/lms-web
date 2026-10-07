@@ -47,7 +47,7 @@ class DocumentRequestForm
             TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (?DocumentRequest $record): bool => $record && in_array($record->status, ['revision', 'rejected'], true))
                 ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->extraAttributes(['style' => 'white-space: pre-line']),
             Section::make('Data pengajuan')->columns(2)->schema([
-                Select::make('company_id')->label('Perusahaan')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->disabledOn('edit'),
+                Select::make('company_id')->label('Badan Usaha')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->disabledOn('edit'),
                 Select::make('document_type_id')->label('Jenis Dokumen')->options(fn (): array => DocumentType::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->live()->disabledOn('edit')
                     ->afterStateUpdated(function (Set $set): void {
                         $set('details', []);

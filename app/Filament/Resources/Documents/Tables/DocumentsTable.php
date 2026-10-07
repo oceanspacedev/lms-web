@@ -36,11 +36,11 @@ class DocumentsTable
                     'records' => $livewire->getTableRecords(),
                     'table' => $livewire->getTable(),
                 ]) : null)
-            ->searchPlaceholder('Cari judul, nomor, perusahaan, atau file')
+            ->searchPlaceholder('Cari judul, nomor, badan usaha, atau file')
             ->columns([
                 TextColumn::make('title')->label('Judul')->searchable()->sortable(),
                 TextColumn::make('document_number')->label('Nomor Dokumen')->searchable()->toggleable(),
-                TextColumn::make('company.name')->label('Perusahaan')->searchable()->sortable(),
+                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable(),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable(),
                 TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa Masa Berlaku')->sortable(),
                 TextColumn::make('expiry_status')->label('Status')->badge()
@@ -50,7 +50,7 @@ class DocumentsTable
                 TextColumn::make('currentVersion.file_name')->label('Nama File')->searchable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('company')->label('Perusahaan')->relationship('company', 'name')->searchable()->preload(),
+                SelectFilter::make('company')->label('Badan Usaha')->relationship('company', 'name')->searchable()->preload(),
                 SelectFilter::make('document_type')->label('Jenis Dokumen')->relationship('documentType', 'name')->searchable()->preload(),
                 SelectFilter::make('expiry_status')->label('Status')->options(Document::EXPIRY_STATUSES)
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)

@@ -13,7 +13,7 @@ class CompaniesTable
     {
         return $table
             ->columns([
-                TextColumn::make('name')->label('Nama Perusahaan')->searchable()->sortable(),
+                TextColumn::make('name')->label('Nama Badan Usaha')->searchable()->sortable(),
                 TextColumn::make('legal_form')->label('Bentuk Badan Usaha')->searchable()->sortable(),
                 TextColumn::make('npwp')->label('NPWP')->searchable()->placeholder('Belum diisi'),
                 TextColumn::make('is_active')
@@ -31,7 +31,7 @@ class CompaniesTable
                 EditAction::make()->label('Ubah'),
             ])
             ->defaultSort('name')
-            ->emptyStateHeading('Belum ada perusahaan')
-            ->emptyStateDescription('Tambahkan perusahaan atau badan usaha sebagai referensi dokumen.');
+            ->emptyStateHeading('Belum ada badan usaha')
+            ->emptyStateDescription(null);
     }
 }

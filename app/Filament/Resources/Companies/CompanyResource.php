@@ -21,9 +21,9 @@ class CompanyResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
 
-    protected static ?string $modelLabel = 'Perusahaan';
+    protected static ?string $modelLabel = 'Badan Usaha';
 
-    protected static ?string $pluralModelLabel = 'Perusahaan';
+    protected static ?string $pluralModelLabel = 'Badan Usaha';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Data Master';
 

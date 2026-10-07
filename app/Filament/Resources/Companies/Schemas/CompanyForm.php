@@ -14,7 +14,7 @@ class CompanyForm
         return $schema
             ->components([
                 TextInput::make('name')
-                    ->label('Nama Perusahaan / Badan Usaha')
+                    ->label('Nama Badan Usaha')
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
@@ -28,8 +28,7 @@ class CompanyForm
                     ->maxLength(30),
                 Toggle::make('is_active')
                     ->label('Aktif')
-                    ->default(true)
-                    ->helperText('Nonaktifkan perusahaan yang tidak digunakan lagi. Data tetap tersimpan.'),
+                    ->default(true),
                 Textarea::make('address')
                     ->label('Alamat')
                     ->rows(3)
