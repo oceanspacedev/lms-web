@@ -4,11 +4,13 @@ namespace App\Filament\Resources\DocumentRequests\Pages;
 
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\Documents\DocumentResource;
+use App\Models\Company;
 use App\Models\DocumentRequest;
 use App\Policies\DocumentRequestPolicy;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -58,6 +60,7 @@ class EditDocumentRequest extends EditRecord
                 ->action(fn (array $data) => $this->decide('rejected', $data['note'])),
             Action::make('archive')->label('Unggah Dokumen Final')->visible(fn (): bool => $policy->archive(auth()->user(), $this->record))->modalWidth('lg')->schema([
                 TextInput::make('number')->label('Nomor Dokumen')->required()->maxLength(255),
+                Select::make('company_id')->label('Perusahaan arsip')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->visible(fn (): bool => $this->record->company_id === null),
                 DatePicker::make('issued_date')->label('Tanggal terbit')->default(fn (): ?string => $this->record->start_date?->toDateString()),
                 DatePicker::make('expiry_date')->label('Tanggal berakhir')->default(fn (): ?string => $this->record->expiry_date?->toDateString())->required(fn (): bool => $this->record->documentType->has_expiry)->visible(fn (): bool => $this->record->documentType->has_expiry)->afterOrEqual('issued_date'),
                 FileUpload::make('file')->label('Dokumen bertanda tangan')->disk('local')->visibility('private')->storeFiles(false)->preventFilePathTampering()->acceptedFileTypes(config('lms.allowed_mime_types'))->maxSize(config('lms.max_upload_size_kb'))->required(),
@@ -65,7 +68,7 @@ class EditDocumentRequest extends EditRecord
                 if (! ($data['file'] ?? null) instanceof UploadedFile) {
                     throw ValidationException::withMessages(['file' => 'Unggah dokumen final.']);
                 }
-                $this->record->archiveSigned($data['file'], $data['number'], $data['issued_date'] ?? null, $data['expiry_date'] ?? null, auth()->user());
+                $this->record->archiveSigned($data['file'], $data['number'], $data['issued_date'] ?? null, $data['expiry_date'] ?? null, auth()->user(), isset($data['company_id']) ? (int) $data['company_id'] : null);
                 $this->refreshFormData(['status', 'history']);
                 Notification::make()->title('Dokumen diarsipkan')->success()->send();
             }),

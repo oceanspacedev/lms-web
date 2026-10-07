@@ -99,7 +99,8 @@ class DocumentRequest extends Model
                 $request->requester_phone = $data['requester_phone'];
                 $request->requester_division = $data['requester_division'];
                 $request->request_reason = $data['request_reason'];
-                Validator::make($request->attributesToArray(), ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
+                $request->other_business_name = $data['other_business_name'] ?? null;
+                Validator::make($request->attributesToArray(), ['company_id' => ['nullable', Rule::exists('companies', 'id')->where('is_active', true)], 'other_business_name' => [Rule::requiredIf($request->company_id === null), 'nullable', 'string', 'max:255']])->validate();
                 $attachments = $request->attachments;
                 foreach ($request->requirements['attachments'] ?? [] as $item) {
                     $value = $data['attachments'][$item['key']] ?? null;
@@ -265,15 +266,18 @@ class DocumentRequest extends Model
         $this->refresh();
     }
 
-    public function archiveSigned(UploadedFile $file, string $number, ?string $issuedDate, ?string $expiryDate, User $user): Document
+    public function archiveSigned(UploadedFile $file, string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null): Document
     {
-        return DB::transaction(function () use ($file, $number, $issuedDate, $expiryDate, $user): Document {
+        return DB::transaction(function () use ($file, $number, $issuedDate, $expiryDate, $user, $companyId): Document {
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($user)->authorize('archive', $request);
             if ($request->status !== 'approved') {
                 throw ValidationException::withMessages(['status' => 'Pengajuan belum disetujui.']);
             }
             Validator::make(['number' => $number], ['number' => ['required', 'string', 'max:255']])->validate();
+            $companyId = $request->company_id ?? $companyId;
+            Validator::make(['company_id' => $companyId], ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
+            $request->company_id = $companyId;
             $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->partner_name, 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user);
             $request->document_id = $document->id;
             $request->status = 'archived';

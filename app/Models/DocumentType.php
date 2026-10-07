@@ -17,12 +17,10 @@ class DocumentType extends Model
     /** @return array<string, mixed> */
     public function publicRequirements(): array
     {
-        $attachments = $this->request_attachments;
-        if (! collect($attachments)->contains(fn (array $item): bool => ($item['when'] ?? 'always') === 'always')) {
-            $attachments[] = ['key' => 'supporting-document', 'label' => 'Dokumen pendukung', 'required' => true, 'when' => 'always'];
-        }
-
-        return ['fields' => [], 'attachments' => $attachments, 'has_expiry' => $this->has_expiry];
+        return ['fields' => [], 'has_expiry' => $this->has_expiry, 'attachments' => [
+            ['key' => 'supporting-document', 'label' => 'Dokumen pendukung', 'required' => true, 'when' => 'always'],
+            ...array_filter($this->request_attachments, fn (array $item): bool => $item['key'] !== 'supporting-document'),
+        ]];
     }
 
     public function resolveRequestPic(): ?User

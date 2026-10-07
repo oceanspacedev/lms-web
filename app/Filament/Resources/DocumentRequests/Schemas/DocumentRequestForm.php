@@ -42,6 +42,7 @@ class DocumentRequestForm
             Section::make('Pengaju')->visible(fn (?DocumentRequest $record): bool => (bool) $record?->public_token)->columns(2)->schema([
                 TextEntry::make('requester_name')->label('Nama'), TextEntry::make('requester_phone')->label('WhatsApp'),
                 TextEntry::make('requester_division')->label('Divisi'), TextEntry::make('request_reason')->label('Keperluan')->columnSpanFull(),
+                TextEntry::make('other_business_name')->label('Badan usaha lainnya')->visible(fn (?DocumentRequest $record): bool => filled($record?->other_business_name)),
             ]),
             TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (?DocumentRequest $record): bool => $record && in_array($record->status, ['revision', 'rejected'], true))
                 ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->extraAttributes(['style' => 'white-space: pre-line']),
