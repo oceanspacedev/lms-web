@@ -27,6 +27,7 @@
         <div class="field"><label for="company">Badan usaha <span aria-hidden="true">*</span></label><select id="company" name="company_id" required @disabled((bool) $submission)><option value="">Pilih badan usaha</option>@foreach($companies as $company)<option value="{{ $company->id }}" @selected((string)old('company_id', $submission?->company_id) === (string)$company->id)>{{ $company->name }}</option>@endforeach<option value="other" @selected(old('company_id', $submission?->other_business_name ? 'other' : '') === 'other')>Lainnya</option></select></div>
         <div data-other-business hidden>@include('requests.field', ['key' => 'other_business_name', 'label' => 'Nama badan usaha', 'required' => true])</div>
         <div class="field"><label for="document-type">Jenis dokumen <span aria-hidden="true">*</span></label><select id="document-type" name="document_type_id" required @disabled((bool) $submission)><option value="">Pilih jenis dokumen</option>@foreach($types as $documentType)<option value="{{ $documentType->id }}" data-expiry="{{ (int)($schemas[$documentType->id]['has_expiry'] ?? false) }}" @selected((string)$selectedType === (string)$documentType->id)>{{ $documentType->name }}</option>@endforeach</select></div>
+        @include('requests.field', ['key' => 'title', 'label' => 'Judul pengajuan', 'required' => true, 'wide' => true])
         @include('requests.field', ['key' => 'request_reason', 'label' => 'Keperluan', 'type' => 'textarea', 'required' => true, 'wide' => true])
     </div>
     </section>

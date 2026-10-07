@@ -9,7 +9,6 @@ use App\Services\WaghubService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -68,18 +67,18 @@ class PublicDocumentRequestController extends Controller
         $data = $request->validate([
             'requester_name' => ['required', 'string', 'max:255'], 'requester_phone' => ['required', 'string', 'max:15', 'regex:/\A(?:08|\+?628)[0-9]{8,11}\z/'],
             'requester_division' => ['required', 'string', 'max:100'], 'request_reason' => ['required', 'string', 'max:4000'],
+            'title' => ['required', 'string', 'max:255'],
             'company_id' => [$submission ? 'nullable' : 'required', Rule::in([...Company::where('is_active', true)->pluck('id')->all(), 'other'])], 'document_type_id' => [$submission ? 'nullable' : 'required', 'integer'],
             'other_business_name' => [Rule::requiredIf($isOther), 'nullable', 'string', 'max:255'],
             'details' => ['sometimes', 'array', 'max:20'], 'attachments' => ['sometimes', 'array', 'max:20'],
         ], ['required' => ':attribute wajib diisi.', 'after_or_equal' => ':attribute tidak boleh sebelum tanggal mulai.', 'requester_phone.regex' => 'Nomor WhatsApp hanya boleh berisi angka, diawali 08, 62, atau +62.'], [
-            'requester_name' => 'Nama pengaju', 'requester_phone' => 'Nomor telepon', 'company_id' => 'Badan usaha', 'document_type_id' => 'Jenis dokumen', 'requester_division' => 'Divisi', 'request_reason' => 'Keperluan',
+            'requester_name' => 'Nama pengaju', 'requester_phone' => 'Nomor telepon', 'company_id' => 'Badan usaha', 'document_type_id' => 'Jenis dokumen', 'requester_division' => 'Divisi', 'request_reason' => 'Keperluan', 'title' => 'Judul pengajuan',
         ]);
         $phone = $waghub->normalizePhone($data['requester_phone']);
         if (! $phone) {
             throw ValidationException::withMessages(['requester_phone' => 'Nomor WhatsApp tidak valid. Gunakan 08 atau +62.']);
         }
         $data['requester_phone'] = $phone;
-        $data['title'] = Str::limit($data['request_reason'], 120, '');
         $data['other_business_name'] = $isOther ? $data['other_business_name'] : null;
         $data['company_id'] = $submission?->company_id ?? ($isOther ? null : $data['company_id']);
         $data['partner_name'] = $isOther ? $data['other_business_name'] : ($submission?->partner_name ?? Company::findOrFail($data['company_id'])->name);
