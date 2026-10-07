@@ -6,7 +6,6 @@ use App\Models\Company;
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
 use App\Models\User;
-use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
@@ -51,6 +50,8 @@ class DocumentRequestForm
                 TextEntry::make('applicant_name')->label('Pengaju')->state(fn (DocumentRequest $record): ?string => $record->requester_name ?? $record->requester?->name)->wrap(),
                 TextEntry::make('requester_phone')->label('WhatsApp')->visible(fn (DocumentRequest $record): bool => filled($record->requester_phone)),
                 TextEntry::make('requester_division')->label('Divisi')->visible(fn (DocumentRequest $record): bool => filled($record->requester_division)),
+                TextEntry::make('submitted_date')->label('Diajukan')->state(fn (DocumentRequest $record): ?string => collect($record->history)->firstWhere('status', 'submitted')['at'] ?? null)
+                    ->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->placeholder('Belum diajukan'),
                 TextEntry::make('submission_reason')->label('Keperluan')->state(fn (DocumentRequest $record): string => $record->request_reason ?: $record->title)->columnSpanFull()->wrap(),
                 TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['revision', 'rejected'], true))
                     ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->columnSpanFull()->wrap(),
@@ -160,33 +161,6 @@ class DocumentRequestForm
 
                 return [TextEntry::make('attachment_progress')->label('Kelengkapan')->state($requiredCount ? $completeCount.' / '.$requiredCount.' lampiran wajib' : 'Tidak ada lampiran wajib'), ...$components];
             }),
-            Section::make('Detail tambahan')->compact()->collapsed()->columns(2)->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
-                TextEntry::make('purpose')->label('Pengajuan')->formatStateUsing(fn (string $state): string => ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'][$state] ?? $state),
-                TextEntry::make('partner_name')->label('Mitra')->visible(fn (DocumentRequest $record): bool => filled($record->partner_name) && $record->partner_name !== ($record->company?->name ?? $record->other_business_name))->wrap(),
-                TextEntry::make('partner_pic')->label('PIC mitra')->visible(fn (DocumentRequest $record): bool => filled($record->partner_pic)),
-                TextEntry::make('partner_contact')->label('Kontak mitra')->visible(fn (DocumentRequest $record): bool => filled($record->partner_contact)),
-                TextEntry::make('start_date')->label('Mulai')->date('d M Y')->visible(fn (DocumentRequest $record): bool => filled($record->start_date)),
-                TextEntry::make('expiry_date')->label('Berakhir')->date('d M Y')->visible(fn (DocumentRequest $record): bool => filled($record->expiry_date)),
-                TextEntry::make('target_date')->label('Target selesai')->date('d M Y')->visible(fn (DocumentRequest $record): bool => filled($record->target_date)),
-                TextEntry::make('amount')->label('Nilai')->money('IDR')->visible(fn (DocumentRequest $record): bool => (bool) $record->has_cost),
-                TextEntry::make('payment_terms')->label('Pembayaran')->visible(fn (DocumentRequest $record): bool => (bool) $record->has_cost && filled($record->payment_terms))->wrap(),
-                Section::make()->contained(false)->columnSpanFull()->schema(function (?DocumentRequest $record): array {
-                    if (! $record) {
-                        return [];
-                    }
-
-                    return collect($record->requirements['fields'] ?? [])->filter(fn (array $item): bool => filled($record->details[$item['key']] ?? null))
-                        ->map(fn (array $item): TextEntry => TextEntry::make('details.'.$item['key'])->label($item['label'])->wrap())->values()->all();
-                }),
-            ]),
-            Section::make('Riwayat')->compact()->collapsed()->visibleOn('edit')->schema([
-                TextEntry::make('history_text')->hiddenLabel()->state(fn (DocumentRequest $record): string => collect($record->history)->reverse()->map(fn (array $event): string => DocumentRequest::STATUSES[$event['status']].' · '.$event['user'].' · '.Carbon::parse($event['at'])->format('d M Y H:i').(filled($event['note']) ? "\n".$event['note'] : ''))->implode("\n\n"))->extraAttributes(['style' => 'white-space: pre-line']),
-            ]),
-            Section::make('Notifikasi WhatsApp')->compact()->collapsed()->visibleOn('edit')->schema([
-                TextEntry::make('notification_log')->hiddenLabel()->state(fn (DocumentRequest $record): string => $record->notifications()->latest('id')->get()->map(fn ($notification): string => ($notification->recipient_kind === 'pic' ? 'PIC' : 'Pengaju').' · '.match ($notification->status) {
-                    'accepted' => 'Diterima WagHub', 'failed' => 'Gagal · '.$notification->attempts.'/5 percobaan', 'cancelled' => 'Digantikan status terbaru', default => 'Menunggu'
-                }.' · '.$notification->created_at->timezone(config('lms.reminder_timezone'))->format('d M Y H:i'))->implode("\n"))->extraAttributes(['style' => 'white-space: pre-line'])->placeholder('Belum ada notifikasi'),
-            ]),
         ]);
     }
 }
