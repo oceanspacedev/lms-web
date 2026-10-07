@@ -23,6 +23,11 @@ class EditDocumentRequest extends EditRecord
 {
     protected static string $resource = DocumentRequestResource::class;
 
+    public function getTitle(): string
+    {
+        return $this->record->editableBy(auth()->user()) ? 'Edit Pengajuan #'.$this->record->id : 'Pengajuan #'.$this->record->id;
+    }
+
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         return DocumentRequest::saveDraft($data, auth()->user(), $record);

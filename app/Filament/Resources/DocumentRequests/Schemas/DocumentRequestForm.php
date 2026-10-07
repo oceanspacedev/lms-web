@@ -24,6 +24,11 @@ use Illuminate\Support\Facades\Storage;
 
 class DocumentRequestForm
 {
+    private static function isReadOnly(?DocumentRequest $record): bool
+    {
+        return $record && ! $record->editableBy(auth()->user());
+    }
+
     /** @return array<string, mixed> */
     private static function requirements(Get $get, ?DocumentRequest $record): array
     {
@@ -38,15 +43,27 @@ class DocumentRequestForm
     public static function configure(Schema $schema): Schema
     {
         return $schema->columns(1)->components([
-            TextEntry::make('status_label')->label('Status')->visibleOn('edit')->state(fn (DocumentRequest $record): string => DocumentRequest::STATUSES[$record->status])->badge(),
-            Section::make('Pengaju')->visible(fn (?DocumentRequest $record): bool => (bool) $record?->public_token)->columns(2)->schema([
+            Section::make('Ringkasan')->compact()->columns(3)->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
+                TextEntry::make('status_label')->label('Status')->state(fn (DocumentRequest $record): string => DocumentRequest::STATUSES[$record->status])->badge(),
+                TextEntry::make('documentType.name')->label('Jenis dokumen')->wrap(),
+                TextEntry::make('business_name')->label('Badan usaha')->state(fn (DocumentRequest $record): ?string => $record->company?->name ?? $record->other_business_name)->wrap(),
+                TextEntry::make('pic.name')->label('PIC')->placeholder('—'),
+                TextEntry::make('applicant_name')->label('Pengaju')->state(fn (DocumentRequest $record): ?string => $record->requester_name ?? $record->requester?->name)->wrap(),
+                TextEntry::make('requester_phone')->label('WhatsApp')->visible(fn (DocumentRequest $record): bool => filled($record->requester_phone)),
+                TextEntry::make('requester_division')->label('Divisi')->visible(fn (DocumentRequest $record): bool => filled($record->requester_division)),
+                TextEntry::make('submission_reason')->label('Keperluan')->state(fn (DocumentRequest $record): string => $record->request_reason ?: $record->title)->columnSpanFull()->wrap(),
+                TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['revision', 'rejected'], true))
+                    ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->columnSpanFull()->wrap(),
+            ]),
+            TextEntry::make('editable_status')->label('Status')->visible(fn (?DocumentRequest $record): bool => $record && ! self::isReadOnly($record))->state(fn (DocumentRequest $record): string => DocumentRequest::STATUSES[$record->status])->badge(),
+            Section::make('Pengaju')->visible(fn (?DocumentRequest $record): bool => (bool) $record?->public_token && ! self::isReadOnly($record))->columns(2)->schema([
                 TextEntry::make('requester_name')->label('Nama'), TextEntry::make('requester_phone')->label('WhatsApp'),
                 TextEntry::make('requester_division')->label('Divisi'), TextEntry::make('request_reason')->label('Keperluan')->columnSpanFull(),
                 TextEntry::make('other_business_name')->label('Badan usaha lainnya')->visible(fn (?DocumentRequest $record): bool => filled($record?->other_business_name)),
             ]),
-            TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (?DocumentRequest $record): bool => $record && in_array($record->status, ['revision', 'rejected'], true))
+            TextEntry::make('editable_review_note')->label('Catatan pemeriksa')->visible(fn (?DocumentRequest $record): bool => $record && ! self::isReadOnly($record) && in_array($record->status, ['revision', 'rejected'], true))
                 ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->extraAttributes(['style' => 'white-space: pre-line']),
-            Section::make('Data pengajuan')->columns(2)->schema([
+            Section::make('Data pengajuan')->visible(fn (?DocumentRequest $record): bool => ! self::isReadOnly($record))->columns(2)->schema([
                 Select::make('company_id')->label('Badan Usaha')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->disabledOn('edit'),
                 Select::make('document_type_id')->label('Jenis Dokumen')->options(fn (): array => DocumentType::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->live()->disabledOn('edit')
                     ->afterStateUpdated(function (Set $set): void {
@@ -60,7 +77,7 @@ class DocumentRequestForm
                 TextInput::make('partner_pic')->label('PIC mitra')->maxLength(255),
                 TextInput::make('partner_contact')->label('Kontak mitra')->maxLength(255),
             ])->disabled(fn (?DocumentRequest $record): bool => $record && ! $record->editableBy(auth()->user())),
-            Section::make('Rencana')->columns(2)->schema([
+            Section::make('Rencana')->visible(fn (?DocumentRequest $record): bool => ! self::isReadOnly($record))->columns(2)->schema([
                 DatePicker::make('start_date')->label('Mulai'),
                 DatePicker::make('expiry_date')->label('Berakhir')->afterOrEqual('start_date'),
                 DatePicker::make('target_date')->label('Target selesai'),
@@ -81,7 +98,7 @@ class DocumentRequestForm
                     }, self::requirements($get, $record)['fields'] ?? []);
                 }),
             ])->disabled(fn (?DocumentRequest $record): bool => $record && ! $record->editableBy(auth()->user())),
-            Section::make('Lampiran')->schema(function (Get $get, ?DocumentRequest $record): array {
+            Section::make('Lampiran')->compact()->schema(function (Get $get, ?DocumentRequest $record): array {
                 $requirements = self::requirements($get, $record)['attachments'] ?? [];
                 $components = [];
                 $optionalComponents = [];
@@ -136,10 +153,29 @@ class DocumentRequestForm
 
                 return [TextEntry::make('attachment_progress')->label('Kelengkapan')->state($requiredCount ? $completeCount.' / '.$requiredCount.' lampiran wajib' : 'Tidak ada lampiran wajib'), ...$components];
             }),
-            Section::make('Riwayat')->collapsed()->visibleOn('edit')->schema([
+            Section::make('Detail tambahan')->compact()->collapsed()->columns(2)->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
+                TextEntry::make('purpose')->label('Pengajuan')->formatStateUsing(fn (string $state): string => ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'][$state] ?? $state),
+                TextEntry::make('partner_name')->label('Mitra')->visible(fn (DocumentRequest $record): bool => filled($record->partner_name) && $record->partner_name !== ($record->company?->name ?? $record->other_business_name))->wrap(),
+                TextEntry::make('partner_pic')->label('PIC mitra')->visible(fn (DocumentRequest $record): bool => filled($record->partner_pic)),
+                TextEntry::make('partner_contact')->label('Kontak mitra')->visible(fn (DocumentRequest $record): bool => filled($record->partner_contact)),
+                TextEntry::make('start_date')->label('Mulai')->date('d M Y')->visible(fn (DocumentRequest $record): bool => filled($record->start_date)),
+                TextEntry::make('expiry_date')->label('Berakhir')->date('d M Y')->visible(fn (DocumentRequest $record): bool => filled($record->expiry_date)),
+                TextEntry::make('target_date')->label('Target selesai')->date('d M Y')->visible(fn (DocumentRequest $record): bool => filled($record->target_date)),
+                TextEntry::make('amount')->label('Nilai')->money('IDR')->visible(fn (DocumentRequest $record): bool => (bool) $record->has_cost),
+                TextEntry::make('payment_terms')->label('Pembayaran')->visible(fn (DocumentRequest $record): bool => (bool) $record->has_cost && filled($record->payment_terms))->wrap(),
+                Section::make()->contained(false)->columnSpanFull()->schema(function (?DocumentRequest $record): array {
+                    if (! $record) {
+                        return [];
+                    }
+
+                    return collect($record->requirements['fields'] ?? [])->filter(fn (array $item): bool => filled($record->details[$item['key']] ?? null))
+                        ->map(fn (array $item): TextEntry => TextEntry::make('details.'.$item['key'])->label($item['label'])->wrap())->values()->all();
+                }),
+            ]),
+            Section::make('Riwayat')->compact()->collapsed()->visibleOn('edit')->schema([
                 TextEntry::make('history_text')->hiddenLabel()->state(fn (DocumentRequest $record): string => collect($record->history)->reverse()->map(fn (array $event): string => DocumentRequest::STATUSES[$event['status']].' · '.$event['user'].' · '.Carbon::parse($event['at'])->format('d M Y H:i').(filled($event['note']) ? "\n".$event['note'] : ''))->implode("\n\n"))->extraAttributes(['style' => 'white-space: pre-line']),
             ]),
-            Section::make('Notifikasi WhatsApp')->collapsed()->visibleOn('edit')->schema([
+            Section::make('Notifikasi WhatsApp')->compact()->collapsed()->visibleOn('edit')->schema([
                 TextEntry::make('notification_log')->hiddenLabel()->state(fn (DocumentRequest $record): string => $record->notifications()->latest('id')->get()->map(fn ($notification): string => ($notification->recipient_kind === 'pic' ? 'PIC' : 'Pengaju').' · '.match ($notification->status) {
                     'accepted' => 'Diterima WagHub', 'failed' => 'Gagal · '.$notification->attempts.'/5 percobaan', 'cancelled' => 'Digantikan status terbaru', default => 'Menunggu'
                 }.' · '.$notification->created_at->timezone(config('lms.reminder_timezone'))->format('d M Y H:i'))->implode("\n"))->extraAttributes(['style' => 'white-space: pre-line'])->placeholder('Belum ada notifikasi'),
