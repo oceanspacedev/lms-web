@@ -9,7 +9,6 @@
     <script src="{{ asset('js/request-form.js') }}" defer></script>
 </head>
 <body>
-    <header class="site-header"><a href="{{ route('requests.public.create') }}">{{ config('app.name') }}</a><span>Pengajuan Dokumen</span></header>
     <main>@yield('content')</main>
 </body>
 </html>

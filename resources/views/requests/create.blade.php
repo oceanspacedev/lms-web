@@ -52,7 +52,7 @@
         </section>
         @endif
     @endforeach
-    <div class="form-footer"><span>* Wajib diisi</span><button type="submit">{{ $submission ? 'Kirim revisi' : 'Ajukan dokumen' }}</button></div>
+    <div class="form-footer"><span>* Wajib diisi</span><button type="submit">{{ $submission ? 'Kirim revisi' : 'Kirim' }}</button></div>
     <noscript><p>Aktifkan JavaScript untuk menampilkan isian sesuai jenis dokumen.</p></noscript>
 </form>
 @endif
