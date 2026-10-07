@@ -3,6 +3,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!form) return;
     const type = document.getElementById('document-type');
     const company = document.getElementById('company');
+    const phone = document.getElementById('field-requester_phone');
+    phone.addEventListener('input', () => {
+        phone.value = phone.value.replace(/[^0-9+]/g, '').replace(/(?!^)\+/g, '');
+    });
     const update = () => {
         const otherBusiness = form.querySelector('[data-other-business]');
         otherBusiness.hidden = company.value !== 'other';

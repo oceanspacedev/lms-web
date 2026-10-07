@@ -11,7 +11,7 @@
     @if($inputType === 'textarea')
         <textarea id="{{ $fieldId }}" name="{{ $fieldName }}" rows="2" maxlength="4000" @required($isRequired) data-required="{{ (int) $isRequired }}" @if($errors->has($key)) aria-invalid="true" @endif>{{ $fieldValue }}</textarea>
     @else
-        <input id="{{ $fieldId }}" name="{{ $fieldName }}" type="{{ $inputType }}" value="{{ $inputType === 'date' ? substr($fieldValue, 0, 10) : $fieldValue }}" @required($isRequired) data-required="{{ (int) $isRequired }}" @if($inputType === 'number') step="any" @elseif($inputType !== 'date') maxlength="{{ $key === 'requester_division' ? 100 : (str_starts_with($key, 'details.') ? 4000 : 255) }}" @endif @if($inputType === 'tel') inputmode="tel" autocomplete="tel" @endif @if($errors->has($key)) aria-invalid="true" @endif>
+        <input id="{{ $fieldId }}" name="{{ $fieldName }}" type="{{ $inputType }}" value="{{ $inputType === 'date' ? substr($fieldValue, 0, 10) : $fieldValue }}" @required($isRequired) data-required="{{ (int) $isRequired }}" @if($inputType === 'number') step="any" @elseif($inputType !== 'date') maxlength="{{ $inputType === 'tel' ? 15 : ($key === 'requester_division' ? 100 : (str_starts_with($key, 'details.') ? 4000 : 255)) }}" @endif @if($inputType === 'tel') inputmode="tel" autocomplete="tel" pattern="(08|\+?628)[0-9]{8,11}" title="Gunakan nomor WhatsApp diawali 08, 62, atau +62." @endif @if($errors->has($key)) aria-invalid="true" @endif>
     @endif
     @error($key)<small class="field-error">{{ $message }}</small>@enderror
 </div>

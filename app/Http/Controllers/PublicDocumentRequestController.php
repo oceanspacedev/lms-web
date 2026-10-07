@@ -66,12 +66,12 @@ class PublicDocumentRequestController extends Controller
         abort_unless(blank($request->input('website')), 422);
         $isOther = $submission ? $submission->company_id === null : $request->input('company_id') === 'other';
         $data = $request->validate([
-            'requester_name' => ['required', 'string', 'max:255'], 'requester_phone' => ['required', 'string', 'max:30'],
+            'requester_name' => ['required', 'string', 'max:255'], 'requester_phone' => ['required', 'string', 'max:15', 'regex:/\A(?:08|\+?628)[0-9]{8,11}\z/'],
             'requester_division' => ['required', 'string', 'max:100'], 'request_reason' => ['required', 'string', 'max:4000'],
             'company_id' => [$submission ? 'nullable' : 'required', Rule::in([...Company::where('is_active', true)->pluck('id')->all(), 'other'])], 'document_type_id' => [$submission ? 'nullable' : 'required', 'integer'],
             'other_business_name' => [Rule::requiredIf($isOther), 'nullable', 'string', 'max:255'],
             'details' => ['sometimes', 'array', 'max:20'], 'attachments' => ['sometimes', 'array', 'max:20'],
-        ], ['required' => ':attribute wajib diisi.', 'after_or_equal' => ':attribute tidak boleh sebelum tanggal mulai.'], [
+        ], ['required' => ':attribute wajib diisi.', 'after_or_equal' => ':attribute tidak boleh sebelum tanggal mulai.', 'requester_phone.regex' => 'Nomor WhatsApp hanya boleh berisi angka, diawali 08, 62, atau +62.'], [
             'requester_name' => 'Nama pengaju', 'requester_phone' => 'Nomor telepon', 'company_id' => 'Badan usaha', 'document_type_id' => 'Jenis dokumen', 'requester_division' => 'Divisi', 'request_reason' => 'Keperluan',
         ]);
         $phone = $waghub->normalizePhone($data['requester_phone']);
