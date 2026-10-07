@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Services\DocumentRequestNotifier;
-use App\Services\WaghubService;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -82,9 +81,11 @@ class DocumentRequest extends Model
                     abort_unless($request->public_token && $request->status === 'revision', 409, 'Pengajuan sudah diproses.');
                     unset($data['company_id'], $data['document_type_id']);
                 } else {
-                    $type = DocumentType::where('is_active', true)->where('accept_public_requests', true)->findOrFail($data['document_type_id']);
-                    $pic = User::findOrFail($type->request_pic_id);
-                    abort_unless($pic->can('Review:DocumentRequest') && app(WaghubService::class)->normalizePhone($pic->phone), 422, 'PIC pengajuan belum tersedia.');
+                    $type = DocumentType::where('is_active', true)->findOrFail($data['document_type_id']);
+                    $pic = $type->resolveRequestPic();
+                    if (! $pic) {
+                        throw ValidationException::withMessages(['document_type_id' => 'Tim pemeriksa belum tersedia. Hubungi admin.']);
+                    }
                     $request->pic_user_id = $pic->id;
                     $request->reviewer_id = $type->request_reviewer_id ?? $pic->id;
                     $request->approver_id = $type->request_approver_id;

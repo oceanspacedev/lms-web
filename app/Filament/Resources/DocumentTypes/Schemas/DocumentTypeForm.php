@@ -11,7 +11,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
@@ -35,8 +34,7 @@ class DocumentTypeForm
                     ->default(false)
                     ->live(),
                 Section::make('Form Pengajuan')->collapsed()->columnSpanFull()->schema([
-                    Toggle::make('accept_public_requests')->label('Pengajuan publik')->live()->default(false),
-                    Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->pluck('name', 'id')->all())->searchable()->required(fn (Get $get): bool => (bool) $get('accept_public_requests'))->visible(fn (Get $get): bool => (bool) $get('accept_public_requests')),
+                    Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->pluck('name', 'id')->all())->searchable()->placeholder('Otomatis (tim pemeriksa)'),
                     Actions::make([
                         Action::make('cooperation')->label('Gunakan contoh Kerja Sama')->color('gray')
                             ->requiresConfirmation()->modalHeading('Ganti form pengajuan?')->modalDescription('Field dan daftar lampiran akan diganti.')
