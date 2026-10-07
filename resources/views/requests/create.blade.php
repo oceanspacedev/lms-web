@@ -7,7 +7,7 @@
 @endphp
 <div class="page-heading"><h1>{{ $submission ? 'Revisi pengajuan #'.$submission->id : 'Pengajuan dokumen' }}</h1><p>Status pengajuan dikirim melalui WhatsApp.</p></div>
 @if($submission)
-    <div class="notice"><strong>Catatan pemeriksa</strong><p>{{ collect($submission->history)->last()['note'] ?? '' }}</p></div>
+    <div class="notice"><strong>Revisi ke-{{ $submission->revisionNumber() }}</strong><p>{{ collect($submission->history)->last()['note'] ?? '' }}</p></div>
 @endif
 @if($errors->any())
     <div class="notice error" role="alert"><strong>Periksa kembali isian pengajuan.</strong><ul>@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul>@if($errors->has('attachments.*'))<p>Pilih kembali berkas lampiran.</p>@endif</div>

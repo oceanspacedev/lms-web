@@ -52,6 +52,7 @@ class DocumentRequestForm
                 TextEntry::make('requester_division')->label('Divisi')->visible(fn (DocumentRequest $record): bool => filled($record->requester_division)),
                 TextEntry::make('submitted_date')->label('Diajukan')->state(fn (DocumentRequest $record): ?string => collect($record->history)->firstWhere('status', 'submitted')['at'] ?? null)
                     ->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->placeholder('Belum diajukan'),
+                TextEntry::make('revision_number')->label('Versi pengajuan')->state(fn (DocumentRequest $record): string => $record->revisionNumber() ? 'Revisi ke-'.$record->revisionNumber() : 'Pengajuan awal'),
                 TextEntry::make('submission_reason')->label('Keperluan')->state(fn (DocumentRequest $record): string => $record->request_reason ?: $record->title)->columnSpanFull()->wrap(),
                 TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['revision', 'rejected'], true))
                     ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->columnSpanFull()->wrap(),

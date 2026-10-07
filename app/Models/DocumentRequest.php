@@ -60,6 +60,11 @@ class DocumentRequest extends Model
         return $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
     }
 
+    public function revisionNumber(): int
+    {
+        return collect($this->history)->where('status', 'revision')->count();
+    }
+
     public function notifications(): HasMany
     {
         return $this->hasMany(DocumentRequestNotification::class);
