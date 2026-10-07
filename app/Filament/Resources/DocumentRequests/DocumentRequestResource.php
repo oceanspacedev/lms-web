@@ -47,6 +47,7 @@ class DocumentRequestResource extends Resource
 
         return $query->where(function (Builder $query) use ($user): void {
             $query->where('requester_id', $user->id);
+            $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where('pic_user_id', $user->id));
             foreach (['Review' => 'reviewer_id', 'Approve' => 'approver_id'] as $permission => $column) {
                 if ($user->can($permission.':DocumentRequest')) {
                     $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull($column)->orWhere($column, $user->id)));

@@ -1,0 +1,105 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\DocumentRequest;
+use App\Models\DocumentRequestNotification;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Throwable;
+
+use function Illuminate\Support\defer;
+
+class DocumentRequestNotifier
+{
+    public function __construct(private WaghubService $waghub) {}
+
+    public function enqueue(DocumentRequest $request): void
+    {
+        $event = count($request->history);
+        $request->notifications()->whereIn('status', ['pending', 'failed'])->where('event_key', 'not like', "lms-request-{$request->id}-{$event}-%")->update(['status' => 'cancelled']);
+        $recipients = ['applicant' => $request->requester_phone ?? $request->requester?->phone];
+        if ($request->status === 'submitted') {
+            $recipients['pic'] = $request->pic?->phone;
+        }
+        foreach ($recipients as $kind => $number) {
+            $key = "lms-request-{$request->id}-{$event}-{$kind}";
+            $phone = $this->waghub->normalizePhone($number);
+            $link = $kind === 'pic'
+                ? route('filament.admin.resources.document-requests.edit', ['record' => $request->id])
+                : ($request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : route('filament.admin.resources.document-requests.edit', ['record' => $request->id]));
+            $status = match ($request->status) {
+                'submitted' => 'Pengajuan diterima dan sedang diperiksa.',
+                'review' => 'Pengajuan sedang diproses untuk persetujuan.',
+                'approved' => 'Pengajuan disetujui. Menunggu dokumen final.',
+                'revision' => 'Pengajuan perlu direvisi.',
+                'rejected' => 'Pengajuan ditolak.',
+                'archived' => 'Pengajuan selesai. Dokumen final telah diarsipkan.',
+                default => DocumentRequest::STATUSES[$request->status],
+            };
+            $text = $kind === 'pic' ? "Pengajuan baru #{$request->id}\n{$request->title}\nPengaju: {$request->applicantName()}" : "Pengajuan #{$request->id}\n{$request->title}\n{$status}";
+            $note = collect($request->history)->last()['note'] ?? null;
+            if ($kind === 'applicant' && filled($note)) {
+                $text .= "\nCatatan: {$note}";
+            }
+            $text .= "\n{$link}";
+            DocumentRequestNotification::firstOrCreate(['event_key' => $key], [
+                'document_request_id' => $request->id, 'recipient_kind' => $kind, 'recipient_phone' => $phone,
+                'payload' => ['recipient' => ['type' => 'phone', 'value' => $phone], 'message' => ['type' => 'text', 'text' => $text],
+                    'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'), 'route_key' => config('services.waghub.route_key'),
+                    'expires_at' => now()->addDay()->toIso8601String(), 'client_reference' => $key],
+            ]);
+        }
+        DB::afterCommit(function () use ($request): void {
+            defer(function () use ($request): void {
+                try {
+                    $this->run($request->id);
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            });
+        });
+    }
+
+    public function run(?int $requestId = null): int
+    {
+        $accepted = 0;
+        DocumentRequestNotification::whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)
+            ->when($requestId, fn (Builder $query): Builder => $query->where('document_request_id', $requestId))
+            ->where(fn (Builder $query): Builder => $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', now()->subMinutes(5)))
+            ->orderBy('id')->limit(50)->get()->each(function (DocumentRequestNotification $notification) use (&$accepted): void {
+                $request = DocumentRequest::find($notification->document_request_id);
+                if (! $request || ! str_starts_with($notification->event_key, 'lms-request-'.$request->id.'-'.count($request->history).'-')) {
+                    $notification->update(['status' => 'cancelled']);
+
+                    return;
+                }
+                $claimed = DocumentRequestNotification::whereKey($notification->id)->whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)
+                    ->where(fn (Builder $query): Builder => $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', now()->subMinutes(5)))
+                    ->update(['last_attempt_at' => now(), 'attempts' => DB::raw('attempts + 1')]);
+                if (! $claimed) {
+                    return;
+                }
+                try {
+                    if (! $notification->recipient_phone) {
+                        throw new \RuntimeException('Nomor WhatsApp belum tersedia atau tidak valid.');
+                    }
+                    $payload = $notification->payload;
+                    if (blank($payload['purpose'] ?? null)) {
+                        $payload['purpose'] = config('services.waghub.purpose');
+                        $notification->update(['payload' => $payload]);
+                    }
+                    $response = $this->waghub->send($payload, $notification->event_key);
+                    if (! $response->successful()) {
+                        throw new \RuntimeException('WagHub menolak permintaan (HTTP '.$response->status().').');
+                    }
+                    $notification->update(['status' => 'accepted', 'accepted_at' => now(), 'error_message' => null]);
+                    $accepted++;
+                } catch (Throwable $exception) {
+                    $notification->update(['status' => 'failed', 'error_message' => 'Pengiriman WhatsApp gagal. Akan dicoba kembali.']);
+                }
+            });
+
+        return $accepted;
+    }
+}

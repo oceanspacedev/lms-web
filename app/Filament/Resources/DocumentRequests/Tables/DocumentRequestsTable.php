@@ -16,7 +16,7 @@ class DocumentRequestsTable
         return $table->columns([
             TextColumn::make('title')->label('Pengajuan')->searchable()->description(fn (DocumentRequest $record): string => '#'.$record->id.' · '.$record->documentType->name),
             TextColumn::make('partner_name')->label('Mitra')->searchable(),
-            TextColumn::make('requester.name')->label('Pengaju'),
+            TextColumn::make('requester_name')->label('Pengaju')->state(fn (DocumentRequest $record): string => $record->applicantName()),
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::STATUSES[$state])->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),

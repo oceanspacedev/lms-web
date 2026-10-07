@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Services\DocumentRequestNotifier;
+use App\Services\WaghubService;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -56,6 +59,76 @@ class DocumentRequest extends Model
     public function editableBy(User $user): bool
     {
         return $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(DocumentRequestNotification::class);
+    }
+
+    public function applicantName(): string
+    {
+        return $this->requester_name ?? $this->requester?->name ?? 'Pengaju';
+    }
+
+    /** @param array<string, mixed> $data */
+    public static function submitPublic(array $data, ?self $existing = null): self
+    {
+        $storedPaths = [];
+        try {
+            return DB::transaction(function () use ($data, $existing, &$storedPaths): self {
+                $request = $existing ? self::whereKey($existing->id)->lockForUpdate()->firstOrFail() : new self;
+                if ($existing) {
+                    abort_unless($request->public_token && $request->status === 'revision', 409, 'Pengajuan sudah diproses.');
+                    unset($data['company_id'], $data['document_type_id']);
+                } else {
+                    $type = DocumentType::where('is_active', true)->where('accept_public_requests', true)->findOrFail($data['document_type_id']);
+                    $pic = User::findOrFail($type->request_pic_id);
+                    abort_unless($pic->can('Review:DocumentRequest') && app(WaghubService::class)->normalizePhone($pic->phone), 422, 'PIC pengajuan belum tersedia.');
+                    $request->pic_user_id = $pic->id;
+                    $request->reviewer_id = $type->request_reviewer_id ?? $pic->id;
+                    $request->approver_id = $type->request_approver_id;
+                    $request->public_token = Str::random(64);
+                    $request->requirements = ['fields' => [], 'attachments' => $type->request_attachments, 'has_expiry' => $type->has_expiry];
+                }
+                unset($data['pic_user_id']);
+                $data['details'] = array_intersect_key($data['details'] ?? [], array_flip(array_column($request->requirements['fields'] ?? [], 'key')));
+                $request->fill($data);
+                $request->requester_name = $data['requester_name'];
+                $request->requester_phone = $data['requester_phone'];
+                $request->requester_division = $data['requester_division'];
+                $request->request_reason = $data['request_reason'];
+                Validator::make($request->attributesToArray(), ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
+                $attachments = $request->attachments;
+                foreach ($request->requirements['attachments'] ?? [] as $item) {
+                    $value = $data['attachments'][$item['key']] ?? null;
+                    if ($value instanceof UploadedFile) {
+                        Validator::make(['file' => $value], ['file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]])->validate();
+                        $path = $value->storeAs('lms/requests/public', Str::uuid().'.'.strtolower($value->getClientOriginalExtension()), ['disk' => 'local', 'visibility' => 'private']);
+                        if ($path === false) {
+                            throw new \RuntimeException('Lampiran gagal disimpan.');
+                        }
+                        $storedPaths[] = $path;
+                        $attachments[$item['key']] = $path;
+                    } elseif ($value !== null) {
+                        throw ValidationException::withMessages(['attachments.'.$item['key'] => 'Unggah berkas lampiran.']);
+                    }
+                }
+                $request->attachments = $attachments;
+                $request->validateSubmission(false);
+                $request->status = 'submitted';
+                $request->recordEvent('submitted', null);
+                $request->save();
+                app(DocumentRequestNotifier::class)->enqueue($request);
+
+                return $request;
+            });
+        } catch (Throwable $exception) {
+            foreach ($storedPaths as $path) {
+                Storage::disk('local')->delete($path);
+            }
+            throw $exception;
+        }
     }
 
     /** @param array<string, mixed> $data */
@@ -133,9 +206,9 @@ class DocumentRequest extends Model
         };
     }
 
-    public function validateSubmission(): void
+    public function validateSubmission(bool $requireDates = true): void
     {
-        $rules = ['start_date' => ['required', 'date'], 'expiry_date' => [Rule::requiredIf((bool) ($this->requirements['has_expiry'] ?? false)), 'nullable', 'date', 'after_or_equal:start_date'], 'amount' => [Rule::requiredIf($this->has_cost), 'nullable', 'numeric', 'min:0'], 'payment_terms' => [Rule::requiredIf($this->has_cost), 'nullable', 'string', 'max:4000']];
+        $rules = ['start_date' => [$requireDates ? 'required' : 'nullable', 'date'], 'expiry_date' => [Rule::requiredIf($requireDates && (bool) ($this->requirements['has_expiry'] ?? false)), 'nullable', 'date', 'after_or_equal:start_date'], 'amount' => [Rule::requiredIf($this->has_cost), 'nullable', 'numeric', 'min:0'], 'payment_terms' => [Rule::requiredIf($this->has_cost), 'nullable', 'string', 'max:4000']];
         $labels = ['start_date' => 'Mulai', 'expiry_date' => 'Berakhir', 'amount' => 'Nilai', 'payment_terms' => 'Pembayaran'];
         foreach ($this->requirements['fields'] ?? [] as $item) {
             $key = 'details.'.$item['key'];
@@ -186,6 +259,7 @@ class DocumentRequest extends Model
             $request->status = $next;
             $request->recordEvent($next, $user, $note);
             $request->save();
+            app(DocumentRequestNotifier::class)->enqueue($request);
         });
         $this->refresh();
     }
@@ -204,14 +278,15 @@ class DocumentRequest extends Model
             $request->status = 'archived';
             $request->recordEvent('archived', $user);
             $request->save();
+            app(DocumentRequestNotifier::class)->enqueue($request);
             $this->refresh();
 
             return $document;
         });
     }
 
-    private function recordEvent(string $status, User $user, ?string $note = null): void
+    private function recordEvent(string $status, ?User $user, ?string $note = null): void
     {
-        $this->history = [...$this->history, ['status' => $status, 'user' => $user->name, 'user_id' => $user->id, 'at' => now()->toIso8601String(), 'note' => $note]];
+        $this->history = [...$this->history, ['status' => $status, 'user' => $user?->name ?? $this->applicantName(), 'user_id' => $user?->id, 'at' => now()->toIso8601String(), 'note' => $note]];
     }
 }

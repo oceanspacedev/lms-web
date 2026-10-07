@@ -14,7 +14,7 @@ class DocumentRequestPolicy
 
     public function view(User $user, DocumentRequest $request): bool
     {
-        return $user->can('View:DocumentRequest') && ($request->requester_id === $user->id || $user->can('ViewAll:DocumentRequest') || ($request->status !== 'draft' && (
+        return $user->can('View:DocumentRequest') && ($request->requester_id === $user->id || $user->can('ViewAll:DocumentRequest') || ($request->status !== 'draft' && ($request->pic_user_id === $user->id ||
             ($user->can('Review:DocumentRequest') && ($request->reviewer_id === null || $request->reviewer_id === $user->id)) ||
             ($user->can('Approve:DocumentRequest') && ($request->approver_id === null || $request->approver_id === $user->id))
         )));

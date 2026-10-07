@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\WaghubService;
 use Database\Factories\DocumentTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
-#[Fillable(['name', 'has_expiry', 'reminder_days', 'is_active', 'reminder_template_id', 'request_fields', 'request_attachments', 'request_reviewer_id', 'request_approver_id'])]
+#[Fillable(['name', 'has_expiry', 'reminder_days', 'is_active', 'reminder_template_id', 'request_fields', 'request_attachments', 'request_reviewer_id', 'request_approver_id', 'accept_public_requests', 'request_pic_id'])]
 class DocumentType extends Model
 {
     /** @return list<int> */
@@ -41,12 +42,18 @@ class DocumentType extends Model
             'is_active' => 'boolean',
             'request_fields' => 'array',
             'request_attachments' => 'array',
+            'accept_public_requests' => 'boolean',
         ];
     }
 
     protected static function booted(): void
     {
         static::saving(function (DocumentType $documentType): void {
+            if ($documentType->accept_public_requests) {
+                $pic = User::find($documentType->request_pic_id);
+                Validator::make(['request_pic_id' => $pic && $pic->can('Review:DocumentRequest') && app(WaghubService::class)->normalizePhone($pic->phone) ? $pic->id : null],
+                    ['request_pic_id' => ['required']], ['required' => 'Pilih PIC dengan izin pemeriksaan dan nomor WhatsApp valid.'])->validate();
+            }
             foreach (['request_fields', 'request_attachments'] as $attribute) {
                 $items = $documentType->{$attribute} ?? [];
                 Validator::make([$attribute => $items], [

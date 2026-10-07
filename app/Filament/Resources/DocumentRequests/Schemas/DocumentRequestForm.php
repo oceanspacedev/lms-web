@@ -39,6 +39,10 @@ class DocumentRequestForm
     {
         return $schema->columns(1)->components([
             TextEntry::make('status_label')->label('Status')->visibleOn('edit')->state(fn (DocumentRequest $record): string => DocumentRequest::STATUSES[$record->status])->badge(),
+            Section::make('Pengaju')->visible(fn (?DocumentRequest $record): bool => (bool) $record?->public_token)->columns(2)->schema([
+                TextEntry::make('requester_name')->label('Nama'), TextEntry::make('requester_phone')->label('WhatsApp'),
+                TextEntry::make('requester_division')->label('Divisi'), TextEntry::make('request_reason')->label('Keperluan')->columnSpanFull(),
+            ]),
             TextEntry::make('review_note')->label('Catatan pemeriksa')->visible(fn (?DocumentRequest $record): bool => $record && in_array($record->status, ['revision', 'rejected'], true))
                 ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->extraAttributes(['style' => 'white-space: pre-line']),
             Section::make('Data pengajuan')->columns(2)->schema([
@@ -133,6 +137,11 @@ class DocumentRequestForm
             }),
             Section::make('Riwayat')->collapsed()->visibleOn('edit')->schema([
                 TextEntry::make('history_text')->hiddenLabel()->state(fn (DocumentRequest $record): string => collect($record->history)->reverse()->map(fn (array $event): string => DocumentRequest::STATUSES[$event['status']].' · '.$event['user'].' · '.Carbon::parse($event['at'])->format('d M Y H:i').(filled($event['note']) ? "\n".$event['note'] : ''))->implode("\n\n"))->extraAttributes(['style' => 'white-space: pre-line']),
+            ]),
+            Section::make('Notifikasi WhatsApp')->collapsed()->visibleOn('edit')->schema([
+                TextEntry::make('notification_log')->hiddenLabel()->state(fn (DocumentRequest $record): string => $record->notifications()->latest('id')->get()->map(fn ($notification): string => ($notification->recipient_kind === 'pic' ? 'PIC' : 'Pengaju').' · '.match ($notification->status) {
+                    'accepted' => 'Diterima WagHub', 'failed' => 'Gagal · '.$notification->attempts.'/5 percobaan', 'cancelled' => 'Digantikan status terbaru', default => 'Menunggu'
+                }.' · '.$notification->created_at->timezone(config('lms.reminder_timezone'))->format('d M Y H:i'))->implode("\n"))->extraAttributes(['style' => 'white-space: pre-line'])->placeholder('Belum ada notifikasi'),
             ]),
         ]);
     }
