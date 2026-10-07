@@ -16,7 +16,7 @@ class DocumentInfolist
         return $schema
             ->columns(['default' => 1, 'xl' => 3])
             ->components([
-                Section::make('Preview dokumen')->compact()->columnSpanFull()
+                Section::make('Preview dokumen')->compact()->collapsed()->columnSpanFull()
                     ->visible(fn (Document $record): bool => in_array($record->currentVersion?->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true))
                     ->schema([
                         View::make('requests.attachment-preview')->viewData(fn (Document $record): array => [
