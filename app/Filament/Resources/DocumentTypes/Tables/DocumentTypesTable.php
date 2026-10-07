@@ -11,9 +11,9 @@ class DocumentTypesTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        return $table->striped()->paginated([10, 25, 50])
             ->columns([
-                TextColumn::make('name')->label('Jenis Dokumen')->searchable()->sortable(),
+                TextColumn::make('name')->label('Jenis Dokumen')->searchable()->sortable()->weight('medium')->limit(40)->wrap(),
                 TextColumn::make('has_expiry')
                     ->label('Masa Berlaku')
                     ->badge()
@@ -31,7 +31,7 @@ class DocumentTypesTable
                 TernaryFilter::make('has_expiry')->label('Masa Berlaku')->placeholder('Semua jenis')->trueLabel('Memiliki Masa Berlaku')->falseLabel('Tanpa Masa Berlaku'),
             ])
             ->recordActions([
-                EditAction::make()->label('Ubah'),
+                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
             ])
             ->defaultSort('name')
             ->emptyStateHeading('Belum ada jenis dokumen')

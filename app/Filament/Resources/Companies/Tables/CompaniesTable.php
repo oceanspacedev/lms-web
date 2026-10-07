@@ -11,9 +11,9 @@ class CompaniesTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        return $table->striped()->paginated([10, 25, 50])
             ->columns([
-                TextColumn::make('name')->label('Nama Badan Usaha')->searchable()->sortable(),
+                TextColumn::make('name')->label('Badan Usaha')->searchable()->sortable()->weight('medium')->limit(40)->wrap(),
                 TextColumn::make('legal_form')->label('Bentuk Badan Usaha')->searchable()->sortable(),
                 TextColumn::make('npwp')->label('NPWP')->searchable()->placeholder('Belum diisi'),
                 TextColumn::make('is_active')
@@ -28,7 +28,7 @@ class CompaniesTable
                 TernaryFilter::make('is_active')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif'),
             ])
             ->recordActions([
-                EditAction::make()->label('Ubah'),
+                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
             ])
             ->defaultSort('name')
             ->emptyStateHeading('Belum ada badan usaha')

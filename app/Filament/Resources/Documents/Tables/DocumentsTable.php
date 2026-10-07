@@ -20,6 +20,7 @@ class DocumentsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->striped()->paginated([10, 25, 50])
             ->heading('Arsip Dokumen')
             ->headerActions([
                 Action::make('tableView')->label('Tabel')->icon('heroicon-o-list-bullet')
@@ -38,15 +39,15 @@ class DocumentsTable
                 ]) : null)
             ->searchPlaceholder('Cari judul, nomor, badan usaha, atau file')
             ->columns([
-                TextColumn::make('title')->label('Judul')->searchable()->sortable(),
-                TextColumn::make('document_number')->label('Nomor Dokumen')->searchable()->toggleable(),
-                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable(),
-                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable(),
-                TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa Masa Berlaku')->sortable(),
+                TextColumn::make('title')->label('Dokumen')->searchable(['title', 'document_number'])->sortable()->weight('medium')->limit(45)->wrap()->width('28%')->tooltip(fn (Document $record): string => $record->title)
+                    ->description(fn (Document $record): ?string => $record->document_number),
+                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap(),
+                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap(),
+                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa batas')->sortable(),
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
-                TextColumn::make('pic.name')->label('PIC'),
+                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap(),
                 TextColumn::make('currentVersion.file_name')->label('Nama File')->searchable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
@@ -71,9 +72,10 @@ class DocumentsTable
             ->filtersFormColumns(1)
             ->deferFilters(false)
             ->recordActions([
-                ViewAction::make()->label('Lihat'),
-                EditAction::make()->label('Ubah'),
+                ViewAction::make()->label('Lihat')->iconButton()->tooltip('Lihat dokumen'),
+                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah dokumen'),
                 Action::make('download')->label('Unduh')->icon('heroicon-o-arrow-down-tray')
+                    ->iconButton()->tooltip('Unduh file')
                     ->url(fn (Document $record): string => route('documents.download', $record))->openUrlInNewTab()
                     ->visible(fn (Document $record): bool => Gate::allows('view', $record)),
             ])

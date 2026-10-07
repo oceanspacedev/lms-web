@@ -12,7 +12,7 @@ class ReminderLogsTable
 {
     public static function configure(Table $table): Table
     {
-        return $table->defaultSort('id', 'desc')->columns([
+        return $table->striped()->paginated([10, 25, 50])->defaultSort('id', 'desc')->columns([
             TextColumn::make('documentVersion.document.title')->label('Dokumen')->searchable()->limit(45),
             TextColumn::make('documentVersion.document.company.name')->label('Badan Usaha')->searchable(),
             TextColumn::make('documentVersion.version_number')->label('Versi')->prefix('v'),
@@ -25,6 +25,6 @@ class ReminderLogsTable
             TextColumn::make('attempts')->label('Percobaan'),
             TextColumn::make('last_attempt_at')->label('Percobaan Terakhir')->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->placeholder('-'),
         ])->filters([SelectFilter::make('status')->label('Status')->options(ReminderLog::STATUSES)])
-            ->recordActions([ViewAction::make()])->toolbarActions([]);
+            ->recordActions([ViewAction::make()->label('Lihat')->iconButton()->tooltip('Lihat log')])->toolbarActions([]);
     }
 }
