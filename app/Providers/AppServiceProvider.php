@@ -5,8 +5,11 @@ namespace App\Providers;
 use App\Models\User;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Console\ServeCommand;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -24,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('public-request-create', fn (Request $request): Limit => Limit::perMinutes(10, 5)->by($request->ip()));
+        RateLimiter::for('public-request-revise', fn (Request $request): Limit => Limit::perMinutes(10, 5)->by($request->ip().'|'.$request->route('token')));
+        RateLimiter::for('public-request-status', fn (Request $request): Limit => Limit::perMinute(60)->by($request->ip().'|'.$request->route('token')));
+
         FilamentAsset::register([
             Css::make('documents-browser', resource_path('css/documents-browser.css'))
                 ->relativePublicPath('css/filament/documents-browser.css'),
