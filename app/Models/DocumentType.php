@@ -14,6 +14,17 @@ use Illuminate\Support\Str;
 #[Fillable(['name', 'has_expiry', 'reminder_days', 'is_active', 'reminder_template_id', 'request_fields', 'request_attachments', 'request_reviewer_id', 'request_approver_id', 'request_pic_id'])]
 class DocumentType extends Model
 {
+    /** @return array<string, mixed> */
+    public function publicRequirements(): array
+    {
+        $attachments = $this->request_attachments;
+        if (! collect($attachments)->contains(fn (array $item): bool => ($item['when'] ?? 'always') === 'always')) {
+            $attachments[] = ['key' => 'supporting-document', 'label' => 'Dokumen pendukung', 'required' => true, 'when' => 'always'];
+        }
+
+        return ['fields' => [], 'attachments' => $attachments, 'has_expiry' => $this->has_expiry];
+    }
+
     public function resolveRequestPic(): ?User
     {
         foreach ([$this->request_pic_id, $this->request_reviewer_id, $this->request_approver_id] as $userId) {

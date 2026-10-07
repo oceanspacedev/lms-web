@@ -40,9 +40,9 @@
                     @foreach($items as $item)
                         @php $existingPath = $submission?->attachments[$item['key']] ?? null; @endphp
                         <div class="field wide" data-condition="{{ $item['when'] ?? 'always' }}">
-                            <label for="attachment-{{ $item['key'] }}">{{ $item['label'] }} @if($item['required'])<span aria-hidden="true">*</span>@endif</label>
+                            <label for="attachment-{{ $typeId }}-{{ $item['key'] }}">{{ $item['label'] }} @if($item['required'])<span aria-hidden="true">*</span>@endif</label>
                             @if($existingPath)<small>Berkas tersimpan. Pilih berkas untuk mengganti.</small>@endif
-                            <input id="attachment-{{ $item['key'] }}" type="file" name="attachments[{{ $item['key'] }}]" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" data-required="{{ (int)($item['required'] && !$existingPath) }}">
+                            <input id="attachment-{{ $typeId }}-{{ $item['key'] }}" type="file" name="attachments[{{ $item['key'] }}]" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" data-required="{{ (int)($item['required'] && !$existingPath) }}">
                         </div>
                     @endforeach
                     </div>

@@ -52,7 +52,7 @@ class PublicDocumentRequestController extends Controller
     private function form(?DocumentRequest $submission = null): Response
     {
         $types = $submission ? collect([$submission->documentType]) : DocumentType::where('is_active', true)->orderBy('name')->get();
-        $schemas = $types->mapWithKeys(fn (DocumentType $type): array => [$type->id => $submission?->requirements ?? ['fields' => [], 'attachments' => $type->request_attachments, 'has_expiry' => $type->has_expiry]]);
+        $schemas = $types->mapWithKeys(fn (DocumentType $type): array => [$type->id => $submission?->requirements ?? $type->publicRequirements()]);
 
         return response()->view('requests.create', [
             'submission' => $submission, 'types' => $types, 'schemas' => $schemas,

@@ -90,7 +90,7 @@ class DocumentRequest extends Model
                     $request->reviewer_id = $type->request_reviewer_id ?? $pic->id;
                     $request->approver_id = $type->request_approver_id;
                     $request->public_token = Str::random(64);
-                    $request->requirements = ['fields' => [], 'attachments' => $type->request_attachments, 'has_expiry' => $type->has_expiry];
+                    $request->requirements = $type->publicRequirements();
                 }
                 unset($data['pic_user_id']);
                 $data['details'] = array_intersect_key($data['details'] ?? [], array_flip(array_column($request->requirements['fields'] ?? [], 'key')));
