@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DocumentRequest;
 use App\Models\DocumentRequestNotification;
+use App\Models\ReminderTemplate;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -19,6 +20,7 @@ class DocumentRequestNotifier
         $event = count($request->history);
         $request->notifications()->whereIn('status', ['pending', 'failed'])->where('event_key', 'not like', "lms-request-{$request->id}-{$event}-%")->update(['status' => 'cancelled']);
         $recipients = ['applicant' => $request->requester_phone ?? $request->requester?->phone];
+        $setting = ReminderTemplate::globalSetting();
         if ($request->status === 'submitted') {
             $recipients['pic'] = $request->pic?->phone;
         }
@@ -28,21 +30,16 @@ class DocumentRequestNotifier
             $link = $kind === 'pic'
                 ? route('filament.admin.resources.document-requests.edit', ['record' => $request->id])
                 : ($request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : route('filament.admin.resources.document-requests.edit', ['record' => $request->id]));
-            $status = match ($request->status) {
-                'submitted' => 'Pengajuan diterima dan sedang diperiksa.',
-                'review' => 'Pengajuan sedang diproses untuk persetujuan.',
-                'approved' => 'Pengajuan disetujui. Menunggu dokumen final.',
-                'revision' => 'Pengajuan perlu direvisi.',
-                'rejected' => 'Pengajuan ditolak.',
-                'archived' => 'Pengajuan selesai. Dokumen final telah diarsipkan.',
-                default => DocumentRequest::STATUSES[$request->status],
-            };
-            $text = $kind === 'pic' ? "Pengajuan baru #{$request->id}\n{$request->title}\nPengaju: {$request->applicantName()}" : "Pengajuan #{$request->id}\n{$request->title}\n{$status}";
             $note = collect($request->history)->last()['note'] ?? null;
-            if ($kind === 'applicant' && filled($note)) {
-                $text .= "\nCatatan: {$note}";
-            }
-            $text .= "\n{$link}";
+            $templateEvent = $kind === 'pic' ? 'pic' : $request->status;
+            $body = $setting?->requestTemplate($templateEvent) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$templateEvent] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
+            $text = ReminderTemplate::renderBody($body, [
+                'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
+                'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
+                'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
+                'status' => DocumentRequest::STATUSES[$request->status], 'catatan' => (string) $note,
+                'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
+            ]);
             DocumentRequestNotification::firstOrCreate(['event_key' => $key], [
                 'document_request_id' => $request->id, 'recipient_kind' => $kind, 'recipient_phone' => $phone,
                 'payload' => ['recipient' => ['type' => 'phone', 'value' => $phone], 'message' => ['type' => 'text', 'text' => $text],

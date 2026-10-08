@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days'])]
+#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'request_templates'])]
 class ReminderTemplate extends Model
 {
     public static function globalSetting(): ?self
@@ -67,17 +67,59 @@ class ReminderTemplate extends Model
 
     public const EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'sisa_hari' => '30', 'pic' => 'PIC Dummy'];
 
-    protected function casts(): array
+    public const REQUEST_TEMPLATE_LABELS = [
+        'submitted' => 'Pengajuan diterima / diperiksa',
+        'review' => 'Menunggu persetujuan',
+        'approved' => 'Disetujui / menunggu tanda tangan',
+        'revision' => 'Perlu revisi',
+        'rejected' => 'Ditolak',
+        'archived' => 'Selesai / diarsipkan',
+        'pic' => 'Pengajuan baru untuk PIC',
+    ];
+
+    public const DEFAULT_REQUEST_TEMPLATES = [
+        'submitted' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan diterima dan sedang diperiksa.{baris_catatan}\n{tautan}",
+        'review' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan sedang diproses untuk persetujuan.{baris_catatan}\n{tautan}",
+        'approved' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan disetujui. Menunggu dokumen final.{baris_catatan}\n{tautan}",
+        'revision' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan perlu direvisi.{baris_catatan}\n{tautan}",
+        'rejected' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan ditolak.{baris_catatan}\n{tautan}",
+        'archived' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan selesai. Dokumen final telah diarsipkan.{baris_catatan}\n{tautan}",
+        'pic' => "Pengajuan baru #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\n{tautan}",
+    ];
+
+    public const REQUEST_VARIABLE_LABELS = [
+        'nomor_pengajuan' => 'Nomor pengajuan', 'judul' => 'Judul pengajuan', 'pengaju' => 'Nama pengaju',
+        'perusahaan' => 'Nama perusahaan', 'jenis_dokumen' => 'Jenis dokumen', 'pic' => 'Nama PIC',
+        'status' => 'Status pengajuan', 'catatan' => 'Catatan pemeriksa',
+        'baris_catatan' => 'Baris catatan (hanya jika ada)', 'tautan' => 'Tautan pengajuan',
+    ];
+
+    public const REQUEST_EXAMPLE_VALUES = [
+        'nomor_pengajuan' => '123', 'judul' => 'Pengajuan Kontrak Dummy', 'pengaju' => 'Budi',
+        'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'pic' => 'PIC Dummy',
+        'status' => 'Perlu Revisi', 'catatan' => 'Mohon lengkapi lampiran.',
+        'baris_catatan' => "\nCatatan: Mohon lengkapi lampiran.", 'tautan' => 'https://contoh.test/pengajuan/123',
+    ];
+
+    public function requestTemplate(string $event): ?string
     {
-        return ['is_active' => 'boolean', 'start_before_days' => 'integer', 'interval_days' => 'integer', 'scheduled_days' => 'array'];
+        return $this->request_templates[$event] ?? self::DEFAULT_REQUEST_TEMPLATES[$event] ?? null;
     }
 
-    /** @return list<string> */
-    public static function unknownVariables(string $body): array
+    protected function casts(): array
+    {
+        return ['is_active' => 'boolean', 'start_before_days' => 'integer', 'interval_days' => 'integer', 'scheduled_days' => 'array', 'request_templates' => 'array'];
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     * @return list<string>
+     */
+    public static function unknownVariables(string $body, array $values = self::EXAMPLE_VALUES): array
     {
         preg_match_all('/\{([^{}]+)\}/', $body, $matches);
 
-        return array_values(array_diff(array_unique($matches[1]), array_keys(self::EXAMPLE_VALUES)));
+        return array_values(array_diff(array_unique($matches[1]), array_keys($values)));
     }
 
     /** @param array<string, string> $values */
@@ -104,7 +146,14 @@ class ReminderTemplate extends Model
                 'interval_days' => [Rule::requiredIf($template->schedule_mode === 'interval'), 'nullable', 'integer', 'min:1', 'max:3650'],
                 'scheduled_days' => [Rule::requiredIf($template->schedule_mode === 'specific_days'), 'array'],
                 'scheduled_days.*' => ['integer', 'min:0', 'max:3650', 'distinct'],
+                'request_templates' => ['nullable', 'array:'.implode(',', array_keys(self::REQUEST_TEMPLATE_LABELS))],
+                'request_templates.*' => ['required', 'string', 'max:4000'],
             ])->validate();
+            foreach ($template->request_templates ?? [] as $event => $body) {
+                if (blank($body) || self::unknownVariables($body, self::REQUEST_EXAMPLE_VALUES) !== []) {
+                    throw ValidationException::withMessages(['request_templates.'.$event => 'Isi pesan wajib diisi dan memakai variabel yang tersedia.']);
+                }
+            }
             if (blank($template->body) || mb_strlen($template->body) > 4000 || self::unknownVariables($template->body) !== []) {
                 throw ValidationException::withMessages(['body' => 'Isi pesan wajib diisi, maksimal 4000 karakter, dan memakai variabel yang tersedia.']);
             }

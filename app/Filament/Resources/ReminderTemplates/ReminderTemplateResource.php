@@ -3,11 +3,10 @@
 namespace App\Filament\Resources\ReminderTemplates;
 
 use App\Filament\Resources\ReminderTemplates\Pages\ManageReminderTemplates;
+use App\Filament\Resources\ReminderTemplates\Pages\WhatsAppDeliveryHistory;
+use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
 use BackedEnum;
-use Filament\Actions\Action;
-use Filament\Actions\EditAction;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
@@ -15,15 +14,12 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\TernaryFilter;
-use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -33,9 +29,9 @@ class ReminderTemplateResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
 
-    protected static ?string $modelLabel = 'Pengaturan Pengingat';
+    protected static ?string $modelLabel = 'Pengaturan WhatsApp';
 
-    protected static ?string $pluralModelLabel = 'Pengaturan Pengingat';
+    protected static ?string $pluralModelLabel = 'Pengaturan WhatsApp';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Data Master';
 
@@ -57,15 +53,26 @@ class ReminderTemplateResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->columns(1)->components([
-            Hidden::make('name')->default('Pengingat Semua Dokumen'),
-            Toggle::make('is_active')->label('Aktif')->default(true),
+        return $schema->columns(1)->components(self::reminderFields());
+    }
+
+    /** @return array<Component> */
+    public static function reminderFields(): array
+    {
+        return self::messageFields('body', ReminderTemplate::DEFAULT_BODY, ReminderTemplate::EXAMPLE_VALUES, ReminderTemplate::VARIABLE_LABELS);
+    }
+
+    /** @return array<Component> */
+    public static function reminderScheduleFields(): array
+    {
+        return [
+            Toggle::make('is_active')->label('Kirim pengingat otomatis')->default(true),
             Select::make('schedule_mode')->label('Jadwal')->options(fn (?ReminderTemplate $record): array => [
-                'interval' => 'Berulang',
-                'specific_days' => 'Hari tertentu',
+                'interval' => 'Ulangi setiap beberapa hari',
+                'specific_days' => 'Pilih hari pengiriman sendiri',
             ])->default('interval')->required()->live()->native(false),
             Grid::make(2)->schema([
-                TextInput::make('start_before_days')->label('Mulai sebelum berakhir')->suffix('hari')->numeric()->integer()->minValue(1)->maxValue(3650)->default(30)->required()
+                TextInput::make('start_before_days')->label('Mulai berapa hari sebelum berakhir?')->suffix('hari')->numeric()->integer()->minValue(1)->maxValue(3650)->default(30)->required()
                     ->visible(fn (Get $get): bool => $get('schedule_mode') === 'interval')->live(onBlur: true),
                 TextInput::make('interval_days')->label('Ulangi setiap')->suffix('hari')->numeric()->integer()->minValue(1)->maxValue(3650)->default(7)->required()
                     ->visible(fn (Get $get): bool => $get('schedule_mode') === 'interval')->live(onBlur: true),
@@ -73,43 +80,50 @@ class ReminderTemplateResource extends Resource
             TagsInput::make('scheduled_days')->label('Hari sebelum berakhir')->default([30, 7, 1])->required()->splitKeys([','])->live()
                 ->nestedRecursiveRules(['integer', 'min:0', 'max:3650', 'distinct'])
                 ->visible(fn (Get $get): bool => $get('schedule_mode') === 'specific_days')
-                ->helperText('0 = tanggal berakhir.'),
-            Hidden::make('show_variables')->default(false)->dehydrated(false),
-            Select::make('message_variable')->label('Sisipkan variabel')->placeholder('Pilih untuk menambahkan')->live()->dehydrated(false)
-                ->options(fn (): array => collect(ReminderTemplate::VARIABLE_LABELS)->map(fn (string $label, string $name): string => $label.' — '.ReminderTemplate::EXAMPLE_VALUES[$name])->all())
-                ->visible(fn (Get $get): bool => (bool) $get('show_variables'))
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
-                    if (isset(ReminderTemplate::VARIABLE_LABELS[$state ?? ''])) {
-                        $set('body', rtrim((string) $get('body')).' {'.$state.'}');
-                        $set('message_variable', null);
-                        $set('show_variables', false);
-                    }
-                }),
-            Textarea::make('body')->label('Pesan')->required()->maxLength(4000)->rows(4)->live(onBlur: true)->columnSpanFull()
-                ->default(ReminderTemplate::DEFAULT_BODY)
-                ->hintAction(Action::make('show_variables')->label('Sisipkan variabel')->link()->action(fn (Get $get, Set $set) => $set('show_variables', ! $get('show_variables'))))
-                ->rules([fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
-                    $unknown = ReminderTemplate::unknownVariables((string) $value);
-                    if ($unknown !== []) {
-                        $fail('Variabel tidak dikenal: '.implode(', ', $unknown));
-                    }
-                }]),
-            Section::make('Pratinjau pesan')->collapsed()->compact()->schema([
-                TextEntry::make('preview')->hiddenLabel()->columnSpanFull()
-                    ->state(fn (Get $get): string => ReminderTemplate::renderBody((string) $get('body'), ReminderTemplate::EXAMPLE_VALUES))->extraAttributes(['style' => 'white-space: pre-line']),
-            ]),
-        ]);
+                ->helperText('Angka = hari sebelum berakhir. 0 = tanggal berakhir.'),
+            TextEntry::make('schedule_time')->label('Waktu pengiriman')->state(self::reminderTimeLabel()),
+        ];
     }
 
-    public static function table(Table $table): Table
+    public static function reminderTimeLabel(): string
     {
-        return $table->columns([
-            TextColumn::make('name')->label('Nama')->searchable()->sortable(),
-            TextColumn::make('schedule')->label('Jadwal')->state(fn (ReminderTemplate $record): string => $record->scheduleDescription())->wrap(),
-            TextColumn::make('is_active')->label('Status')->badge()->formatStateUsing(fn (bool $state): string => $state ? 'Aktif' : 'Nonaktif')->color(fn (bool $state): string => $state ? 'success' : 'gray'),
-        ])->filters([TernaryFilter::make('is_active')->label('Status')->placeholder('Semua')->trueLabel('Aktif')->falseLabel('Nonaktif')])
-            ->recordActions([EditAction::make()->label('Ubah')->modalWidth('2xl')])->defaultSort('name')
-            ->emptyStateHeading('Belum ada data')->emptyStateDescription('Tambahkan data melalui tombol Tambah.');
+        $timezone = config('lms.reminder_timezone');
+
+        return config('lms.reminder_time').' '.($timezone === 'Asia/Jakarta' ? 'WIB' : $timezone);
+    }
+
+    /** @return array<Component> */
+    public static function requestTemplateFields(string $event): array
+    {
+        return self::messageFields('request_templates.'.$event, ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], [
+            ...ReminderTemplate::REQUEST_EXAMPLE_VALUES,
+            'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa',
+        ], ReminderTemplate::REQUEST_VARIABLE_LABELS);
+    }
+
+    /**
+     * @param  array<string, string>  $examples
+     * @param  array<string, string>  $labels
+     * @return array<Component>
+     */
+    private static function messageFields(string $field, string $default, array $examples, array $labels): array
+    {
+        return [
+            Textarea::make($field)->label('Isi pesan')->required()->maxLength(4000)->rows(7)->live(debounce: 500)
+                ->default($default)->formatStateUsing(fn (?string $state): string => $state ?? $default)
+                ->view('filament.resources.reminder-templates.variable-message-editor', ['variableLabels' => $labels])
+                ->rules([fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail) use ($examples): void {
+                    $unknown = ReminderTemplate::unknownVariables((string) $value, $examples);
+                    if ($unknown !== []) {
+                        $fail('Data otomatis tidak dikenali: '.implode(', ', $unknown).'. Gunakan pilihan data di bawah pesan.');
+                    }
+                }]),
+            Section::make('Lihat contoh pesan')->collapsed()->compact()->schema([
+                TextEntry::make('message_example')->hiddenLabel()
+                    ->state(fn (Get $get): string => ReminderTemplate::renderBody((string) $get($field), $examples))
+                    ->view('filament.resources.reminder-templates.message-preview'),
+            ]),
+        ];
     }
 
     public static function canDelete(Model $record): bool
@@ -124,6 +138,6 @@ class ReminderTemplateResource extends Resource
 
     public static function getPages(): array
     {
-        return ['index' => ManageReminderTemplates::route('/')];
+        return ['index' => ManageReminderTemplates::route('/'), 'history' => WhatsAppDeliveryHistory::route('/history')];
     }
 }
