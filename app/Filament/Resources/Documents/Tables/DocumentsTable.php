@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Documents\Tables;
 
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Models\Document;
+use App\Services\DocumentSpreadsheetExporter;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -27,6 +28,14 @@ class DocumentsTable
             ->striped()->paginated([10, 25, 50])
             ->heading('Arsip Dokumen')
             ->headerActions([
+                Action::make('exportExcel')->label('Ekspor Excel')->icon('heroicon-o-table-cells')->color('gray')
+                    ->tooltip('Unduh daftar dokumen sesuai pencarian dan filter yang aktif')
+                    ->visible(fn (): bool => Gate::allows('viewAny', Document::class))
+                    ->action(function (ListDocuments $livewire) {
+                        Gate::authorize('viewAny', Document::class);
+
+                        return app(DocumentSpreadsheetExporter::class)->download($livewire->getTableQueryForExport(), 'dokumen');
+                    }),
                 Action::make('tableView')->label('Tabel')->icon('heroicon-o-list-bullet')
                     ->color(fn (ListDocuments $livewire): string => $livewire->isGridView() ? 'gray' : 'primary')
                     ->extraAttributes(fn (ListDocuments $livewire): array => ['aria-pressed' => $livewire->isGridView() ? 'false' : 'true'])

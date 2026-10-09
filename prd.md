@@ -397,6 +397,22 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 44: Ekspor Excel
+
+**Tujuan:** Daftar dokumen dapat dibawa ke Excel untuk dilaporkan atau diolah.
+
+**Cakupan:**
+- Tombol "Ekspor Excel" di halaman daftar dokumen. Isinya mengikuti pencarian, filter, dan urutan yang sedang aktif, dan tetap dibatasi hak akses user (hanya yang boleh melihat daftar dokumen).
+- Tombol yang sama di widget dashboard "Berakhir dalam 30 Hari", berisi dokumen yang tampil di widget tersebut.
+- Berkas `.xlsx` (satu sheet "Dokumen", baris judul tebal) dibuat secara streaming per 500 baris, sehingga aman untuk data besar. Memakai OpenSpout yang sudah terpasang bersama Filament, tanpa paket baru.
+- Kolom: Judul, Nomor Dokumen, Badan Usaha, Jenis Dokumen, Pihak Lawan, PIC, Tanggal Terbit, Tanggal Berakhir (tanggal sungguhan, format dd/mm/yyyy), Status, Sisa Hari (negatif bila sudah lewat, kosong bila tanpa masa tenggang), Versi Aktif, Nama File, Dibuat.
+- Nama berkas memuat waktu unduh (WIB), unduhan tidak disimpan di cache (`no-store, private`). Dokumen tanpa versi tetap diekspor dengan kolom versi dikosongkan.
+- Penunjang pengujian: `phpunit.xml` menonaktifkan Debugbar (`DEBUGBAR_ENABLED=false`, yang juga menghentikan penumpukan berkas di `storage/debugbar`) dan menaikkan `memory_limit` tes menjadi 512M, karena suite yang makin besar melewati batas bawaan 128 MB.
+
+**Definition of Done:** Tes mencakup isi sheet dan kolom hitungan, respons unduhan, dokumen tanpa versi, lebih dari satu chunk, ekspor mengikuti pencarian dan filter, ekspor widget 30 hari, dan pembatasan akses. Commit: `feat(work-44): ekspor excel daftar dokumen`.
+
+---
+
 ### WORK 43: Filter dan Pencarian Lanjutan Dokumen
 
 **Tujuan:** Dokumen dapat dicari berdasarkan pihak lawan dan rentang tanggal berakhir, selain filter badan usaha, jenis, status, PIC, dan format yang sudah ada.
@@ -492,5 +508,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 41 | Sembunyikan nama PIC di halaman publik | `ahtar-dev` |
 | 42 | Perbaikan tes yang usang | `ahtar-dev` |
 | 43 | Filter pihak lawan dan rentang tanggal berakhir | `ahtar-dev` |
+| 44 | Ekspor Excel daftar dokumen | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

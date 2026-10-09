@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Services\DocumentSpreadsheetExporter;
 use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -49,6 +50,14 @@ class ExpiringDocuments extends TableWidget
                     ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
                 TextColumn::make('pic.name')->label('PIC'),
+            ])
+            ->headerActions([
+                Action::make('exportExcel')->label('Ekspor Excel')->icon('heroicon-o-table-cells')->color('gray')
+                    ->action(function (self $livewire) {
+                        abort_unless(static::canView(), 403);
+
+                        return app(DocumentSpreadsheetExporter::class)->download($livewire->getTableQueryForExport(), 'dokumen-berakhir-30-hari');
+                    }),
             ])
             ->recordActions([
                 Action::make('view')->label('Lihat Dokumen')->icon('heroicon-o-eye')
