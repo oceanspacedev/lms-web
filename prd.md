@@ -379,6 +379,20 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 40: Akun Dummy per Role untuk Pengujian
+
+**Tujuan:** Pengujian manual (oleh developer maupun agen) dapat memakai akun dari setiap role tanpa membuat akun satu per satu.
+
+**Cakupan:**
+- Seeder `DummyAccountSeeder`, dijalankan manual: `php artisan db:seed --class=DummyAccountSeeder`. Tidak dipanggil oleh `DatabaseSeeder` dan menolak berjalan di production.
+- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@dummy.test` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
+- Role dasar berawalan `dummy_` agar tidak menimpa role buatan sendiri, dengan izin untuk menguji alur dokumen dan pengajuan: `dummy_legal` (kelola dokumen, lihat master, log, template, pemeriksa pengajuan, penerima pengingat), `dummy_viewer` (lihat dokumen), `dummy_pemeriksa` (periksa pengajuan), `dummy_penyetuju` (setujui pengajuan dan arsipkan dokumen final), `dummy_pengaju` (buat dan ubah pengajuan). Izin role buatan sendiri tidak diubah.
+- Nomor WhatsApp akun dummy dikosongkan agar pesan tidak sampai ke nomor sungguhan. Variabel `.env` `LMS_DUMMY_PHONE` mengisi nomor milik sendiri untuk menguji pengiriman.
+
+**Definition of Done:** Tes mencakup akun per role (termasuk role kustom) dapat membuka panel, seeder idempoten, izin tiap role dasar, role kustom tidak ditimpa, nama akun, dan penolakan di production. Commit: `feat(work-40): seeder akun dummy per role`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -415,5 +429,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 36 | Template pesan kedaluwarsa dapat diubah | `ahtar-dev` |
 | 37 | Pengingat pengajuan yang menggantung | `ahtar-dev` |
 | 38 | Timeline status pengajuan di halaman publik | `ahtar-dev` |
+| 40 | Seeder akun dummy per role | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
