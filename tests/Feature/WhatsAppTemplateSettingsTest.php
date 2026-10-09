@@ -137,6 +137,39 @@ class WhatsAppTemplateSettingsTest extends TestCase
         $this->assertSame([1, 7], $setting->fresh()->overdueOffsets());
     }
 
+    public function test_overdue_template_can_be_customized_previewed_and_restored(): void
+    {
+        $this->authorizeSettings(['ViewAny:ReminderTemplate', 'Update:ReminderTemplate']);
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        $component = 'expiry_settings.template_overdue';
+        Livewire::test(ManageReminderTemplates::class)
+            ->assertSee('Pesan setelah kedaluwarsa')->assertSee('Terlambat: 3 hari')
+            ->mountAction(TestAction::make('edit_overdue')->schemaComponent($component, 'content'))
+            ->assertActionDataSet(['overdue_body' => ReminderTemplate::DEFAULT_OVERDUE_BODY])
+            ->setActionData(['overdue_body' => 'LEGAL: {dokumen} lewat {hari_terlambat} hari. PIC {pic}'])
+            ->callMountedAction()->assertHasNoActionErrors()
+            ->assertSee('LEGAL: Kontrak Dummy lewat 3 hari. PIC PIC Dummy');
+        $this->assertSame('LEGAL: {dokumen} lewat {hari_terlambat} hari. PIC {pic}', $setting->fresh()->overdue_body);
+        $this->assertSame($setting->body, $setting->fresh()->body);
+
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('reset_overdue')->schemaComponent($component, 'content'))->assertHasNoActionErrors();
+        $this->assertNull($setting->fresh()->overdue_body);
+        $this->assertSame(ReminderTemplate::DEFAULT_OVERDUE_BODY, $setting->fresh()->overdueBody());
+    }
+
+    public function test_overdue_template_rejects_unknown_variables_including_remaining_days(): void
+    {
+        $this->authorizeSettings();
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        foreach (['{tidak_ada}', 'Sisa {sisa_hari}'] as $body) {
+            Livewire::test(ManageReminderTemplates::class)
+                ->callAction(TestAction::make('edit_overdue')->schemaComponent('expiry_settings.template_overdue', 'content'), ['overdue_body' => $body])
+                ->assertHasActionErrors(['overdue_body']);
+        }
+        $this->assertNull($setting->fresh()->overdue_body);
+    }
+
     public function test_user_without_permission_cannot_access_settings(): void
     {
         $this->actingAs(User::factory()->create());

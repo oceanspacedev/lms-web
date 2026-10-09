@@ -147,7 +147,11 @@ class DocumentReminderSender
         $remaining = (int) $today->diffInDays(CarbonImmutable::parse($expiry, $today->timezone), false);
         $template = ReminderTemplate::globalSetting();
         $overdue = $log->offset_days < 0;
-        $body = $overdue ? ReminderTemplate::DEFAULT_OVERDUE_BODY : ($template?->is_active ? $template->body : ReminderTemplate::DEFAULT_BODY);
+        $body = match (true) {
+            ! $template?->is_active => $overdue ? ReminderTemplate::DEFAULT_OVERDUE_BODY : ReminderTemplate::DEFAULT_BODY,
+            $overdue => $template->overdueBody(),
+            default => $template->body,
+        };
         $text = ReminderTemplate::renderBody($body, [
             'dokumen' => $document->title, 'nomor' => $document->document_number ?? '-',
             'perusahaan' => $document->company->name, 'jenis_dokumen' => $document->documentType->name,

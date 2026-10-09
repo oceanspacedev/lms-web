@@ -300,7 +300,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Pengaturan baru "Setelah kedaluwarsa (opsional)" di jadwal pengingat: daftar hari setelah tanggal berakhir, misalnya 1 dan 7. Kosong berarti tidak ada pengingat kedaluwarsa. Mengikuti status aktif template global.
 - Log pengingat memakai `offset_days` negatif untuk pengingat kedaluwarsa (`-1` = H+1), sehingga unik per `(document_version_id, offset_days)` dan tidak terkirim ganda. Kolom diubah menjadi signed integer.
 - Catch-up berlaku sama: bila H+1 terlewat, dikirim terlambat satu kali untuk jadwal terdekat yang sudah tercapai.
-- Pesan memakai teks bawaan khusus kedaluwarsa (`DEFAULT_OVERDUE_BODY`) dengan data `{hari_terlambat}`. Teks ini belum dapat diubah dari UI.
+- Pesan memakai teks khusus kedaluwarsa dengan data `{hari_terlambat}`. Teks bawaan: `DEFAULT_OVERDUE_BODY`; dapat diubah sejak Work 36.
 - `expires_at` pesan kedaluwarsa dihitung dari hari pengiriman, bukan tanggal berakhir dokumen.
 - Pengingat kedaluwarsa dibatalkan otomatis bila versi baru diunggah atau jadwal dihapus.
 - Log Pengingat menampilkan `H-N` untuk sebelum dan `H+N` untuk setelah berakhir.
@@ -324,6 +324,22 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Aksi "Unggah Versi Baru" tetap tersedia untuk perubahan lain.
 
 **Definition of Done:** Tes mencakup saran tanggal (berakhir di masa depan, sudah lewat, tanpa tanggal terbit, masa tidak rapi bulan), form terisi dan tersimpan sebagai versi baru, serta visibilitas aksi untuk viewer dan jenis dokumen tanpa masa berlaku. Commit: `feat(work-35): tombol perpanjang dokumen`.
+
+---
+
+### WORK 36: Template Pesan Kedaluwarsa Dapat Diubah
+
+**Tujuan:** Admin dan PIC dapat menyesuaikan isi pesan pengingat kedaluwarsa dengan standar masing-masing, sama seperti template lainnya.
+
+**Cakupan:**
+- Kolom `overdue_body` (nullable) pada pengaturan global. Kosong berarti memakai teks bawaan `DEFAULT_OVERDUE_BODY`.
+- Panel "Pesan setelah kedaluwarsa" di halaman Pengaturan WhatsApp, lengkap dengan pratinjau, ubah template, kirim pesan uji, dan kembalikan bawaan, setara template pengingat masa berlaku.
+- Data otomatis yang tersedia: `{dokumen}`, `{nomor}`, `{perusahaan}`, `{jenis_dokumen}`, `{tanggal_berakhir}`, `{hari_terlambat}`, `{pic}`. `{sisa_hari}` tidak tersedia karena tidak bermakna setelah kedaluwarsa. Variabel tak dikenal ditolak, maksimal 4000 karakter.
+- Pengirim pengingat memakai template tersimpan; bila kosong memakai teks bawaan.
+- Pesan uji mendukung jenis `overdue` dengan data contoh, dan riwayat pengiriman menamainya "Pesan uji · Setelah kedaluwarsa".
+- Menyimpan isi yang sama dengan teks bawaan dicatat sebagai kosong, sehingga perubahan teks bawaan di kode ikut berlaku.
+
+**Definition of Done:** Tes mencakup ubah, pratinjau, dan pulihkan lewat halaman pengaturan, penolakan variabel tak dikenal (termasuk `{sisa_hari}`), pengiriman memakai template kustom dan fallback bawaan, serta pesan uji. Commit: `feat(work-36): template pesan kedaluwarsa dapat diubah`.
 
 ---
 
@@ -360,5 +376,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 33 | Peringatan kesehatan pengingat di dashboard | `ahtar-dev` |
 | 34 | Pengingat setelah kedaluwarsa | `ahtar-dev` |
 | 35 | Tombol perpanjang dokumen | `ahtar-dev` |
+| 36 | Template pesan kedaluwarsa dapat diubah | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

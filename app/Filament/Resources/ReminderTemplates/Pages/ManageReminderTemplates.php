@@ -82,6 +82,14 @@ class ManageReminderTemplates extends Page
             ->schema([TextEntry::make('reminder_message')->hiddenLabel()
                 ->state(fn (): string => ReminderTemplate::renderBody(ReminderTemplate::globalSetting()?->body ?? ReminderTemplate::DEFAULT_BODY, ReminderTemplate::EXAMPLE_VALUES))
                 ->view('filament.resources.reminder-templates.message-preview')]);
+        $overdueSection = Section::make('Pesan setelah kedaluwarsa')->key('template_overdue')->compact()->columnSpanFull()
+            ->extraAttributes(['class' => 'whatsapp-settings-panel'])
+            ->description('Dikirim sesuai jadwal "Setelah kedaluwarsa" pada pengaturan jadwal.')
+            ->headerActions([$this->editTemplateAction('overdue', 'Pengingat setelah kedaluwarsa')])
+            ->footerActions($this->templateTools('overdue'))
+            ->schema([TextEntry::make('overdue_message')->hiddenLabel()
+                ->state(fn (): string => ReminderTemplate::renderBody(ReminderTemplate::globalSetting()?->overdueBody() ?? ReminderTemplate::DEFAULT_OVERDUE_BODY, ReminderTemplate::OVERDUE_EXAMPLE_VALUES))
+                ->view('filament.resources.reminder-templates.message-preview')]);
         $tabs = [];
         $labels = ['submitted' => 'Pengajuan diterima', 'review' => 'Menunggu persetujuan', 'approved' => 'Disetujui', 'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'pic' => 'Notifikasi PIC'];
 
@@ -102,7 +110,7 @@ class ManageReminderTemplates extends Page
             Section::make('Pengingat masa berlaku')->key('expiry_settings')->contained(false)
                 ->extraAttributes(['class' => 'whatsapp-settings-group'])
                 ->schema([
-                    Grid::make(['default' => 1, 'xl' => 2])->extraAttributes(['class' => 'whatsapp-settings-reminder'])->schema([$scheduleSection, $reminderSection]),
+                    Grid::make(['default' => 1, 'xl' => 2])->extraAttributes(['class' => 'whatsapp-settings-reminder'])->schema([$scheduleSection, $reminderSection, $overdueSection]),
                 ]),
             Section::make('Notifikasi status pengajuan')->key('notification_settings')->contained(false)
                 ->extraAttributes(['class' => 'whatsapp-settings-group whatsapp-settings-status'])
@@ -150,8 +158,20 @@ class ManageReminderTemplates extends Page
     {
         $setting = ReminderTemplate::globalSetting();
 
-        return $event === 'reminder' ? ($setting?->body ?? ReminderTemplate::DEFAULT_BODY)
-            : ($setting?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]);
+        return match ($event) {
+            'reminder' => $setting?->body ?? ReminderTemplate::DEFAULT_BODY,
+            'overdue' => $setting?->overdueBody() ?? ReminderTemplate::DEFAULT_OVERDUE_BODY,
+            default => $setting?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event],
+        };
+    }
+
+    private function defaultBody(string $event): string
+    {
+        return match ($event) {
+            'reminder' => ReminderTemplate::DEFAULT_BODY,
+            'overdue' => ReminderTemplate::DEFAULT_OVERDUE_BODY,
+            default => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event],
+        };
     }
 
     /** @return array<Action> */
@@ -166,7 +186,11 @@ class ManageReminderTemplates extends Page
                     TextInput::make('phone')->label('Nomor WhatsApp tujuan')->tel()->required()->maxLength(30)
                         ->default(fn (): ?string => auth()->user()->phone)->placeholder('08xxxxxxxxxx'),
                     TextEntry::make('test_preview')->label('Pesan yang dikirim')->state(fn (): string => "[PESAN UJI]\n".ReminderTemplate::renderBody($this->templateBody($event),
-                        $event === 'reminder' ? ReminderTemplate::EXAMPLE_VALUES : [...ReminderTemplate::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa']))
+                        match ($event) {
+                            'reminder' => ReminderTemplate::EXAMPLE_VALUES,
+                            'overdue' => ReminderTemplate::OVERDUE_EXAMPLE_VALUES,
+                            default => [...ReminderTemplate::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa'],
+                        }))
                         ->view('filament.resources.reminder-templates.message-preview'),
                 ])->action(function (array $data) use ($event): void {
                     abort_unless($this->canEditSettings(), 403);
@@ -178,7 +202,7 @@ class ManageReminderTemplates extends Page
                     }
                 }),
             Action::make('reset_'.$event)->label('Kembalikan bawaan')->link()->color('gray')->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->visible(fn (): bool => $this->canEditSettings() && $this->templateBody($event) !== ($event === 'reminder' ? ReminderTemplate::DEFAULT_BODY : ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]))
+                ->visible(fn (): bool => $this->canEditSettings() && $this->templateBody($event) !== $this->defaultBody($event))
                 ->requiresConfirmation()->modalHeading('Kembalikan template bawaan?')
                 ->modalDescription('Isi pesan ini akan diganti dengan template bawaan. Jadwal dan template lainnya tetap.')
                 ->modalSubmitActionLabel('Kembalikan bawaan')
@@ -191,6 +215,8 @@ class ManageReminderTemplates extends Page
                         }
                         if ($event === 'reminder') {
                             $setting->body = ReminderTemplate::DEFAULT_BODY;
+                        } elseif ($event === 'overdue') {
+                            $setting->overdue_body = null;
                         } else {
                             $setting->request_templates = [...($setting->request_templates ?? []), $event => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]];
                         }
@@ -215,13 +241,16 @@ class ManageReminderTemplates extends Page
                     ];
                 }
 
-                return $event === 'reminder' ? ['body' => $setting?->body ?? ReminderTemplate::DEFAULT_BODY] : [
-                    'request_templates' => [$event => $setting?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]],
-                ];
+                return match ($event) {
+                    'reminder' => ['body' => $setting?->body ?? ReminderTemplate::DEFAULT_BODY],
+                    'overdue' => ['overdue_body' => $setting?->overdueBody() ?? ReminderTemplate::DEFAULT_OVERDUE_BODY],
+                    default => ['request_templates' => [$event => $setting?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]]],
+                };
             })
             ->schema(match ($event) {
                 'schedule' => ReminderTemplateResource::reminderScheduleFields(),
                 'reminder' => ReminderTemplateResource::reminderFields(),
+                'overdue' => ReminderTemplateResource::overdueFields(),
                 default => ReminderTemplateResource::requestTemplateFields($event),
             })
             ->action(function (array $data) use ($event): void {
@@ -236,6 +265,8 @@ class ManageReminderTemplates extends Page
                         $setting->fill(Arr::only($data, ['is_active', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days']));
                     } elseif ($event === 'reminder') {
                         $setting->body = $data['body'];
+                    } elseif ($event === 'overdue') {
+                        $setting->overdue_body = $data['overdue_body'] === ReminderTemplate::DEFAULT_OVERDUE_BODY ? null : $data['overdue_body'];
                     } else {
                         $setting->request_templates = [...($setting->request_templates ?? []), $event => $data['request_templates'][$event]];
                     }

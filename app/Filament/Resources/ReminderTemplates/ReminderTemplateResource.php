@@ -63,6 +63,12 @@ class ReminderTemplateResource extends Resource
     }
 
     /** @return array<Component> */
+    public static function overdueFields(): array
+    {
+        return self::messageFields('overdue_body', ReminderTemplate::DEFAULT_OVERDUE_BODY, ReminderTemplate::OVERDUE_EXAMPLE_VALUES, ReminderTemplate::OVERDUE_VARIABLE_LABELS);
+    }
+
+    /** @return array<Component> */
     public static function reminderScheduleFields(): array
     {
         return [

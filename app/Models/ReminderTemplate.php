@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days', 'request_templates'])]
+#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days', 'overdue_body', 'request_templates'])]
 class ReminderTemplate extends Model
 {
     public static function globalSetting(): ?self
@@ -32,6 +32,11 @@ class ReminderTemplate extends Model
         $setting = self::globalSetting();
 
         return $setting?->is_active ? $setting->overdueOffsets() : [];
+    }
+
+    public function overdueBody(): string
+    {
+        return filled($this->overdue_body) ? $this->overdue_body : self::DEFAULT_OVERDUE_BODY;
     }
 
     /** @return list<int> Hari setelah tanggal berakhir, urut naik. */
@@ -81,7 +86,9 @@ class ReminderTemplate extends Model
 
     public const DEFAULT_OVERDUE_BODY = "Dokumen sudah kedaluwarsa\nDokumen: {dokumen}\nPerusahaan: {perusahaan}\nBerakhir: {tanggal_berakhir}\nTerlambat: {hari_terlambat} hari\nPIC: {pic}";
 
-    public const OVERDUE_EXAMPLE_VALUES = [...self::EXAMPLE_VALUES, 'hari_terlambat' => '3'];
+    public const OVERDUE_VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Perusahaan', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'hari_terlambat' => 'Hari Terlambat', 'pic' => 'Nama PIC'];
+
+    public const OVERDUE_EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'hari_terlambat' => '3', 'pic' => 'PIC Dummy'];
 
     public const EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'sisa_hari' => '30', 'pic' => 'PIC Dummy'];
 
@@ -173,6 +180,9 @@ class ReminderTemplate extends Model
                 if (blank($body) || self::unknownVariables($body, self::REQUEST_EXAMPLE_VALUES) !== []) {
                     throw ValidationException::withMessages(['request_templates.'.$event => 'Isi pesan wajib diisi dan memakai variabel yang tersedia.']);
                 }
+            }
+            if (filled($template->overdue_body) && (mb_strlen($template->overdue_body) > 4000 || self::unknownVariables($template->overdue_body, self::OVERDUE_EXAMPLE_VALUES) !== [])) {
+                throw ValidationException::withMessages(['overdue_body' => 'Isi pesan maksimal 4000 karakter dan memakai variabel yang tersedia.']);
             }
             if (blank($template->body) || mb_strlen($template->body) > 4000 || self::unknownVariables($template->body) !== []) {
                 throw ValidationException::withMessages(['body' => 'Isi pesan wajib diisi, maksimal 4000 karakter, dan memakai variabel yang tersedia.']);

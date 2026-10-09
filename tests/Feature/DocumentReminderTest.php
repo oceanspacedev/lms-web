@@ -115,6 +115,27 @@ class DocumentReminderTest extends TestCase
         $this->assertSame([-1, -7], ReminderLog::orderByDesc('offset_days')->pluck('offset_days')->all());
     }
 
+    public function test_overdue_reminder_uses_custom_template_and_falls_back_to_default(): void
+    {
+        $setting = ReminderTemplate::globalSetting();
+        $setting->update(['overdue_days' => [1, 7], 'overdue_body' => 'LEGAL {dokumen} lewat {hari_terlambat} hari']);
+        $this->document(-1);
+        app(DocumentReminderSender::class)->run();
+        Http::assertSent(fn ($request): bool => $request['message']['text'] === 'LEGAL Kontrak Pengujian lewat 1 hari');
+
+        $setting->update(['overdue_body' => null]);
+        $this->travel(6)->days();
+        app(DocumentReminderSender::class)->run();
+        Http::assertSent(fn ($request): bool => str_contains($request['message']['text'], 'Dokumen sudah kedaluwarsa')
+            && str_contains($request['message']['text'], 'Terlambat: 7 hari'));
+    }
+
+    public function test_overdue_body_validation_rejects_unknown_variables(): void
+    {
+        $this->expectException(ValidationException::class);
+        ReminderTemplate::globalSetting()->update(['overdue_body' => 'Sisa {sisa_hari} hari']);
+    }
+
     public function test_overdue_reminder_is_not_sent_before_first_day_or_when_not_configured(): void
     {
         $this->document(-1);
