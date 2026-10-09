@@ -36,31 +36,43 @@ class ViewDocument extends ViewRecord
                 ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab()
                 ->visible(fn (): bool => $this->getRecord()->currentVersion !== null),
             EditAction::make()->label('Ubah Informasi')->icon('heroicon-o-pencil-square')->color('gray'),
-            Action::make('updateVersion')->label('Unggah Versi Baru')->icon('heroicon-o-arrow-path')->color('gray')
-                ->authorize('update', $this->getRecord())
-                ->modalHeading('Perbarui Dokumen')->modalSubmitActionLabel('Simpan Versi Baru')
-                ->schema(fn (): array => DocumentVersionForm::components($this->getRecord()->documentType->has_expiry))
-                ->action(function (array $data): void {
-                    Gate::authorize('update', $this->getRecord());
-                    if (! ($data['file'] ?? null) instanceof UploadedFile) {
-                        throw ValidationException::withMessages(['mountedActions.0.data.file' => 'Unggah file dokumen yang valid.']);
-                    }
-
-                    try {
-                        $this->getRecord()->appendVersion($data, $data['file'], auth()->user());
-                    } catch (ValidationException $exception) {
-                        throw ValidationException::withMessages(collect($exception->errors())
-                            ->mapWithKeys(fn (array $messages, string $field): array => ['mountedActions.0.data.'.$field => $messages])->all());
-                    } catch (Throwable $exception) {
-                        report($exception);
-                        Notification::make()->title('Versi baru belum tersimpan')->body('Penyimpanan gagal. Versi sebelumnya tetap aktif. Coba lagi.')->danger()->send();
-
-                        throw new Halt;
-                    }
-
-                    $this->dispatch('document-version-updated');
-                    Notification::make()->title('Versi baru berhasil disimpan')->success()->send();
-                }),
+            $this->versionAction('renew')->label('Perpanjang')->icon('heroicon-o-arrow-path-rounded-square')
+                ->color(fn (): string => in_array($this->getRecord()->expiry_status, ['expiring', 'expired'], true) ? 'warning' : 'gray')
+                ->visible(fn (): bool => (bool) $this->getRecord()->documentType?->has_expiry && $this->getRecord()->currentVersion?->expiry_date !== null)
+                ->modalHeading('Perpanjang Dokumen')
+                ->modalDescription('Tanggal dan catatan sudah diisi dari versi aktif. Periksa kembali sebelum menyimpan.')
+                ->fillForm(fn (): array => $this->getRecord()->renewalSuggestion()),
+            $this->versionAction('updateVersion')->label('Unggah Versi Baru')->icon('heroicon-o-arrow-up-tray')->color('gray')
+                ->modalHeading('Perbarui Dokumen'),
         ];
+    }
+
+    private function versionAction(string $name): Action
+    {
+        return Action::make($name)
+            ->authorize('update', $this->getRecord())
+            ->modalSubmitActionLabel('Simpan Versi Baru')
+            ->schema(fn (): array => DocumentVersionForm::components($this->getRecord()->documentType->has_expiry))
+            ->action(function (array $data): void {
+                Gate::authorize('update', $this->getRecord());
+                if (! ($data['file'] ?? null) instanceof UploadedFile) {
+                    throw ValidationException::withMessages(['mountedActions.0.data.file' => 'Unggah file dokumen yang valid.']);
+                }
+
+                try {
+                    $this->getRecord()->appendVersion($data, $data['file'], auth()->user());
+                } catch (ValidationException $exception) {
+                    throw ValidationException::withMessages(collect($exception->errors())
+                        ->mapWithKeys(fn (array $messages, string $field): array => ['mountedActions.0.data.'.$field => $messages])->all());
+                } catch (Throwable $exception) {
+                    report($exception);
+                    Notification::make()->title('Versi baru belum tersimpan')->body('Penyimpanan gagal. Versi sebelumnya tetap aktif. Coba lagi.')->danger()->send();
+
+                    throw new Halt;
+                }
+
+                $this->dispatch('document-version-updated');
+                Notification::make()->title('Versi baru berhasil disimpan')->success()->send();
+            });
     }
 }

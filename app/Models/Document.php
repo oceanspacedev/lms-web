@@ -141,6 +141,37 @@ class Document extends Model
                 ->whereDate('expiry_date', '<=', today(config('lms.reminder_timezone'))->addDays($days)->toDateString()));
     }
 
+    /**
+     * Saran isian form perpanjangan: masa baru dimulai saat versi aktif berakhir (atau hari ini bila sudah lewat)
+     * dan berlaku selama masa versi aktif, atau setahun bila lama masa tidak diketahui.
+     *
+     * @return array{issued_date: string, expiry_date: string, change_note: string}
+     */
+    public function renewalSuggestion(): array
+    {
+        $timezone = config('lms.reminder_timezone');
+        $today = CarbonImmutable::today($timezone);
+        $current = $this->currentVersion;
+        $oldExpiry = CarbonImmutable::parse($current->expiry_date->toDateString(), $timezone);
+        $oldIssued = $current->issued_date ? CarbonImmutable::parse($current->issued_date->toDateString(), $timezone) : null;
+        $issued = $oldExpiry->gt($today) ? $oldExpiry : $today;
+
+        if ($oldIssued === null || $oldIssued->gte($oldExpiry)) {
+            $expiry = $issued->addYearNoOverflow();
+        } else {
+            $months = (int) round(abs($oldIssued->diffInMonths($oldExpiry)));
+            $expiry = $months >= 1 && abs($oldIssued->addMonthsNoOverflow($months)->diffInDays($oldExpiry)) <= 1
+                ? $issued->addMonthsNoOverflow($months)
+                : $issued->addDays((int) abs($oldIssued->diffInDays($oldExpiry)));
+        }
+
+        return [
+            'issued_date' => $issued->toDateString(),
+            'expiry_date' => $expiry->toDateString(),
+            'change_note' => 'Perpanjangan masa berlaku dokumen.',
+        ];
+    }
+
     /** @param array<string, mixed> $data */
     public static function archive(array $data, UploadedFile $file, User $uploader): self
     {

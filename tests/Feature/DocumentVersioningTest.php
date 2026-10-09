@@ -15,6 +15,8 @@ use Illuminate\Database\QueryException;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -162,6 +164,75 @@ class DocumentVersioningTest extends TestCase
             ->callAction('updateVersion', [...$this->versionData(), 'file' => UploadedFile::fake()->create('baru.pdf', 1, 'application/pdf')])
             ->assertHasNoActionErrors();
         $this->assertSame(2, $document->fresh()->currentVersion->version_number);
+    }
+
+    public function test_renewal_suggestion_starts_at_current_expiry_and_keeps_term(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 9)->setTime(9, 0));
+
+        $this->assertSame([
+            'issued_date' => '2027-01-01', 'expiry_date' => '2028-01-01', 'change_note' => 'Perpanjangan masa berlaku dokumen.',
+        ], $this->document()->renewalSuggestion());
+    }
+
+    public function test_renewal_suggestion_starts_today_when_already_expired(): void
+    {
+        $document = $this->document();
+        $this->travelTo(now()->setDate(2027, 3, 10)->setTime(9, 0));
+
+        $suggestion = $document->renewalSuggestion();
+        $this->assertSame('2027-03-10', $suggestion['issued_date']);
+        $this->assertSame('2028-03-10', $suggestion['expiry_date']);
+    }
+
+    public function test_renewal_suggestion_falls_back_to_one_year_or_day_count(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 9)->setTime(9, 0));
+        $withoutIssued = Document::archive([
+            'company_id' => Company::factory()->create()->id, 'document_type_id' => DocumentType::factory()->create()->id,
+            'pic_user_id' => User::factory()->create()->id, 'title' => 'Tanpa Tanggal Terbit', 'expiry_date' => '2027-02-28',
+        ], UploadedFile::fake()->create('lama.pdf', 1, 'application/pdf'), User::factory()->create());
+        $this->assertSame(['2027-02-28', '2028-02-28'], array_values(Arr::only($withoutIssued->renewalSuggestion(), ['issued_date', 'expiry_date'])));
+
+        $document = $this->document();
+        DB::table('document_versions')->where('id', $document->current_version_id)->update(['issued_date' => '2026-12-01', 'expiry_date' => '2027-03-11']);
+        $suggestion = $document->fresh()->renewalSuggestion();
+        $this->assertSame('2027-03-11', $suggestion['issued_date']);
+        $this->assertSame('2027-06-19', $suggestion['expiry_date']);
+    }
+
+    public function test_renew_action_is_prefilled_and_stores_new_version(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 9)->setTime(9, 0));
+        $document = $this->document();
+        $user = User::factory()->create();
+        $user->givePermissionTo(['ViewAny:Document', 'View:Document', 'Update:Document']);
+        $this->actingAs($user);
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
+            ->mountAction('renew')
+            ->assertActionDataSet(['issued_date' => '2027-01-01', 'expiry_date' => '2028-01-01', 'change_note' => 'Perpanjangan masa berlaku dokumen.'])
+            ->setActionData(['file' => UploadedFile::fake()->create('baru.pdf', 1, 'application/pdf')])
+            ->callMountedAction()->assertHasNoActionErrors();
+        $version = $document->fresh()->currentVersion;
+        $this->assertSame(2, $version->version_number);
+        $this->assertSame('2028-01-01', $version->expiry_date->toDateString());
+        $this->assertSame('Perpanjangan masa berlaku dokumen.', $version->change_note);
+    }
+
+    public function test_renew_action_is_hidden_for_viewers_and_non_expiring_types(): void
+    {
+        $document = $this->document();
+        $viewer = User::factory()->create();
+        $viewer->givePermissionTo(['ViewAny:Document', 'View:Document']);
+        $this->actingAs($viewer);
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])->assertActionHidden('renew');
+
+        $editor = User::factory()->create();
+        $editor->givePermissionTo(['ViewAny:Document', 'View:Document', 'Update:Document']);
+        $this->actingAs($editor);
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])->assertActionVisible('renew');
+        $document->documentType->update(['has_expiry' => false]);
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])->assertActionHidden('renew')->assertActionVisible('updateVersion');
     }
 
     public function test_viewer_can_read_history_but_cannot_update_or_mutate_versions(): void

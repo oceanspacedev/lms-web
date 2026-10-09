@@ -309,6 +309,24 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 35: Tombol Perpanjang Dokumen
+
+**Tujuan:** Memperpanjang dokumen cukup dengan satu klik dan unggah file, tanpa mengisi ulang tanggal dan catatan.
+
+**Cakupan:**
+- Aksi "Perpanjang" di halaman detail dokumen, hanya untuk jenis dokumen bermasa berlaku yang versi aktifnya punya tanggal berakhir, dan hanya untuk user yang boleh mengubah dokumen.
+- Form terisi saran dari `Document::renewalSuggestion()`:
+  - Tanggal terbit baru = tanggal berakhir versi aktif, atau hari ini bila sudah lewat.
+  - Tanggal berakhir baru = tanggal terbit baru ditambah lama masa versi aktif (dalam bulan bila rapi, selain itu dalam hari), atau setahun bila tanggal terbit lama tidak diketahui.
+  - Catatan perubahan: "Perpanjangan masa berlaku dokumen."
+- Semua isian dapat diubah sebelum disimpan. Penyimpanan memakai alur versi baru yang sama (`appendVersion`), jadi versi lama tetap menjadi arsip.
+- Tombol berwarna peringatan bila dokumen berstatus Segera Berakhir atau Kedaluwarsa.
+- Aksi "Unggah Versi Baru" tetap tersedia untuk perubahan lain.
+
+**Definition of Done:** Tes mencakup saran tanggal (berakhir di masa depan, sudah lewat, tanpa tanggal terbit, masa tidak rapi bulan), form terisi dan tersimpan sebagai versi baru, serta visibilitas aksi untuk viewer dan jenis dokumen tanpa masa berlaku. Commit: `feat(work-35): tombol perpanjang dokumen`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -341,5 +359,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 32 | Pengingat catch-up | `ahtar-dev` |
 | 33 | Peringatan kesehatan pengingat di dashboard | `ahtar-dev` |
 | 34 | Pengingat setelah kedaluwarsa | `ahtar-dev` |
+| 35 | Tombol perpanjang dokumen | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
