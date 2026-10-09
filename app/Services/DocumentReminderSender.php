@@ -61,8 +61,7 @@ class DocumentReminderSender
                 $document = $version?->document;
                 if (! $document || ! $version->is_current || $document->current_version_id !== $version->id
                     || ! $document->documentType->has_expiry || ! $version->expiry_date
-                    || $version->expiry_date->toDateString() < $today->toDateString()
-                    || ! in_array($log->offset_days, $document->documentType->effectiveReminderDays(), true)) {
+                    || ! $this->isScheduled($log->offset_days, $document, $version->expiry_date->toDateString(), $today)) {
                     $log->update(['status' => 'cancelled', 'error_message' => 'Versi atau jadwal pengingat sudah tidak berlaku.']);
                     $result['cancelled']++;
 
@@ -106,9 +105,27 @@ class DocumentReminderSender
     private function dueOffset(Document $document, CarbonImmutable $today): ?int
     {
         $remaining = (int) $today->diffInDays(CarbonImmutable::parse($document->currentVersion->expiry_date->toDateString(), $today->timezone), false);
+        if ($remaining < 0) {
+            $reached = array_filter($document->documentType->effectiveOverdueDays(), fn (int $day): bool => $day <= -$remaining);
+
+            return $reached === [] ? null : -max($reached);
+        }
         $reached = array_filter($document->documentType->effectiveReminderDays(), fn (int $day): bool => $day >= $remaining);
 
-        return $remaining < 0 || $reached === [] ? null : min($reached);
+        return $reached === [] ? null : min($reached);
+    }
+
+    /**
+     * Offset negatif adalah pengingat setelah kedaluwarsa (hari setelah tanggal berakhir).
+     */
+    private function isScheduled(int $offset, Document $document, string $expiry, CarbonImmutable $today): bool
+    {
+        $expired = $expiry < $today->toDateString();
+        if ($offset < 0) {
+            return $expired && in_array(-$offset, $document->documentType->effectiveOverdueDays(), true);
+        }
+
+        return ! $expired && in_array($offset, $document->documentType->effectiveReminderDays(), true);
     }
 
     /** @return array<string, mixed> */
@@ -129,11 +146,13 @@ class DocumentReminderSender
         $expiry = $document->currentVersion->expiry_date->toDateString();
         $remaining = (int) $today->diffInDays(CarbonImmutable::parse($expiry, $today->timezone), false);
         $template = ReminderTemplate::globalSetting();
-        $text = ReminderTemplate::renderBody($template?->is_active ? $template->body : ReminderTemplate::DEFAULT_BODY, [
+        $overdue = $log->offset_days < 0;
+        $body = $overdue ? ReminderTemplate::DEFAULT_OVERDUE_BODY : ($template?->is_active ? $template->body : ReminderTemplate::DEFAULT_BODY);
+        $text = ReminderTemplate::renderBody($body, [
             'dokumen' => $document->title, 'nomor' => $document->document_number ?? '-',
             'perusahaan' => $document->company->name, 'jenis_dokumen' => $document->documentType->name,
             'tanggal_berakhir' => $expiry,
-            'sisa_hari' => (string) $remaining, 'pic' => $document->pic?->name ?? '-',
+            'sisa_hari' => (string) $remaining, 'hari_terlambat' => (string) max(0, -$remaining), 'pic' => $document->pic?->name ?? '-',
         ]);
 
         return [
@@ -141,7 +160,7 @@ class DocumentReminderSender
             'message' => ['type' => 'text', 'text' => $text],
             'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'),
             'route_key' => config('services.waghub.route_key'),
-            'expires_at' => CarbonImmutable::parse($expiry, $today->timezone)->endOfDay()->toIso8601String(),
+            'expires_at' => ($overdue ? $today->addDay() : CarbonImmutable::parse($expiry, $today->timezone))->endOfDay()->toIso8601String(),
             'client_reference' => "lms-reminder-{$log->document_version_id}-{$log->offset_days}",
         ];
     }

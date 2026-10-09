@@ -13,6 +13,7 @@ use App\Services\WaghubService;
 use Database\Seeders\ReminderLogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class DocumentReminderTest extends TestCase
@@ -89,6 +90,60 @@ class DocumentReminderTest extends TestCase
         app(DocumentReminderSender::class)->run();
         Http::assertNothingSent();
         $this->assertDatabaseCount('reminder_logs', 0);
+    }
+
+    public function test_overdue_reminders_follow_configured_days_after_expiry(): void
+    {
+        ReminderTemplate::globalSetting()->update(['overdue_days' => [1, 7]]);
+        $document = $this->document(-1);
+        app(DocumentReminderSender::class)->run();
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Idempotency-Key', "lms-reminder-{$document->current_version_id}--1")
+            && str_contains($request['message']['text'], 'Dokumen sudah kedaluwarsa')
+            && str_contains($request['message']['text'], 'Terlambat: 1 hari')
+            && now()->lt($request['expires_at']));
+        $this->assertSame(-1, ReminderLog::sole()->offset_days);
+
+        $this->travel(2)->days();
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(1);
+
+        $this->travel(5)->days();
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(2);
+        $this->assertSame([-1, -7], ReminderLog::orderByDesc('offset_days')->pluck('offset_days')->all());
+    }
+
+    public function test_overdue_reminder_is_not_sent_before_first_day_or_when_not_configured(): void
+    {
+        $this->document(-1);
+        app(DocumentReminderSender::class)->run();
+        Http::assertNothingSent();
+
+        ReminderTemplate::globalSetting()->update(['overdue_days' => [3]]);
+        app(DocumentReminderSender::class)->run();
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('reminder_logs', 0);
+    }
+
+    public function test_pending_overdue_log_is_cancelled_when_schedule_is_removed(): void
+    {
+        ReminderTemplate::globalSetting()->update(['overdue_days' => [1]]);
+        $this->document(-1);
+        config(['testing.waghub_status' => 500]);
+        app(DocumentReminderSender::class)->run();
+        ReminderTemplate::globalSetting()->update(['overdue_days' => []]);
+        $this->travel(1)->days();
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(1);
+        $this->assertSame('cancelled', ReminderLog::sole()->status);
+    }
+
+    public function test_overdue_days_validation_rejects_invalid_values(): void
+    {
+        $this->expectException(ValidationException::class);
+        ReminderTemplate::globalSetting()->update(['overdue_days' => [0, 7]]);
     }
 
     public function test_failed_request_retries_next_day_with_identical_payload_and_key(): void

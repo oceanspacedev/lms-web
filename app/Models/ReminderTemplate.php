@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'request_templates'])]
+#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days', 'request_templates'])]
 class ReminderTemplate extends Model
 {
     public static function globalSetting(): ?self
@@ -26,7 +26,21 @@ class ReminderTemplate extends Model
         return $setting?->is_active ? ($setting->reminderOffsets() ?? []) : [];
     }
 
-    protected $attributes = ['schedule_mode' => 'inherit', 'start_before_days' => 30, 'interval_days' => 7, 'scheduled_days' => '[]'];
+    /** @return list<int> */
+    public static function globalOverdueDays(): array
+    {
+        $setting = self::globalSetting();
+
+        return $setting?->is_active ? $setting->overdueOffsets() : [];
+    }
+
+    /** @return list<int> Hari setelah tanggal berakhir, urut naik. */
+    public function overdueOffsets(): array
+    {
+        return collect($this->overdue_days)->map(fn (int|string $day): int => (int) $day)->filter(fn (int $day): bool => $day > 0)->unique()->sort()->values()->all();
+    }
+
+    protected $attributes = ['schedule_mode' => 'inherit', 'start_before_days' => 30, 'interval_days' => 7, 'scheduled_days' => '[]', 'overdue_days' => '[]'];
 
     public const VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Perusahaan', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'sisa_hari' => 'Sisa Hari', 'pic' => 'Nama PIC'];
 
@@ -64,6 +78,10 @@ class ReminderTemplate extends Model
     use HasFactory;
 
     public const DEFAULT_BODY = "Pengingat masa berlaku dokumen\nDokumen: {dokumen}\nPerusahaan: {perusahaan}\nBerakhir: {tanggal_berakhir}\nSisa waktu: {sisa_hari} hari\nPIC: {pic}";
+
+    public const DEFAULT_OVERDUE_BODY = "Dokumen sudah kedaluwarsa\nDokumen: {dokumen}\nPerusahaan: {perusahaan}\nBerakhir: {tanggal_berakhir}\nTerlambat: {hari_terlambat} hari\nPIC: {pic}";
+
+    public const OVERDUE_EXAMPLE_VALUES = [...self::EXAMPLE_VALUES, 'hari_terlambat' => '3'];
 
     public const EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'sisa_hari' => '30', 'pic' => 'PIC Dummy'];
 
@@ -108,7 +126,7 @@ class ReminderTemplate extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'start_before_days' => 'integer', 'interval_days' => 'integer', 'scheduled_days' => 'array', 'request_templates' => 'array'];
+        return ['is_active' => 'boolean', 'start_before_days' => 'integer', 'interval_days' => 'integer', 'scheduled_days' => 'array', 'overdue_days' => 'array', 'request_templates' => 'array'];
     }
 
     /**
@@ -146,6 +164,8 @@ class ReminderTemplate extends Model
                 'interval_days' => [Rule::requiredIf($template->schedule_mode === 'interval'), 'nullable', 'integer', 'min:1', 'max:3650'],
                 'scheduled_days' => [Rule::requiredIf($template->schedule_mode === 'specific_days'), 'array'],
                 'scheduled_days.*' => ['integer', 'min:0', 'max:3650', 'distinct'],
+                'overdue_days' => ['nullable', 'array', 'max:20'],
+                'overdue_days.*' => ['integer', 'min:1', 'max:3650', 'distinct'],
                 'request_templates' => ['nullable', 'array:'.implode(',', array_keys(self::REQUEST_TEMPLATE_LABELS))],
                 'request_templates.*' => ['required', 'string', 'max:4000'],
             ])->validate();

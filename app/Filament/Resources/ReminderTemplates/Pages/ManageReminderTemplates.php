@@ -67,6 +67,10 @@ class ManageReminderTemplates extends Page
                     TextEntry::make('reminder_days')->label('Sebelum berakhir')->columnSpanFull()->badge()->color('gray')
                         ->state(fn (): array => array_map(fn (int $day): string => $day === 0 ? 'Tanggal berakhir' : $day.' hari', ReminderTemplate::globalSetting()?->reminderOffsets() ?? []))
                         ->visible(fn (): bool => ReminderTemplate::globalSetting()?->schedule_mode === 'specific_days'),
+                    TextEntry::make('reminder_overdue')->label('Setelah kedaluwarsa')->columnSpanFull()->badge()->color('gray')
+                        ->state(fn (): array => array_map(fn (int $day): string => $day.' hari', ReminderTemplate::globalSetting()?->overdueOffsets() ?? []))
+                        ->placeholder('Tidak ada')
+                        ->visible(fn (): bool => (bool) ReminderTemplate::globalSetting()),
                     TextEntry::make('reminder_unconfigured')->hiddenLabel()->state('Jadwal belum diatur')->columnSpanFull()
                         ->visible(fn (): bool => ! ReminderTemplate::globalSetting() || ReminderTemplate::globalSetting()?->schedule_mode === 'inherit'),
                 ]),
@@ -229,7 +233,7 @@ class ManageReminderTemplates extends Page
                         'schedule_mode' => 'interval', 'request_templates' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES,
                     ]);
                     if ($event === 'schedule') {
-                        $setting->fill(Arr::only($data, ['is_active', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days']));
+                        $setting->fill(Arr::only($data, ['is_active', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days']));
                     } elseif ($event === 'reminder') {
                         $setting->body = $data['body'];
                     } else {

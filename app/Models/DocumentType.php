@@ -46,6 +46,16 @@ class DocumentType extends Model
         return ReminderTemplate::globalReminderDays();
     }
 
+    /** @return list<int> Hari setelah tanggal berakhir untuk pengingat kedaluwarsa. */
+    public function effectiveOverdueDays(): array
+    {
+        if (! $this->has_expiry) {
+            return [];
+        }
+
+        return ReminderTemplate::globalOverdueDays();
+    }
+
     public function reminderTemplate(): BelongsTo
     {
         return $this->belongsTo(ReminderTemplate::class);

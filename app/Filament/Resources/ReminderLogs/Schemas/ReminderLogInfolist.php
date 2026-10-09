@@ -16,7 +16,7 @@ class ReminderLogInfolist
                 TextEntry::make('documentVersion.document.title')->label('Dokumen'),
                 TextEntry::make('documentVersion.document.company.name')->label('Badan Usaha'),
                 TextEntry::make('documentVersion.version_number')->label('Versi')->prefix('v'),
-                TextEntry::make('offset_days')->label('Jadwal')->prefix('H-'),
+                TextEntry::make('offset_days')->label('Jadwal')->formatStateUsing(fn (int $state): string => $state < 0 ? 'H+'.abs($state) : 'H-'.$state),
                 TextEntry::make('recipient_phone')->label('WhatsApp')->placeholder('-'),
                 TextEntry::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => ReminderLog::STATUSES[$state] ?? $state),
                 TextEntry::make('attempts')->label('Jumlah Percobaan'),

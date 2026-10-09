@@ -81,6 +81,9 @@ class ReminderTemplateResource extends Resource
                 ->nestedRecursiveRules(['integer', 'min:0', 'max:3650', 'distinct'])
                 ->visible(fn (Get $get): bool => $get('schedule_mode') === 'specific_days')
                 ->helperText('Angka = hari sebelum berakhir. 0 = tanggal berakhir.'),
+            TagsInput::make('overdue_days')->label('Setelah kedaluwarsa (opsional)')->default([])->splitKeys([','])
+                ->nestedRecursiveRules(['integer', 'min:1', 'max:3650', 'distinct'])
+                ->helperText('Angka = hari setelah tanggal berakhir, misalnya 1 dan 7. Kosongkan bila tidak perlu.'),
             TextEntry::make('schedule_time')->label('Waktu pengiriman')->state(self::reminderTimeLabel()),
         ];
     }

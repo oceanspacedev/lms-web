@@ -292,6 +292,23 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 34: Pengingat Setelah Kedaluwarsa
+
+**Tujuan:** Dokumen yang sudah lewat masa berlaku tetap diingatkan sampai diperbarui, bukan dibiarkan diam.
+
+**Cakupan:**
+- Pengaturan baru "Setelah kedaluwarsa (opsional)" di jadwal pengingat: daftar hari setelah tanggal berakhir, misalnya 1 dan 7. Kosong berarti tidak ada pengingat kedaluwarsa. Mengikuti status aktif template global.
+- Log pengingat memakai `offset_days` negatif untuk pengingat kedaluwarsa (`-1` = H+1), sehingga unik per `(document_version_id, offset_days)` dan tidak terkirim ganda. Kolom diubah menjadi signed integer.
+- Catch-up berlaku sama: bila H+1 terlewat, dikirim terlambat satu kali untuk jadwal terdekat yang sudah tercapai.
+- Pesan memakai teks bawaan khusus kedaluwarsa (`DEFAULT_OVERDUE_BODY`) dengan data `{hari_terlambat}`. Teks ini belum dapat diubah dari UI.
+- `expires_at` pesan kedaluwarsa dihitung dari hari pengiriman, bukan tanggal berakhir dokumen.
+- Pengingat kedaluwarsa dibatalkan otomatis bila versi baru diunggah atau jadwal dihapus.
+- Log Pengingat menampilkan `H-N` untuk sebelum dan `H+N` untuk setelah berakhir.
+
+**Definition of Done:** Tes mencakup pengiriman pada hari yang dikonfigurasi, tanpa kirim ganda, tidak terkirim bila belum dikonfigurasi atau belum tercapai, pembatalan saat jadwal dihapus, validasi input, dan penyimpanan lewat form jadwal. Commit: `feat(work-34): pengingat setelah kedaluwarsa`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -323,5 +340,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 9 | Pencarian, audit, finishing | `ahtar-dev` |
 | 32 | Pengingat catch-up | `ahtar-dev` |
 | 33 | Peringatan kesehatan pengingat di dashboard | `ahtar-dev` |
+| 34 | Pengingat setelah kedaluwarsa | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

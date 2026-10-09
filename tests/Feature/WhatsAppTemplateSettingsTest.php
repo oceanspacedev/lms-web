@@ -126,6 +126,17 @@ class WhatsAppTemplateSettingsTest extends TestCase
         $this->assertNull($setting->fresh()->request_templates);
     }
 
+    public function test_schedule_form_saves_overdue_days(): void
+    {
+        $this->authorizeSettings(['ViewAny:ReminderTemplate', 'Update:ReminderTemplate']);
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('edit_schedule')->schemaComponent('expiry_settings.reminder_schedule', 'content'), [
+                'is_active' => true, 'schedule_mode' => 'interval', 'start_before_days' => 30, 'interval_days' => 7, 'scheduled_days' => [], 'overdue_days' => [1, '7'],
+            ])->assertHasNoActionErrors();
+        $this->assertSame([1, 7], $setting->fresh()->overdueOffsets());
+    }
+
     public function test_user_without_permission_cannot_access_settings(): void
     {
         $this->actingAs(User::factory()->create());
