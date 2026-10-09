@@ -6,6 +6,7 @@ use App\Services\DocumentRequestNotifier;
 use Carbon\CarbonImmutable;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,9 @@ class DocumentRequest extends Model
 
     public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'rejected' => 'Ditolak', 'archived' => 'Selesai'];
 
+    /** Status saat pengajuan menunggu tindakan staf. */
+    public const WAITING_STATUSES = ['submitted', 'review'];
+
     public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan', 'archived' => 'Selesai'];
 
     public const TIMELINE_LABELS = [
@@ -40,7 +44,7 @@ class DocumentRequest extends Model
 
     protected function casts(): array
     {
-        return ['details' => 'array', 'attachments' => 'array', 'requirements' => 'array', 'history' => 'array', 'has_cost' => 'boolean', 'start_date' => 'date', 'expiry_date' => 'date', 'target_date' => 'date', 'amount' => 'decimal:2'];
+        return ['details' => 'array', 'attachments' => 'array', 'requirements' => 'array', 'history' => 'array', 'status_changed_at' => 'datetime', 'has_cost' => 'boolean', 'start_date' => 'date', 'expiry_date' => 'date', 'target_date' => 'date', 'amount' => 'decimal:2'];
     }
 
     public function company(): BelongsTo
@@ -73,12 +77,19 @@ class DocumentRequest extends Model
         return $this->belongsTo(User::class, 'approver_id');
     }
 
-    /** Waktu masuk ke tahap saat ini, diambil dari peristiwa terakhir di riwayat. */
+    /** Waktu masuk ke tahap saat ini: kolom status_changed_at, atau peristiwa terakhir di riwayat bila belum terisi. */
     public function waitingSince(): CarbonImmutable
     {
-        $at = collect($this->history)->last()['at'] ?? null;
+        $at = $this->status_changed_at ?? collect($this->history)->last()['at'] ?? null;
 
         return CarbonImmutable::parse($at ?? $this->updated_at);
+    }
+
+    /** Pengajuan yang menunggu tindakan pemeriksa atau penyetuju lebih lama dari $days hari. */
+    public function scopeWaitingLongerThan(Builder $query, int $days): Builder
+    {
+        return $query->whereIn('status', self::WAITING_STATUSES)
+            ->whereRaw('coalesce(document_requests.status_changed_at, document_requests.updated_at) <= ?', [now()->subDays($days)->toDateTimeString()]);
     }
 
     public function editableBy(User $user): bool
@@ -387,6 +398,8 @@ class DocumentRequest extends Model
 
     private function recordEvent(string $status, ?User $user, ?string $note = null): void
     {
-        $this->history = [...$this->history, ['status' => $status, 'user' => $user?->name ?? $this->applicantName(), 'user_id' => $user?->id, 'at' => now()->toIso8601String(), 'note' => $note]];
+        $now = now();
+        $this->history = [...$this->history, ['status' => $status, 'user' => $user?->name ?? $this->applicantName(), 'user_id' => $user?->id, 'at' => $now->toIso8601String(), 'note' => $note]];
+        $this->status_changed_at = $now;
     }
 }

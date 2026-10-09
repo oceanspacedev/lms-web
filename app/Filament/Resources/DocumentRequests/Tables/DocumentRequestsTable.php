@@ -4,10 +4,13 @@ namespace App\Filament\Resources\DocumentRequests\Tables;
 
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Models\DocumentRequest;
+use App\Models\ReminderTemplate;
 use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class DocumentRequestsTable
 {
@@ -22,7 +25,13 @@ class DocumentRequestsTable
                 'archived' => 'success', 'rejected' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
             TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->sortable(),
-        ])->filters([SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES)])
+        ])->filters([
+            SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
+            Filter::make('waiting_long')->toggle()
+                ->label(fn (): string => 'Menunggu lebih dari '.ReminderTemplate::requestReminderSettings()['after_days'].' hari')
+                ->query(fn (Builder $query): Builder => $query->waitingLongerThan(ReminderTemplate::requestReminderSettings()['after_days']))
+                ->indicator('Menunggu lama'),
+        ])
             ->recordActions([Action::make('open')->label('Buka')->icon('heroicon-o-eye')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record]))])->defaultSort('updated_at', 'desc')->emptyStateHeading('Belum ada pengajuan')->emptyStateDescription(null);
     }
 }

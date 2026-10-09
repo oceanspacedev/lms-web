@@ -28,7 +28,7 @@ class DocumentRequestReminderSender
         $body = ReminderTemplate::globalSetting()?->requestReminderBody() ?? ReminderTemplate::DEFAULT_REQUEST_REMINDER_BODY;
         $created = 0;
         DocumentRequest::with(['company', 'documentType', 'pic', 'requester', 'reviewer', 'approver'])
-            ->whereIn('status', ['submitted', 'review'])
+            ->whereIn('status', DocumentRequest::WAITING_STATUSES)
             ->each(function (DocumentRequest $request) use ($settings, $body, &$created): void {
                 $waitingDays = (int) $request->waitingSince()->diffInDays(now());
                 if ($waitingDays < $settings['after_days']) {

@@ -357,7 +357,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Idempotensi lewat `event_key` `lms-request-{id}-{jumlah riwayat}-stale{k}-u{user}`. Karena memakai awalan yang sama dengan notifikasi status, pengingat tertunda otomatis dibatalkan saat pengajuan berpindah tahap.
 - Isi pesan dapat diubah (ubah, pratinjau, pesan uji, kembalikan bawaan). Data otomatis: nomor pengajuan, judul, pengaju, perusahaan, jenis dokumen, tahap, hari menunggu, tautan. Kolom kosong memakai `DEFAULT_REQUEST_REMINDER_BODY`.
 - Penerima tanpa nomor WhatsApp valid tetap dicatat sebagai notifikasi gagal di riwayat pengiriman.
-- Di luar cakupan: kartu dashboard jumlah pengajuan menunggu.
+- Kartu dashboard jumlah pengajuan menunggu dikerjakan terpisah di Work 46.
 
 **Definition of Done:** Tes mencakup ambang pertama, ulangan dan batas maksimal tanpa duplikat, catch-up, penerima tiap tahap dan fallback, status yang diabaikan, pengaturan nonaktif dan kustom, template kustom dan validasi, pengiriman dan pembatalan saat status berubah, nomor kosong, serta form pengaturan. Commit: `feat(work-37): pengingat pengajuan yang menggantung`.
 
@@ -394,6 +394,21 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Pesan error yang lebih rinci per penyebab tidak dikerjakan karena rinciannya sudah tersedia di WagHub.
 
 **Definition of Done:** Tes mencakup kirim ulang berhasil dengan kunci dan payload sama, percobaan yang habis, nomor yang diperbaiki, hanya status Gagal, pembatalan untuk versi atau tahap yang sudah lewat, gagal lagi, tampilan tombol menurut status dan izin, audit, penolakan tanpa izin, di luar cakupan pengajuan, dan sumber tidak dikenal. Commit: `feat(work-39): kirim ulang notifikasi yang gagal`.
+
+---
+
+### WORK 46: Pengajuan yang Menunggu Terlalu Lama di Dashboard dan Daftar
+
+**Tujuan:** Staf langsung melihat pengajuan yang menggantung dan dapat menyaringnya, tanpa menunggu pengingat WhatsApp.
+
+**Cakupan:**
+- Kolom `status_changed_at` pada `document_requests`, diisi setiap pengajuan berpindah tahap (bersama riwayat) dan diisi ulang dari riwayat terakhir untuk data lama oleh migrasi. `waitingSince()` kini memakai kolom ini, lalu riwayat, lalu `updated_at`.
+- Scope `DocumentRequest::waitingLongerThan($hari)`: hanya status Diperiksa dan Menunggu Persetujuan, batas inklusif. Data tanpa `status_changed_at` memakai `updated_at`.
+- Filter "Menunggu lebih dari N hari" (toggle) di daftar pengajuan. N mengikuti pengaturan "Mulai setelah" pada pengingat pengajuan (bawaan 2), dan dapat digabung dengan filter status.
+- Widget dashboard "Pengajuan Menunggu Tindakan": dua kartu (Menunggu Pemeriksaan dan Menunggu Persetujuan) berisi jumlah pengajuan yang boleh dilihat user, dengan keterangan berapa yang menunggu lebih dari N hari. Kartu menaut ke daftar terfilter status, dan filter menunggu lama bila ada yang menunggu. Widget hanya tampil bagi user yang boleh melihat pengajuan dan hanya bila ada pengajuan yang menunggu.
+- Pengingat pengajuan (Work 37) memakai daftar status menunggu yang sama.
+
+**Definition of Done:** Tes mencakup batas inklusif dan status yang diabaikan, cadangan ke `updated_at`, prioritas `waitingSince`, transisi yang mereset waktu tunggu, filter tabel beserta ambang yang mengikuti pengaturan, jumlah dan tautan kartu, pembatasan sesuai hak lihat, serta visibilitas widget. Commit: `feat(work-46): pengajuan menunggu terlalu lama di dashboard dan daftar`.
 
 ---
 
@@ -525,5 +540,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 43 | Filter pihak lawan dan rentang tanggal berakhir | `ahtar-dev` |
 | 44 | Ekspor Excel daftar dokumen | `ahtar-dev` |
 | 45 | Ringkasan dokumen berakhir per badan usaha | `ahtar-dev` |
+| 46 | Pengajuan menunggu terlalu lama di dashboard dan daftar | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
