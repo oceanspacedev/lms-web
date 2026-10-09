@@ -129,11 +129,18 @@ class AdminMonitoringAccessTest extends TestCase
 
     public function test_custom_permission_seeder_is_idempotent(): void
     {
+        $expected = array_keys(config('filament-shield.custom_permissions'));
+
         $this->seed(MonitoringPermissionSeeder::class);
-        $this->assertDatabaseCount('permissions', 3);
-        $this->assertDatabaseHas('permissions', ['name' => 'View:Horizon', 'guard_name' => 'web']);
-        $this->assertDatabaseHas('permissions', ['name' => 'View:LogViewer', 'guard_name' => 'web']);
-        $this->assertDatabaseHas('permissions', ['name' => 'receive_reminder', 'guard_name' => 'web']);
+        $this->seed(MonitoringPermissionSeeder::class);
+
+        $this->assertDatabaseCount('permissions', count($expected));
+        foreach ($expected as $permission) {
+            $this->assertDatabaseHas('permissions', ['name' => $permission, 'guard_name' => 'web']);
+        }
+        $this->assertContains('View:Horizon', $expected);
+        $this->assertContains('View:LogViewer', $expected);
+        $this->assertContains('receive_reminder', $expected);
     }
 
     public function test_production_panel_accepts_assigned_roles_and_permissions_but_rejects_unassigned_users(): void

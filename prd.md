@@ -397,6 +397,20 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 42: Perbaikan Tes yang Usang
+
+**Tujuan:** Suite tes hijau, sehingga kegagalan baru langsung terlihat. Sebelumnya 17 tes gagal sejak jadwal pengingat dipindah ke template global (Work 11) dan sejak permission pengajuan ditambahkan ke Shield (Work 12).
+
+**Cakupan:** hanya tes yang diperbarui; tidak ada perubahan perilaku aplikasi.
+- `AdminMonitoringAccessTest`: seeder permission kustom diuji terhadap seluruh daftar `filament-shield.custom_permissions` dan dijalankan dua kali (idempoten), bukan angka tetap 3.
+- `DocumentStatusDashboardTest` dan `DummyAcceptanceTest`: status Segera Berakhir kini menyiapkan jadwal pada template global, bukan `reminder_days` per jenis dokumen.
+- `DocumentTypeResourceTest`: tiga tes yang mengisi `reminder_days` lewat form diganti. Form jenis dokumen tidak punya kolom itu lagi, sehingga yang diuji adalah: kolom tidak ada, jadwal efektif mengikuti template global (hanya untuk jenis bermasa berlaku, mengikuti status aktif), nilai lama pada model tidak diubah saat edit, dan validasi data lama pada model tetap berlaku.
+- `ReminderScheduleValidationTest` (baru): aturan input jadwal global (negatif, desimal, teks, terlalu besar, duplikat, kosong ditolak; 0 diterima dan diurutkan menurun; mode interval dan inherit), menggantikan validasi yang dulu diuji lewat form jenis dokumen.
+
+**Definition of Done:** Seluruh suite hijau. Commit: `test(work-42): perbarui tes yang usang terhadap jadwal pengingat global`.
+
+---
+
 ### WORK 41: Sembunyikan Nama PIC di Halaman Publik
 
 **Tujuan:** Pengaju tidak perlu mengetahui siapa staf internal yang menangani pengajuannya.
@@ -462,5 +476,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 39 | Kirim ulang notifikasi yang gagal | `ahtar-dev` |
 | 40 | Seeder akun dummy per role | `ahtar-dev` |
 | 41 | Sembunyikan nama PIC di halaman publik | `ahtar-dev` |
+| 42 | Perbaikan tes yang usang | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

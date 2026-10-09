@@ -8,6 +8,7 @@ use App\Filament\Widgets\ExpiringDocuments;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
+use App\Models\ReminderTemplate;
 use App\Models\User;
 use Database\Seeders\DocumentSeeder;
 use Filament\Facades\Filament;
@@ -31,9 +32,20 @@ class DocumentStatusDashboardTest extends TestCase
         $this->seed(DocumentSeeder::class);
     }
 
+    /** Jadwal pengingat berlaku global untuk semua dokumen; daftar kosong berarti tidak ada jadwal. */
+    private function useReminderDays(array $days): void
+    {
+        $attributes = $days === [] ? ['schedule_mode' => 'inherit', 'scheduled_days' => []] : ['schedule_mode' => 'specific_days', 'scheduled_days' => $days];
+        $template = ReminderTemplate::globalSetting();
+        $template ? $template->update($attributes) : ReminderTemplate::factory()->create($attributes);
+    }
+
     private function document(?string $expiryDate, array $reminderDays = [90, 60, 30], bool $hasExpiry = true): Document
     {
-        $type = DocumentType::factory()->create(['has_expiry' => $hasExpiry, 'reminder_days' => $reminderDays]);
+        if ($hasExpiry) {
+            $this->useReminderDays($reminderDays);
+        }
+        $type = DocumentType::factory()->create(['has_expiry' => $hasExpiry]);
         $document = Document::factory()->create(['document_type_id' => $type->id]);
         $version = DocumentVersion::factory()->create(['document_id' => $document->id, 'expiry_date' => $expiryDate]);
         $document->current_version_id = $version->id;
@@ -74,11 +86,11 @@ class DocumentStatusDashboardTest extends TestCase
         }
     }
 
-    public function test_status_tracks_current_version_and_type_configuration_changes(): void
+    public function test_status_tracks_current_version_and_reminder_schedule_changes(): void
     {
         $document = $this->document('2026-12-04', [30]);
         $this->assertSame('active', $document->expiry_status);
-        $document->documentType->update(['reminder_days' => [90]]);
+        $this->useReminderDays([90]);
         $this->assertSame('expiring', $document->fresh()->expiry_status);
         $old = $document->currentVersion;
         $old->update(['is_current' => false]);

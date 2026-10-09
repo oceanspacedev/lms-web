@@ -13,6 +13,7 @@ use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\ReminderLog;
+use App\Models\ReminderTemplate;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DocumentSeeder;
@@ -53,7 +54,8 @@ class DummyAcceptanceTest extends TestCase
         $viewer = User::factory()->create(['name' => 'Viewer Dummy', 'email' => 'viewer@example.test']);
         $viewer->assignRole($viewerRole);
         $company = Company::factory()->create(['name' => 'PT Dummy UAT']);
-        $type = DocumentType::factory()->create(['name' => 'Kontrak Dummy', 'reminder_days' => [30, 7]]);
+        ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30, 7]]);
+        $type = DocumentType::factory()->create(['name' => 'Kontrak Dummy']);
         $this->actingAs($editor);
         Livewire::test(CreateDocument::class)->fillForm([
             'title' => 'Kontrak Dummy UAT', 'document_number' => 'DUMMY-001', 'company_id' => $company->id,
@@ -118,7 +120,8 @@ class DummyAcceptanceTest extends TestCase
     public function test_status_and_filters_follow_wib_day_before_utc_midnight(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-05 18:00:00', 'UTC'));
-        $document = Document::factory()->create(['document_type_id' => DocumentType::factory()->create(['reminder_days' => [30]])->id]);
+        ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30]]);
+        $document = Document::factory()->create(['document_type_id' => DocumentType::factory()->create()->id]);
         $version = DocumentVersion::factory()->create(['document_id' => $document->id, 'expiry_date' => '2026-10-05']);
         $document->current_version_id = $version->id;
         $document->save();
