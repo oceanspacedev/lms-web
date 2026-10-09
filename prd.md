@@ -379,6 +379,24 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 39: Kirim Ulang Notifikasi yang Gagal
+
+**Tujuan:** Admin dapat memulihkan pesan WhatsApp yang gagal dari halaman Riwayat pengiriman, tanpa mengubah data langsung di database.
+
+**Cakupan:**
+- Tombol "Kirim ulang" pada baris berstatus Gagal, untuk notifikasi pengajuan dan pengingat masa berlaku dokumen. Pesan uji tidak dapat dikirim ulang. Ada konfirmasi sebelum mengirim.
+- Hanya user yang boleh mengubah pengaturan WhatsApp (`Update:ReminderTemplate`) yang melihat dan dapat memakai tombol. Notifikasi pengajuan harus berada dalam cakupan pengajuan yang boleh dilihat user tersebut, selain itu ditolak.
+- Percobaan direset dan kunci idempotensi tetap sama, sehingga pesan yang ternyata sudah sampai tidak terkirim ganda. Pesan dan payload yang sama dipakai ulang.
+- Nomor penerima dihitung ulang dari data saat ini (nomor pengaju, PIC, atau pemeriksa/penyetuju), sehingga nomor yang sudah diperbaiki ikut terpakai.
+- Pesan yang sudah tidak berlaku (versi dokumen diganti, jadwal dihapus, atau pengajuan sudah berpindah tahap) dibatalkan, bukan dikirim.
+- Hasil ditampilkan sebagai notifikasi: diterima WagHub, gagal lagi, atau dibatalkan.
+- Audit: kolom `resent_by` dan `resent_at` pada `reminder_logs` dan `document_request_notifications`; riwayat menampilkan "Dikirim ulang oleh {nama}".
+- Pesan error yang lebih rinci per penyebab tidak dikerjakan karena rinciannya sudah tersedia di WagHub.
+
+**Definition of Done:** Tes mencakup kirim ulang berhasil dengan kunci dan payload sama, percobaan yang habis, nomor yang diperbaiki, hanya status Gagal, pembatalan untuk versi atau tahap yang sudah lewat, gagal lagi, tampilan tombol menurut status dan izin, audit, penolakan tanpa izin, di luar cakupan pengajuan, dan sumber tidak dikenal. Commit: `feat(work-39): kirim ulang notifikasi yang gagal`.
+
+---
+
 ### WORK 40: Akun Dummy per Role untuk Pengujian
 
 **Tujuan:** Pengujian manual (oleh developer maupun agen) dapat memakai akun dari setiap role tanpa membuat akun satu per satu.
@@ -429,6 +447,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 36 | Template pesan kedaluwarsa dapat diubah | `ahtar-dev` |
 | 37 | Pengingat pengajuan yang menggantung | `ahtar-dev` |
 | 38 | Timeline status pengajuan di halaman publik | `ahtar-dev` |
+| 39 | Kirim ulang notifikasi yang gagal | `ahtar-dev` |
 | 40 | Seeder akun dummy per role | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

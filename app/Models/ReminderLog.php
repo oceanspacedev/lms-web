@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['document_version_id', 'offset_days', 'recipient_phone', 'status', 'attempts', 'request_payload', 'provider_response', 'error_message', 'last_attempt_at', 'sent_at'])]
+#[Fillable(['document_version_id', 'offset_days', 'recipient_phone', 'status', 'attempts', 'request_payload', 'provider_response', 'error_message', 'last_attempt_at', 'sent_at', 'resent_by', 'resent_at'])]
 class ReminderLog extends Model
 {
     /** @use HasFactory<ReminderLogFactory> */
@@ -18,7 +18,7 @@ class ReminderLog extends Model
 
     protected function casts(): array
     {
-        return ['request_payload' => 'array', 'provider_response' => 'array', 'last_attempt_at' => 'datetime', 'sent_at' => 'datetime'];
+        return ['request_payload' => 'array', 'provider_response' => 'array', 'last_attempt_at' => 'datetime', 'sent_at' => 'datetime', 'resent_at' => 'datetime'];
     }
 
     public function documentVersion(): BelongsTo

@@ -54,6 +54,10 @@
                     <div class="wa-history__row"><h2 class="wa-history__title">{{ $name }}</h2><span class="wa-history__status wa-history__status--{{ $delivery->status }}">{{ $delivery->status_label }}</span></div>
                     <div class="wa-history__row"><p class="wa-history__meta">{{ $delivery->recipient_phone ?: 'Nomor belum tersedia' }}</p><time class="wa-history__meta">{{ \Carbon\CarbonImmutable::parse($delivery->created_at)->timezone(config('lms.reminder_timezone'))->format('d M Y, H:i') }}</time></div>
                     @if ($delivery->error_message)<p class="wa-history__error">{{ $delivery->error_message }}</p>@endif
+                    @if ($delivery->resent_by_name)<p class="wa-history__meta">Dikirim ulang oleh {{ $delivery->resent_by_name }} · {{ \Carbon\CarbonImmutable::parse($delivery->resent_at)->timezone(config('lms.reminder_timezone'))->format('d M Y H:i') }} WIB</p>@endif
+                    @if ($delivery->can_resend)
+                        <div><x-filament::button size="sm" color="gray" icon="heroicon-o-arrow-path" wire:click="resend('{{ $delivery->source }}', {{ $delivery->id }})" wire:confirm="Kirim ulang pesan ini? Kunci pengiriman sama, jadi pesan tidak akan terkirim ganda." wire:loading.attr="disabled">Kirim ulang</x-filament::button></div>
+                    @endif
                     @if (filled($delivery->message))<details><summary>Lihat pesan</summary><p class="wa-history__message">{{ $delivery->message }}</p></details>@endif
                 </article>
             @empty

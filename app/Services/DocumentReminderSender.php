@@ -50,52 +50,79 @@ class DocumentReminderSender
             return $result;
         }
         ReminderLog::whereIn('status', ['pending', 'failed'])->each(function (ReminderLog $log) use ($today, &$result): void {
-            $key = "lms-reminder-{$log->document_version_id}-{$log->offset_days}";
-            $lock = Cache::lock($key, max(60, (int) config('services.waghub.timeout') + 30));
-            if (! $lock->get()) {
-                return;
-            }
-            try {
-                $log->refresh()->load('documentVersion.document.company', 'documentVersion.document.documentType', 'documentVersion.document.pic');
-                $version = $log->documentVersion;
-                $document = $version?->document;
-                if (! $document || ! $version->is_current || $document->current_version_id !== $version->id
-                    || ! $document->documentType->has_expiry || ! $version->expiry_date
-                    || ! $this->isScheduled($log->offset_days, $document, $version->expiry_date->toDateString(), $today)) {
-                    $log->update(['status' => 'cancelled', 'error_message' => 'Versi atau jadwal pengingat sudah tidak berlaku.']);
-                    $result['cancelled']++;
-
-                    return;
-                }
-                $claimed = ReminderLog::whereKey($log->id)->whereIn('status', ['pending', 'failed'])
-                    ->where('attempts', '<', config('lms.reminder_max_attempts'))
-                    ->where(function (Builder $query) use ($today): void {
-                        $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<', $today->utc());
-                    })->update(['status' => 'pending', 'attempts' => DB::raw('attempts + 1'), 'last_attempt_at' => now()]);
-                if (! $claimed) {
-                    return;
-                }
-                try {
-                    $payload = $log->request_payload ?? $this->payload($document, $log, $today);
-                    $log->update(['request_payload' => $payload, 'recipient_phone' => $payload['recipient']['value']]);
-                    $response = $this->waghub->send($payload, $key);
-                    $log->update(['provider_response' => $response->json() ?? ['http_status' => $response->status()]]);
-                    if (! $response->successful()) {
-                        throw new RuntimeException('WagHub menolak permintaan (HTTP '.$response->status().').');
-                    }
-                    $log->update(['status' => 'accepted', 'sent_at' => null, 'error_message' => null]);
-                    $result['accepted']++;
-                } catch (Throwable $exception) {
-                    $log->update(['status' => 'failed', 'error_message' => $exception instanceof RuntimeException && ! $exception instanceof ConnectionException
-                        ? $exception->getMessage() : 'Koneksi WagHub gagal; pengiriman akan dicoba kembali.']);
-                    $result['failed']++;
-                }
-            } finally {
-                $lock->release();
+            $outcome = $this->deliver($log, $today);
+            if ($outcome !== null) {
+                $result[$outcome]++;
             }
         });
 
         return $result;
+    }
+
+    /**
+     * Kirim ulang pengingat yang gagal atas permintaan user. Percobaan direset, kunci idempotensi tetap sama,
+     * dan nomor penerima dihitung ulang bila payload belum pernah terbentuk.
+     *
+     * @return 'accepted'|'failed'|'cancelled'|null Null bila log bukan berstatus gagal atau sedang diproses.
+     */
+    public function resend(ReminderLog $log, User $user): ?string
+    {
+        $this->waghub->assertConfigured();
+        if ($log->status !== 'failed') {
+            return null;
+        }
+        $log->update(['status' => 'pending', 'attempts' => 0, 'last_attempt_at' => null, 'error_message' => null, 'resent_by' => $user->id, 'resent_at' => now()]);
+
+        return $this->deliver($log, CarbonImmutable::today(config('lms.reminder_timezone')));
+    }
+
+    /** @return 'accepted'|'failed'|'cancelled'|null */
+    private function deliver(ReminderLog $log, CarbonImmutable $today): ?string
+    {
+        $key = "lms-reminder-{$log->document_version_id}-{$log->offset_days}";
+        $lock = Cache::lock($key, max(60, (int) config('services.waghub.timeout') + 30));
+        if (! $lock->get()) {
+            return null;
+        }
+        try {
+            $log->refresh()->load('documentVersion.document.company', 'documentVersion.document.documentType', 'documentVersion.document.pic');
+            $version = $log->documentVersion;
+            $document = $version?->document;
+            if (! $document || ! $version->is_current || $document->current_version_id !== $version->id
+                || ! $document->documentType->has_expiry || ! $version->expiry_date
+                || ! $this->isScheduled($log->offset_days, $document, $version->expiry_date->toDateString(), $today)) {
+                $log->update(['status' => 'cancelled', 'error_message' => 'Versi atau jadwal pengingat sudah tidak berlaku.']);
+
+                return 'cancelled';
+            }
+            $claimed = ReminderLog::whereKey($log->id)->whereIn('status', ['pending', 'failed'])
+                ->where('attempts', '<', config('lms.reminder_max_attempts'))
+                ->where(function (Builder $query) use ($today): void {
+                    $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<', $today->utc());
+                })->update(['status' => 'pending', 'attempts' => DB::raw('attempts + 1'), 'last_attempt_at' => now()]);
+            if (! $claimed) {
+                return null;
+            }
+            try {
+                $payload = $log->request_payload ?? $this->payload($document, $log, $today);
+                $log->update(['request_payload' => $payload, 'recipient_phone' => $payload['recipient']['value']]);
+                $response = $this->waghub->send($payload, $key);
+                $log->update(['provider_response' => $response->json() ?? ['http_status' => $response->status()]]);
+                if (! $response->successful()) {
+                    throw new RuntimeException('WagHub menolak permintaan (HTTP '.$response->status().').');
+                }
+                $log->update(['status' => 'accepted', 'sent_at' => null, 'error_message' => null]);
+
+                return 'accepted';
+            } catch (Throwable $exception) {
+                $log->update(['status' => 'failed', 'error_message' => $exception instanceof RuntimeException && ! $exception instanceof ConnectionException
+                    ? $exception->getMessage() : 'Koneksi WagHub gagal; pengiriman akan dicoba kembali.']);
+
+                return 'failed';
+            }
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

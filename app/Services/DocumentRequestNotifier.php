@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DocumentRequest;
 use App\Models\DocumentRequestNotification;
 use App\Models\ReminderTemplate;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -58,11 +59,51 @@ class DocumentRequestNotifier
         });
     }
 
-    public function run(?int $requestId = null): int
+    /**
+     * Kirim ulang notifikasi yang gagal atas permintaan user. Percobaan direset dan kunci idempotensi tetap sama.
+     * Nomor penerima dihitung ulang dari data saat ini, sehingga nomor yang sudah diperbaiki ikut terpakai.
+     * Notifikasi untuk tahap yang sudah terlewati dibatalkan, bukan dikirim.
+     *
+     * @return 'accepted'|'failed'|'cancelled'|null Null bila notifikasi bukan berstatus gagal.
+     */
+    public function resend(DocumentRequestNotification $notification, User $user): ?string
+    {
+        $this->waghub->assertConfigured();
+        if ($notification->status !== 'failed') {
+            return null;
+        }
+        $phone = $this->currentPhone($notification) ?? $notification->recipient_phone;
+        $payload = $notification->payload;
+        $payload['recipient'] = ['type' => 'phone', 'value' => $phone];
+        $notification->update([
+            'status' => 'pending', 'attempts' => 0, 'last_attempt_at' => null, 'error_message' => null,
+            'recipient_phone' => $phone, 'payload' => $payload, 'resent_by' => $user->id, 'resent_at' => now(),
+        ]);
+        $this->run($notification->document_request_id, $notification->id);
+
+        return match ($notification->fresh()->status) {
+            'accepted' => 'accepted', 'cancelled' => 'cancelled', default => 'failed',
+        };
+    }
+
+    private function currentPhone(DocumentRequestNotification $notification): ?string
+    {
+        $request = DocumentRequest::find($notification->document_request_id);
+        $number = match ($notification->recipient_kind) {
+            'applicant' => $request?->requester_phone ?? $request?->requester?->phone,
+            'pic' => $request?->pic?->phone,
+            default => preg_match('/-u(\d+)$/', $notification->event_key, $matches) === 1 ? User::find((int) $matches[1])?->phone : null,
+        };
+
+        return $this->waghub->normalizePhone($number);
+    }
+
+    public function run(?int $requestId = null, ?int $notificationId = null): int
     {
         $accepted = 0;
         DocumentRequestNotification::whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)
             ->when($requestId, fn (Builder $query): Builder => $query->where('document_request_id', $requestId))
+            ->when($notificationId, fn (Builder $query): Builder => $query->whereKey($notificationId))
             ->where(fn (Builder $query): Builder => $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', now()->subMinutes(5)))
             ->orderBy('id')->limit(50)->get()->each(function (DocumentRequestNotification $notification) use (&$accepted): void {
                 $request = DocumentRequest::find($notification->document_request_id);
