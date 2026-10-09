@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days', 'overdue_body', 'request_templates'])]
+#[Fillable(['name', 'is_active', 'body', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days', 'overdue_body', 'request_templates', 'request_reminder_enabled', 'request_reminder_after_days', 'request_reminder_interval_days', 'request_reminder_max', 'request_reminder_body'])]
 class ReminderTemplate extends Model
 {
     public static function globalSetting(): ?self
@@ -34,6 +34,24 @@ class ReminderTemplate extends Model
         return $setting?->is_active ? $setting->overdueOffsets() : [];
     }
 
+    /** @return array{enabled: bool, after_days: int, interval_days: int, max: int} */
+    public static function requestReminderSettings(): array
+    {
+        $setting = self::globalSetting();
+
+        return $setting === null ? self::REQUEST_REMINDER_DEFAULTS : [
+            'enabled' => $setting->request_reminder_enabled,
+            'after_days' => max(1, $setting->request_reminder_after_days),
+            'interval_days' => max(1, $setting->request_reminder_interval_days),
+            'max' => max(1, $setting->request_reminder_max),
+        ];
+    }
+
+    public function requestReminderBody(): string
+    {
+        return filled($this->request_reminder_body) ? $this->request_reminder_body : self::DEFAULT_REQUEST_REMINDER_BODY;
+    }
+
     public function overdueBody(): string
     {
         return filled($this->overdue_body) ? $this->overdue_body : self::DEFAULT_OVERDUE_BODY;
@@ -45,7 +63,7 @@ class ReminderTemplate extends Model
         return collect($this->overdue_days)->map(fn (int|string $day): int => (int) $day)->filter(fn (int $day): bool => $day > 0)->unique()->sort()->values()->all();
     }
 
-    protected $attributes = ['schedule_mode' => 'inherit', 'start_before_days' => 30, 'interval_days' => 7, 'scheduled_days' => '[]', 'overdue_days' => '[]'];
+    protected $attributes = ['schedule_mode' => 'inherit', 'start_before_days' => 30, 'interval_days' => 7, 'scheduled_days' => '[]', 'overdue_days' => '[]', 'request_reminder_enabled' => true, 'request_reminder_after_days' => 2, 'request_reminder_interval_days' => 2, 'request_reminder_max' => 3];
 
     public const VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Perusahaan', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'sisa_hari' => 'Sisa Hari', 'pic' => 'Nama PIC'];
 
@@ -85,6 +103,20 @@ class ReminderTemplate extends Model
     public const DEFAULT_BODY = "Pengingat masa berlaku dokumen\nDokumen: {dokumen}\nPerusahaan: {perusahaan}\nBerakhir: {tanggal_berakhir}\nSisa waktu: {sisa_hari} hari\nPIC: {pic}";
 
     public const DEFAULT_OVERDUE_BODY = "Dokumen sudah kedaluwarsa\nDokumen: {dokumen}\nPerusahaan: {perusahaan}\nBerakhir: {tanggal_berakhir}\nTerlambat: {hari_terlambat} hari\nPIC: {pic}";
+
+    public const DEFAULT_REQUEST_REMINDER_BODY = "Pengajuan menunggu tindakan\nPengajuan #{nomor_pengajuan}: {judul}\nTahap: {status}\nMenunggu {hari_menunggu} hari\n{tautan}";
+
+    public const REQUEST_REMINDER_DEFAULTS = ['enabled' => true, 'after_days' => 2, 'interval_days' => 2, 'max' => 3];
+
+    public const REQUEST_REMINDER_VARIABLE_LABELS = [
+        'nomor_pengajuan' => 'Nomor pengajuan', 'judul' => 'Judul pengajuan', 'pengaju' => 'Nama pengaju', 'perusahaan' => 'Nama perusahaan',
+        'jenis_dokumen' => 'Jenis dokumen', 'status' => 'Tahap pengajuan', 'hari_menunggu' => 'Hari menunggu', 'tautan' => 'Tautan pengajuan',
+    ];
+
+    public const REQUEST_REMINDER_EXAMPLE_VALUES = [
+        'nomor_pengajuan' => '123', 'judul' => 'Pengajuan Kontrak Dummy', 'pengaju' => 'Budi', 'perusahaan' => 'PT Dummy',
+        'jenis_dokumen' => 'Kontrak', 'status' => 'Diperiksa', 'hari_menunggu' => '3', 'tautan' => 'https://contoh.test/admin/document-requests/123/edit',
+    ];
 
     public const OVERDUE_VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Perusahaan', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'hari_terlambat' => 'Hari Terlambat', 'pic' => 'Nama PIC'];
 
@@ -133,7 +165,7 @@ class ReminderTemplate extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'start_before_days' => 'integer', 'interval_days' => 'integer', 'scheduled_days' => 'array', 'overdue_days' => 'array', 'request_templates' => 'array'];
+        return ['is_active' => 'boolean', 'start_before_days' => 'integer', 'interval_days' => 'integer', 'scheduled_days' => 'array', 'overdue_days' => 'array', 'request_reminder_enabled' => 'boolean', 'request_reminder_after_days' => 'integer', 'request_reminder_interval_days' => 'integer', 'request_reminder_max' => 'integer', 'request_templates' => 'array'];
     }
 
     /**
@@ -180,6 +212,14 @@ class ReminderTemplate extends Model
                 if (blank($body) || self::unknownVariables($body, self::REQUEST_EXAMPLE_VALUES) !== []) {
                     throw ValidationException::withMessages(['request_templates.'.$event => 'Isi pesan wajib diisi dan memakai variabel yang tersedia.']);
                 }
+            }
+            Validator::make($template->attributesToArray(), [
+                'request_reminder_after_days' => ['required', 'integer', 'min:1', 'max:365'],
+                'request_reminder_interval_days' => ['required', 'integer', 'min:1', 'max:365'],
+                'request_reminder_max' => ['required', 'integer', 'min:1', 'max:10'],
+            ])->validate();
+            if (filled($template->request_reminder_body) && (mb_strlen($template->request_reminder_body) > 4000 || self::unknownVariables($template->request_reminder_body, self::REQUEST_REMINDER_EXAMPLE_VALUES) !== [])) {
+                throw ValidationException::withMessages(['request_reminder_body' => 'Isi pesan maksimal 4000 karakter dan memakai variabel yang tersedia.']);
             }
             if (filled($template->overdue_body) && (mb_strlen($template->overdue_body) > 4000 || self::unknownVariables($template->overdue_body, self::OVERDUE_EXAMPLE_VALUES) !== [])) {
                 throw ValidationException::withMessages(['overdue_body' => 'Isi pesan maksimal 4000 karakter dan memakai variabel yang tersedia.']);

@@ -22,7 +22,7 @@ class WhatsAppTemplateTester
     {
         $setting = ReminderTemplate::globalSetting();
         abort_unless($setting ? $user->can('update', $setting) : $user->can('create', ReminderTemplate::class), 403);
-        abort_unless(in_array($event, ['reminder', 'overdue'], true) || array_key_exists($event, ReminderTemplate::REQUEST_TEMPLATE_LABELS), 404);
+        abort_unless(in_array($event, ['reminder', 'overdue', 'request_reminder'], true) || array_key_exists($event, ReminderTemplate::REQUEST_TEMPLATE_LABELS), 404);
         $number = $this->waghub->normalizePhone($phone);
         if ($number === null) {
             throw ValidationException::withMessages(['phone' => 'Masukkan nomor WhatsApp Indonesia yang valid.']);
@@ -40,11 +40,13 @@ class WhatsAppTemplateTester
             $body = match ($event) {
                 'reminder' => $setting?->body ?? ReminderTemplate::DEFAULT_BODY,
                 'overdue' => $setting?->overdueBody() ?? ReminderTemplate::DEFAULT_OVERDUE_BODY,
+                'request_reminder' => $setting?->requestReminderBody() ?? ReminderTemplate::DEFAULT_REQUEST_REMINDER_BODY,
                 default => $setting?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event],
             };
             $values = match ($event) {
                 'reminder' => ReminderTemplate::EXAMPLE_VALUES,
                 'overdue' => ReminderTemplate::OVERDUE_EXAMPLE_VALUES,
+                'request_reminder' => ReminderTemplate::REQUEST_REMINDER_EXAMPLE_VALUES,
                 default => [...ReminderTemplate::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa'],
             };
             $message = "[PESAN UJI]\n".ReminderTemplate::renderBody($body, $values);

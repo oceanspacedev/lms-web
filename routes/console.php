@@ -14,3 +14,8 @@ Schedule::command('lms:send-reminders')
     ->withoutOverlapping(30);
 
 Schedule::command('lms:send-request-notifications')->everyMinute()->withoutOverlapping(5);
+
+Schedule::command('lms:send-request-reminders')
+    ->dailyAt(config('lms.reminder_time'))
+    ->timezone(config('lms.reminder_timezone'))
+    ->withoutOverlapping(30);

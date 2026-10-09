@@ -123,6 +123,17 @@ class WhatsAppToolsTest extends TestCase
         $this->assertSame("[PESAN UJI]\nUji lewat 3 hari Kontrak Dummy", $log->message);
     }
 
+    public function test_request_reminder_test_message_uses_saved_template_with_example_values(): void
+    {
+        $user = $this->authorizeSettings();
+        ReminderTemplate::factory()->create(['is_active' => false, 'request_reminder_body' => 'Uji #{nomor_pengajuan} {hari_menunggu} hari']);
+        $result = app(WhatsAppTemplateTester::class)->send($user, 'request_reminder', '081234567890');
+        $this->assertSame('accepted', $result['status']);
+        $log = DB::table('whatsapp_test_messages')->sole();
+        $this->assertSame('request_reminder', $log->template_event);
+        $this->assertSame("[PESAN UJI]\nUji #123 3 hari", $log->message);
+    }
+
     public function test_missing_provider_configuration_is_recorded_safely(): void
     {
         $user = $this->authorizeSettings();

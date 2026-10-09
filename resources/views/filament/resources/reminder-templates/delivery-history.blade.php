@@ -45,7 +45,7 @@
             @forelse ($deliveries as $delivery)
                 @php
                     $name = match ($delivery->source) {
-                        'test' => 'Pesan uji · '.(match ($delivery->template_event) { 'reminder' => 'Masa berlaku', 'overdue' => 'Setelah kedaluwarsa', default => (\App\Models\ReminderTemplate::REQUEST_TEMPLATE_LABELS[$delivery->template_event] ?? $delivery->template_event) }),
+                        'test' => 'Pesan uji · '.(match ($delivery->template_event) { 'reminder' => 'Masa berlaku', 'overdue' => 'Setelah kedaluwarsa', 'request_reminder' => 'Pengingat pengajuan', default => (\App\Models\ReminderTemplate::REQUEST_TEMPLATE_LABELS[$delivery->template_event] ?? $delivery->template_event) }),
                         'reminder' => 'Pengingat masa berlaku · Versi #'.$delivery->reference_id,
                         default => 'Notifikasi pengajuan #'.$delivery->reference_id,
                     };

@@ -63,6 +63,24 @@ class DocumentRequest extends Model
         return $this->belongsTo(User::class, 'pic_user_id');
     }
 
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewer_id');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approver_id');
+    }
+
+    /** Waktu masuk ke tahap saat ini, diambil dari peristiwa terakhir di riwayat. */
+    public function waitingSince(): CarbonImmutable
+    {
+        $at = collect($this->history)->last()['at'] ?? null;
+
+        return CarbonImmutable::parse($at ?? $this->updated_at);
+    }
+
     public function editableBy(User $user): bool
     {
         return $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);

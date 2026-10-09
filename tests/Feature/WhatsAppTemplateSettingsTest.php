@@ -170,6 +170,50 @@ class WhatsAppTemplateSettingsTest extends TestCase
         $this->assertNull($setting->fresh()->overdue_body);
     }
 
+    public function test_request_reminder_schedule_can_be_saved_and_rejects_invalid_values(): void
+    {
+        $this->authorizeSettings(['ViewAny:ReminderTemplate', 'Update:ReminderTemplate']);
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        $component = 'notification_settings.request_reminder';
+        Livewire::test(ManageReminderTemplates::class)
+            ->assertSee('Pengingat pengajuan menggantung')->assertSee('2 hari')->assertSee('3 kali')
+            ->mountAction(TestAction::make('edit_request_reminder_settings')->schemaComponent($component, 'content'))
+            ->assertActionDataSet(['request_reminder_enabled' => true, 'request_reminder_after_days' => 2, 'request_reminder_interval_days' => 2, 'request_reminder_max' => 3])
+            ->setActionData(['request_reminder_enabled' => false, 'request_reminder_after_days' => 1, 'request_reminder_interval_days' => 3, 'request_reminder_max' => 5])
+            ->callMountedAction()->assertHasNoActionErrors();
+        $fresh = $setting->fresh();
+        $this->assertFalse($fresh->request_reminder_enabled);
+        $this->assertSame([1, 3, 5], [$fresh->request_reminder_after_days, $fresh->request_reminder_interval_days, $fresh->request_reminder_max]);
+
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('edit_request_reminder_settings')->schemaComponent($component, 'content'), [
+                'request_reminder_enabled' => true, 'request_reminder_after_days' => 0, 'request_reminder_interval_days' => 366, 'request_reminder_max' => 11,
+            ])->assertHasActionErrors(['request_reminder_after_days', 'request_reminder_interval_days', 'request_reminder_max']);
+        $this->assertSame(1, $setting->fresh()->request_reminder_after_days);
+    }
+
+    public function test_request_reminder_template_can_be_customized_and_restored(): void
+    {
+        $this->authorizeSettings(['ViewAny:ReminderTemplate', 'Update:ReminderTemplate']);
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        $component = 'notification_settings.request_reminder';
+        Livewire::test(ManageReminderTemplates::class)
+            ->mountAction(TestAction::make('edit_request_reminder')->schemaComponent($component, 'content'))
+            ->assertActionDataSet(['request_reminder_body' => ReminderTemplate::DEFAULT_REQUEST_REMINDER_BODY])
+            ->setActionData(['request_reminder_body' => 'SEGERA: {judul} menunggu {hari_menunggu} hari'])
+            ->callMountedAction()->assertHasNoActionErrors()
+            ->assertSee('SEGERA: Pengajuan Kontrak Dummy menunggu 3 hari');
+        $this->assertSame('SEGERA: {judul} menunggu {hari_menunggu} hari', $setting->fresh()->request_reminder_body);
+
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('reset_request_reminder')->schemaComponent($component, 'content'))->assertHasNoActionErrors();
+        $this->assertNull($setting->fresh()->request_reminder_body);
+
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('edit_request_reminder')->schemaComponent($component, 'content'), ['request_reminder_body' => 'Halo {pic}'])
+            ->assertHasActionErrors(['request_reminder_body']);
+    }
+
     public function test_user_without_permission_cannot_access_settings(): void
     {
         $this->actingAs(User::factory()->create());

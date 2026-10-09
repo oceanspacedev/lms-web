@@ -343,6 +343,26 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 37: Pengingat Pengajuan yang Menggantung
+
+**Tujuan:** Pengajuan tidak diam di tahap pemeriksa atau penyetuju tanpa ada yang tahu. Pihak yang bertugas diingatkan otomatis lewat WhatsApp.
+
+**Cakupan:**
+- Pengaturan di halaman Pengaturan WhatsApp, panel "Pengingat pengajuan menggantung": aktif/nonaktif, mulai setelah N hari (bawaan 2), ulangi setiap N hari (bawaan 2), maksimal N kali (bawaan 3). Tanpa pengaturan tersimpan, nilai bawaan berlaku dan pengingat aktif.
+- Command `lms:send-request-reminders`, dijadwalkan harian pada jam pengingat (08:00 WIB). Command hanya membuat notifikasi; pengiriman dan percobaan ulang tetap oleh `lms:send-request-notifications` (tiap menit).
+- Penerima menurut tahap:
+  - Diperiksa: pemeriksa pengajuan (`reviewer_id`), atau PIC bila kosong.
+  - Menunggu Persetujuan: penyetuju (`approver_id`), atau semua user dengan permission `Approve:DocumentRequest` bila belum ditetapkan.
+- Lama menunggu dihitung dari peristiwa terakhir di riwayat. Pengingat ke-k jatuh tempo pada `mulai + (k-1) x interval` hari. Bila beberapa run terlewat, hanya pengingat terbaru yang dikirim.
+- Idempotensi lewat `event_key` `lms-request-{id}-{jumlah riwayat}-stale{k}-u{user}`. Karena memakai awalan yang sama dengan notifikasi status, pengingat tertunda otomatis dibatalkan saat pengajuan berpindah tahap.
+- Isi pesan dapat diubah (ubah, pratinjau, pesan uji, kembalikan bawaan). Data otomatis: nomor pengajuan, judul, pengaju, perusahaan, jenis dokumen, tahap, hari menunggu, tautan. Kolom kosong memakai `DEFAULT_REQUEST_REMINDER_BODY`.
+- Penerima tanpa nomor WhatsApp valid tetap dicatat sebagai notifikasi gagal di riwayat pengiriman.
+- Di luar cakupan: kartu dashboard jumlah pengajuan menunggu.
+
+**Definition of Done:** Tes mencakup ambang pertama, ulangan dan batas maksimal tanpa duplikat, catch-up, penerima tiap tahap dan fallback, status yang diabaikan, pengaturan nonaktif dan kustom, template kustom dan validasi, pengiriman dan pembatalan saat status berubah, nomor kosong, serta form pengaturan. Commit: `feat(work-37): pengingat pengajuan yang menggantung`.
+
+---
+
 ### WORK 38: Timeline Status di Halaman Publik
 
 **Tujuan:** Pengaju memahami posisi pengajuannya dan apa yang sudah terjadi, tidak hanya melihat status terakhir.
@@ -393,6 +413,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 34 | Pengingat setelah kedaluwarsa | `ahtar-dev` |
 | 35 | Tombol perpanjang dokumen | `ahtar-dev` |
 | 36 | Template pesan kedaluwarsa dapat diubah | `ahtar-dev` |
+| 37 | Pengingat pengajuan yang menggantung | `ahtar-dev` |
 | 38 | Timeline status pengajuan di halaman publik | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

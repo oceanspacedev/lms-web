@@ -63,6 +63,27 @@ class ReminderTemplateResource extends Resource
     }
 
     /** @return array<Component> */
+    public static function requestReminderFields(): array
+    {
+        return self::messageFields('request_reminder_body', ReminderTemplate::DEFAULT_REQUEST_REMINDER_BODY, ReminderTemplate::REQUEST_REMINDER_EXAMPLE_VALUES, ReminderTemplate::REQUEST_REMINDER_VARIABLE_LABELS);
+    }
+
+    /** @return array<Component> */
+    public static function requestReminderSettingsFields(): array
+    {
+        return [
+            Toggle::make('request_reminder_enabled')->label('Kirim pengingat pengajuan')->default(true),
+            Grid::make(3)->schema([
+                TextInput::make('request_reminder_after_days')->label('Mulai setelah')->suffix('hari')->numeric()->integer()->minValue(1)->maxValue(365)->default(2)->required(),
+                TextInput::make('request_reminder_interval_days')->label('Ulangi setiap')->suffix('hari')->numeric()->integer()->minValue(1)->maxValue(365)->default(2)->required(),
+                TextInput::make('request_reminder_max')->label('Maksimal')->suffix('kali')->numeric()->integer()->minValue(1)->maxValue(10)->default(3)->required(),
+            ]),
+            TextEntry::make('request_reminder_help')->hiddenLabel()
+                ->state('Pemeriksa diingatkan saat pengajuan menunggu di tahap Diperiksa, penyetuju saat menunggu persetujuan. Pengingat dikirim sekitar pukul '.config('lms.reminder_time').' dan berhenti begitu pengajuan berpindah tahap.'),
+        ];
+    }
+
+    /** @return array<Component> */
     public static function overdueFields(): array
     {
         return self::messageFields('overdue_body', ReminderTemplate::DEFAULT_OVERDUE_BODY, ReminderTemplate::OVERDUE_EXAMPLE_VALUES, ReminderTemplate::OVERDUE_VARIABLE_LABELS);
