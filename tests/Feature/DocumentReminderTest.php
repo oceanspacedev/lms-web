@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\ReminderLog;
+use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentReminderSender;
 use App\Services\WaghubService;
@@ -24,6 +25,7 @@ class DocumentReminderTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 6)->setTime(1, 0));
         config(['services.waghub.url' => 'https://waghub.test', 'services.waghub.token' => 'test-token', 'services.waghub.purpose' => 'test-purpose']);
         $this->seed(ReminderLogSeeder::class);
+        ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30, 7], 'body' => ReminderTemplate::DEFAULT_BODY]);
         Http::preventStrayRequests();
         Http::fake(['waghub.test/*' => fn () => Http::response(['status' => 'accepted'], config('testing.waghub_status', 202))]);
     }
@@ -32,7 +34,7 @@ class DocumentReminderTest extends TestCase
     {
         $document = Document::factory()->create([
             'title' => 'Kontrak Pengujian',
-            'document_type_id' => DocumentType::factory()->create(['has_expiry' => true, 'reminder_days' => [30, 7]])->id,
+            'document_type_id' => DocumentType::factory()->create(['has_expiry' => true])->id,
             'pic_user_id' => User::factory()->create(['phone' => $phone])->id,
         ]);
         $version = DocumentVersion::factory()->create(['document_id' => $document->id, 'expiry_date' => today('Asia/Jakarta')->addDays($days)]);
@@ -45,7 +47,7 @@ class DocumentReminderTest extends TestCase
     public function test_exact_schedule_payload_and_repeat_run_are_idempotent(): void
     {
         $document = $this->document();
-        $this->document(29);
+        $this->document(31);
         $this->artisan('lms:send-reminders')->assertSuccessful();
         $this->artisan('lms:send-reminders')->assertSuccessful();
         Http::assertSentCount(1);
@@ -57,6 +59,36 @@ class DocumentReminderTest extends TestCase
             && str_contains($request['message']['text'], 'Sisa waktu: 30 hari'));
         $this->assertSame('accepted', ReminderLog::sole()->status);
         $this->assertNull(ReminderLog::sole()->sent_at);
+    }
+
+    public function test_missed_schedule_is_sent_late_once_with_accurate_remaining_days(): void
+    {
+        $document = $this->document(29);
+        app(DocumentReminderSender::class)->run();
+        $this->travel(1)->days();
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Idempotency-Key', "lms-reminder-{$document->current_version_id}-30")
+            && str_contains($request['message']['text'], 'Sisa waktu: 29 hari'));
+        $this->assertSame(30, ReminderLog::sole()->offset_days);
+    }
+
+    public function test_new_document_inside_window_gets_nearest_reached_schedule_only(): void
+    {
+        $this->document(5);
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => str_contains($request['message']['text'], 'Sisa waktu: 5 hari'));
+        $this->assertSame(7, ReminderLog::sole()->offset_days);
+    }
+
+    public function test_expired_document_and_document_outside_window_are_not_reminded(): void
+    {
+        $this->document(31);
+        $this->document(-1);
+        app(DocumentReminderSender::class)->run();
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('reminder_logs', 0);
     }
 
     public function test_failed_request_retries_next_day_with_identical_payload_and_key(): void

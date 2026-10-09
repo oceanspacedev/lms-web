@@ -30,13 +30,20 @@ class DocumentReminderSender
             ->whereHas('documentType', fn (Builder $query): Builder => $query->where('has_expiry', true))
             ->whereHas('currentVersion', fn (Builder $query): Builder => $query->where('is_current', true)->whereNotNull('expiry_date'))
             ->each(function (Document $document) use ($today, $dryRun, &$result): void {
-                $offset = (int) $today->diffInDays(CarbonImmutable::parse($document->currentVersion->expiry_date->toDateString(), $today->timezone), false);
-                if (! in_array($offset, $document->documentType->effectiveReminderDays(), true)) {
+                $offset = $this->dueOffset($document, $today);
+                if ($offset === null) {
                     return;
                 }
-                $result['due']++;
-                if (! $dryRun) {
-                    ReminderLog::firstOrCreate(['document_version_id' => $document->current_version_id, 'offset_days' => $offset]);
+                $attributes = ['document_version_id' => $document->current_version_id, 'offset_days' => $offset];
+                if ($dryRun) {
+                    if (! ReminderLog::where($attributes)->exists()) {
+                        $result['due']++;
+                    }
+
+                    return;
+                }
+                if (ReminderLog::firstOrCreate($attributes)->wasRecentlyCreated) {
+                    $result['due']++;
                 }
             });
         if ($dryRun) {
@@ -90,6 +97,18 @@ class DocumentReminderSender
         });
 
         return $result;
+    }
+
+    /**
+     * Jadwal pengingat terdekat yang sudah tercapai (catch-up), atau null bila belum ada.
+     * Jadwal yang terlewat tetap dikirim terlambat satu kali; log unik per versi dan jadwal mencegah kirim ganda.
+     */
+    private function dueOffset(Document $document, CarbonImmutable $today): ?int
+    {
+        $remaining = (int) $today->diffInDays(CarbonImmutable::parse($document->currentVersion->expiry_date->toDateString(), $today->timezone), false);
+        $reached = array_filter($document->documentType->effectiveReminderDays(), fn (int $day): bool => $day >= $remaining);
+
+        return $remaining < 0 || $reached === [] ? null : min($reached);
     }
 
     /** @return array<string, mixed> */
