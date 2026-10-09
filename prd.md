@@ -275,6 +275,23 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 33: Peringatan Kesehatan Pengingat di Dashboard
+
+**Tujuan:** Admin langsung tahu bila pengingat tidak akan berjalan, tanpa harus memeriksa log satu per satu.
+
+**Cakupan:**
+- Widget dashboard "Perlu Perhatian: Pengingat WhatsApp", tampil paling atas dan hanya bila ada masalah.
+- Peringatan yang diperiksa (`ReminderHealthChecker`):
+  1. Template pengingat belum dibuat, nonaktif, atau jadwalnya kosong (tidak ada pengingat yang akan dikirim).
+  2. Dokumen aktif dengan PIC tanpa nomor WhatsApp valid. Level "Perhatian" bila ada penerima cadangan (permission `receive_reminder` dengan nomor valid), level "Penting" bila tidak ada.
+  3. Pengingat berstatus `failed` pada Log Pengingat.
+- Tautan "Periksa" mengarah ke pengaturan template atau Log Pengingat terfilter status Gagal, hanya bila user punya akses halaman tersebut.
+- Widget hanya terlihat oleh user dengan akses lihat Template atau Log Pengingat.
+
+**Definition of Done:** Tes mencakup setup sehat tanpa peringatan, tiap jenis peringatan, pengecualian dokumen kedaluwarsa dan tanpa masa tenggang, serta pembatasan akses widget. Commit: `feat(work-33): peringatan kesehatan pengingat di dashboard`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -305,5 +322,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 8 | Pengingat WhatsApp | `ahtar-dev` |
 | 9 | Pencarian, audit, finishing | `ahtar-dev` |
 | 32 | Pengingat catch-up | `ahtar-dev` |
+| 33 | Peringatan kesehatan pengingat di dashboard | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
