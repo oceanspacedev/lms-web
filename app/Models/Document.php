@@ -135,10 +135,16 @@ class Document extends Model
 
     public function scopeExpiringWithin(Builder $query, int $days): Builder
     {
+        return $this->scopeExpiringBetween($query, 0, $days);
+    }
+
+    /** Dokumen yang berakhir antara $fromDays dan $toDays hari dari hari ini, kedua ujung termasuk. */
+    public function scopeExpiringBetween(Builder $query, int $fromDays, int $toDays): Builder
+    {
         return $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', true))
             ->whereHas('currentVersion', fn (Builder $version): Builder => $version
-                ->whereDate('expiry_date', '>=', today(config('lms.reminder_timezone'))->toDateString())
-                ->whereDate('expiry_date', '<=', today(config('lms.reminder_timezone'))->addDays($days)->toDateString()));
+                ->whereDate('expiry_date', '>=', today(config('lms.reminder_timezone'))->addDays($fromDays)->toDateString())
+                ->whereDate('expiry_date', '<=', today(config('lms.reminder_timezone'))->addDays($toDays)->toDateString()));
     }
 
     /**

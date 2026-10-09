@@ -397,6 +397,21 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 45: Ringkasan Dokumen Berakhir per Badan Usaha
+
+**Tujuan:** Dari dashboard terlihat badan usaha mana yang paling banyak punya dokumen akan berakhir, tanpa membuka daftar satu per satu.
+
+**Cakupan:**
+- Widget dashboard "Dokumen Berakhir per Badan Usaha" (lebar penuh, di bawah daftar 30 hari) untuk user yang boleh melihat dokumen.
+- Kolom per badan usaha: 0-30 hari, 31-60 hari, 61-90 hari (dihitung dari hari ini, kedua ujung termasuk), dan Kedaluwarsa. Dihitung dari versi aktif dokumen bermasa berlaku yang belum dihapus; dokumen tanpa masa tenggang dan versi lama tidak dihitung.
+- Badan usaha tanpa dokumen dalam 90 hari maupun kedaluwarsa tidak ditampilkan. Urutan: paling banyak berakhir dalam 30 hari, lalu paling banyak kedaluwarsa, lalu nama.
+- Setiap angka di atas nol menjadi tautan ke daftar dokumen yang sudah terfilter badan usaha dan rentang tanggalnya (atau status Kedaluwarsa), memakai filter dari Work 43. Angka nol tidak berupa tautan.
+- Scope `Document::expiringBetween($dariHari, $sampaiHari)` ditambahkan; `expiringWithin` tetap berperilaku sama dengan memakainya.
+
+**Definition of Done:** Tes mencakup batas tiap rentang, dokumen yang tidak dihitung (tanpa masa tenggang, dihapus, versi lama), badan usaha yang disembunyikan dan urutan, tautan yang cocok dengan hasil daftar terfilter, akses dan kemunculan di dashboard, keadaan kosong, serta scope 30 hari yang tidak berubah. Commit: `feat(work-45): ringkasan dokumen berakhir per badan usaha`.
+
+---
+
 ### WORK 44: Ekspor Excel
 
 **Tujuan:** Daftar dokumen dapat dibawa ke Excel untuk dilaporkan atau diolah.
@@ -509,5 +524,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 42 | Perbaikan tes yang usang | `ahtar-dev` |
 | 43 | Filter pihak lawan dan rentang tanggal berakhir | `ahtar-dev` |
 | 44 | Ekspor Excel daftar dokumen | `ahtar-dev` |
+| 45 | Ringkasan dokumen berakhir per badan usaha | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
