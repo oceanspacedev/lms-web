@@ -93,9 +93,9 @@ class PublicRequestStatusTimelineTest extends TestCase
         $this->assertSame([['label' => 'Pengajuan diterima', 'actor' => 'Pengaju', 'at' => null, 'note' => null, 'tone' => 'normal']], $request->publicTimeline());
     }
 
-    public function test_public_status_page_shows_progress_and_history_without_exposing_staff_names(): void
+    public function test_public_status_page_shows_progress_and_history_without_exposing_staff_or_pic_names(): void
     {
-        $pic = User::factory()->create(['name' => 'Pic Terlihat']);
+        $pic = User::factory()->create(['name' => 'Nama PIC Rahasia']);
         $this->request('review', [
             $this->event('submitted', '2026-10-01T01:00:00Z'),
             $this->event('review', '2026-10-02T03:15:00Z', null, 'Nama Staf Rahasia'),
@@ -105,7 +105,7 @@ class PublicRequestStatusTimelineTest extends TestCase
             ->assertSee('Tahap pengajuan')->assertSee('Menunggu Persetujuan')->assertSee('Riwayat')
             ->assertSee('Diteruskan untuk persetujuan')->assertSee('Pengajuan diterima')->assertSee('Pemeriksa')
             ->assertSee('02 Oct 2026 10:15 WIB')->assertSee('aria-current="step"', false)
-            ->assertDontSee('Nama Staf Rahasia');
+            ->assertDontSee('Nama Staf Rahasia')->assertDontSee('Nama PIC Rahasia');
     }
 
     public function test_rejected_page_keeps_reason_and_marks_stopped_stage(): void

@@ -371,7 +371,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Halaman `/pengajuan/{token}` menampilkan indikator tahap: Diperiksa, Menunggu Persetujuan, Menunggu Tanda Tangan, Selesai. Tahap berjalan disorot (`aria-current`), tahap yang dilewati ditandai selesai.
 - Status Perlu Revisi kembali ke tahap pertama. Status Ditolak menandai tahap tempat penolakan terjadi (Diperiksa atau Menunggu Persetujuan) sebagai dihentikan.
 - Riwayat berurutan, terbaru di atas: nama tahap, peran pelaku, waktu (WIB), dan catatan reviewer bila ada. Pengiriman ulang setelah revisi tampil sebagai "Revisi dikirim". Draf internal tidak ditampilkan.
-- Halaman publik hanya menyebut peran (Pengaju, Pemeriksa, Penyetuju), tidak memuat nama staf dari riwayat. Keputusan setelah tahap persetujuan dicatat sebagai Penyetuju, selain itu Pemeriksa. Baris PIC yang sudah ada di ringkasan tidak diubah.
+- Halaman publik hanya menyebut peran (Pengaju, Pemeriksa, Penyetuju), tidak memuat nama staf dari riwayat. Keputusan setelah tahap persetujuan dicatat sebagai Penyetuju, selain itu Pemeriksa. Nama PIC pada ringkasan baru disembunyikan di Work 41.
 - Data diambil dari kolom `history` yang sudah ada, tanpa migrasi. Riwayat lama tanpa waktu atau catatan tetap tampil.
 - Estimasi selesai tidak ditampilkan karena form publik tidak mengisi tanggal target.
 
@@ -394,6 +394,18 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Pesan error yang lebih rinci per penyebab tidak dikerjakan karena rinciannya sudah tersedia di WagHub.
 
 **Definition of Done:** Tes mencakup kirim ulang berhasil dengan kunci dan payload sama, percobaan yang habis, nomor yang diperbaiki, hanya status Gagal, pembatalan untuk versi atau tahap yang sudah lewat, gagal lagi, tampilan tombol menurut status dan izin, audit, penolakan tanpa izin, di luar cakupan pengajuan, dan sumber tidak dikenal. Commit: `feat(work-39): kirim ulang notifikasi yang gagal`.
+
+---
+
+### WORK 41: Sembunyikan Nama PIC di Halaman Publik
+
+**Tujuan:** Pengaju tidak perlu mengetahui siapa staf internal yang menangani pengajuannya.
+
+**Cakupan:**
+- Baris "PIC" dihapus dari ringkasan halaman status publik `/pengajuan/{token}`. Halaman publik tidak lagi memuat nama staf mana pun (PIC maupun pelaku di riwayat).
+- Notifikasi WhatsApp ke pengaju tidak berubah; variabel `{pic}` pada template tetap tersedia bagi admin yang ingin memakainya.
+
+**Definition of Done:** Tes memastikan nama PIC dan nama staf pada riwayat tidak tampil di halaman status. Commit: `feat(work-41): sembunyikan nama PIC di halaman status publik`.
 
 ---
 
@@ -449,5 +461,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 38 | Timeline status pengajuan di halaman publik | `ahtar-dev` |
 | 39 | Kirim ulang notifikasi yang gagal | `ahtar-dev` |
 | 40 | Seeder akun dummy per role | `ahtar-dev` |
+| 41 | Sembunyikan nama PIC di halaman publik | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

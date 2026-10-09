@@ -6,7 +6,7 @@
     <div class="receipt-heading"><span>Pengajuan #{{ $submission->id }}</span><span class="status {{ $submission->status }}">{{ $submission->status === 'approved' ? 'Disetujui' : \App\Models\DocumentRequest::STATUSES[$submission->status] }}</span></div>
     <h2>{{ $submission->title }}</h2>
     <p>{{ $submission->revisionNumber() ? 'Revisi ke-'.$submission->revisionNumber() : 'Pengajuan awal' }}</p>
-    <dl><div><dt>Pengaju</dt><dd>{{ $submission->applicantName() }}</dd></div><div><dt>PIC</dt><dd>{{ $submission->pic?->name }}</dd></div><div><dt>Diperbarui</dt><dd>{{ $submission->updated_at->timezone(config('lms.reminder_timezone'))->format('d M Y H:i') }}</dd></div></dl>
+    <dl><div><dt>Pengaju</dt><dd>{{ $submission->applicantName() }}</dd></div><div><dt>Diperbarui</dt><dd>{{ $submission->updated_at->timezone(config('lms.reminder_timezone'))->format('d M Y H:i') }}</dd></div></dl>
     @if($submission->status === 'rejected')<div class="notice error"><strong>Alasan penolakan</strong><p>{{ collect($submission->history)->last()['note'] ?? '' }}</p></div>@endif
     <ol class="progress" aria-label="Tahap pengajuan">
         @foreach($submission->progressSteps() as $step)
