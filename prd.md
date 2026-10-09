@@ -397,46 +397,57 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
-### WORK 47: Uji Alur Lengkap dari Ujung ke Ujung
+### WORK 40: Akun Dummy per Role untuk Pengujian
 
-**Tujuan:** Memastikan seluruh perjalanan pengajuan sampai dokumen berjalan utuh dan saling nyambung, bukan hanya tiap bagian sendiri-sendiri.
+**Tujuan:** Pengujian manual (oleh developer maupun agen) dapat memakai akun dari setiap role tanpa membuat akun satu per satu.
 
-**Cakupan:** `FullLifecycleFlowTest`, memakai akun dummy per role (`DummyAccountSeeder`), WagHub dipalsukan, dan waktu dimajukan sesuai alur.
-- Alur utama: pengaju publik mengisi form dan mengunggah lampiran → pengaju dan pemeriksa menerima WhatsApp → halaman status menampilkan tahap dan riwayat tanpa nama staf → 2 hari tanpa tindakan memicu pengingat ke pemeriksa (tidak ganda bila command diulang) → pemeriksa meminta revisi dan pengaju menerima catatannya → pengaju mengirim revisi lewat tautan → pemeriksa meneruskan, penyetuju menyetujui → dokumen final diarsipkan (dokumen, versi 1, berkas di S3, PIC, pihak lawan) → muncul di daftar dan pencarian tim legal → pengingat masa berlaku: jadwal terlewat dikirim terlambat sekali, lalu tepat waktu di H-7 → tim legal memperpanjang (form terisi otomatis, versi 2, versi lama menjadi arsip) → pengingat versi baru dihitung ulang dari awal → ekspor Excel memuat versi aktif terbaru.
-- Pemulihan: pesan gagal dikirim ulang dari halaman riwayat dengan kunci idempotensi yang sama dan tanpa pengiriman ganda.
-- Penolakan: pengajuan ditolak, pengaju menerima alasannya, halaman status menandai tahap dihentikan, dan pengingat tidak lagi dikirim.
+**Cakupan:**
+- Seeder `DummyAccountSeeder`, dijalankan manual: `php artisan db:seed --class=DummyAccountSeeder`. Tidak dipanggil oleh `DatabaseSeeder` dan menolak berjalan di production.
+- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@dummy.test` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
+- Role dasar berawalan `dummy_` agar tidak menimpa role buatan sendiri, dengan izin untuk menguji alur dokumen dan pengajuan: `dummy_legal` (kelola dokumen, lihat master, log, template, pemeriksa pengajuan, penerima pengingat), `dummy_viewer` (lihat dokumen), `dummy_pemeriksa` (periksa pengajuan), `dummy_penyetuju` (setujui pengajuan dan arsipkan dokumen final), `dummy_pengaju` (buat dan ubah pengajuan). Izin role buatan sendiri tidak diubah.
+- Nomor WhatsApp akun dummy dikosongkan agar pesan tidak sampai ke nomor sungguhan. Variabel `.env` `LMS_DUMMY_PHONE` mengisi nomor milik sendiri untuk menguji pengiriman.
 
-**Definition of Done:** Ketiga skenario lulus. Commit: `test(work-47): uji alur lengkap pengajuan sampai perpanjangan`.
+**Definition of Done:** Tes mencakup akun per role (termasuk role kustom) dapat membuka panel, seeder idempoten, izin tiap role dasar, role kustom tidak ditimpa, nama akun, dan penolakan di production. Commit: `feat(work-40): seeder akun dummy per role`.
 
 ---
 
-### WORK 46: Pengajuan yang Menunggu Terlalu Lama di Dashboard dan Daftar
+### WORK 41: Sembunyikan Nama PIC di Halaman Publik
 
-**Tujuan:** Staf langsung melihat pengajuan yang menggantung dan dapat menyaringnya, tanpa menunggu pengingat WhatsApp.
+**Tujuan:** Pengaju tidak perlu mengetahui siapa staf internal yang menangani pengajuannya.
 
 **Cakupan:**
-- Kolom `status_changed_at` pada `document_requests`, diisi setiap pengajuan berpindah tahap (bersama riwayat) dan diisi ulang dari riwayat terakhir untuk data lama oleh migrasi. `waitingSince()` kini memakai kolom ini, lalu riwayat, lalu `updated_at`.
-- Scope `DocumentRequest::waitingLongerThan($hari)`: hanya status Diperiksa dan Menunggu Persetujuan, batas inklusif. Data tanpa `status_changed_at` memakai `updated_at`.
-- Filter "Menunggu lebih dari N hari" (toggle) di daftar pengajuan. N mengikuti pengaturan "Mulai setelah" pada pengingat pengajuan (bawaan 2), dan dapat digabung dengan filter status.
-- Widget dashboard "Pengajuan Menunggu Tindakan": dua kartu (Menunggu Pemeriksaan dan Menunggu Persetujuan) berisi jumlah pengajuan yang boleh dilihat user, dengan keterangan berapa yang menunggu lebih dari N hari. Kartu menaut ke daftar terfilter status, dan filter menunggu lama bila ada yang menunggu. Widget hanya tampil bagi user yang boleh melihat pengajuan dan hanya bila ada pengajuan yang menunggu.
-- Pengingat pengajuan (Work 37) memakai daftar status menunggu yang sama.
+- Baris "PIC" dihapus dari ringkasan halaman status publik `/pengajuan/{token}`. Halaman publik tidak lagi memuat nama staf mana pun (PIC maupun pelaku di riwayat).
+- Notifikasi WhatsApp ke pengaju tidak berubah; variabel `{pic}` pada template tetap tersedia bagi admin yang ingin memakainya.
 
-**Definition of Done:** Tes mencakup batas inklusif dan status yang diabaikan, cadangan ke `updated_at`, prioritas `waitingSince`, transisi yang mereset waktu tunggu, filter tabel beserta ambang yang mengikuti pengaturan, jumlah dan tautan kartu, pembatasan sesuai hak lihat, serta visibilitas widget. Commit: `feat(work-46): pengajuan menunggu terlalu lama di dashboard dan daftar`.
+**Definition of Done:** Tes memastikan nama PIC dan nama staf pada riwayat tidak tampil di halaman status. Commit: `feat(work-41): sembunyikan nama PIC di halaman status publik`.
 
 ---
 
-### WORK 45: Ringkasan Dokumen Berakhir per Badan Usaha
+### WORK 42: Perbaikan Tes yang Usang
 
-**Tujuan:** Dari dashboard terlihat badan usaha mana yang paling banyak punya dokumen akan berakhir, tanpa membuka daftar satu per satu.
+**Tujuan:** Suite tes hijau, sehingga kegagalan baru langsung terlihat. Sebelumnya 17 tes gagal sejak jadwal pengingat dipindah ke template global (Work 11) dan sejak permission pengajuan ditambahkan ke Shield (Work 12).
+
+**Cakupan:** hanya tes yang diperbarui; tidak ada perubahan perilaku aplikasi.
+- `AdminMonitoringAccessTest`: seeder permission kustom diuji terhadap seluruh daftar `filament-shield.custom_permissions` dan dijalankan dua kali (idempoten), bukan angka tetap 3.
+- `DocumentStatusDashboardTest` dan `DummyAcceptanceTest`: status Segera Berakhir kini menyiapkan jadwal pada template global, bukan `reminder_days` per jenis dokumen.
+- `DocumentTypeResourceTest`: tiga tes yang mengisi `reminder_days` lewat form diganti. Form jenis dokumen tidak punya kolom itu lagi, sehingga yang diuji adalah: kolom tidak ada, jadwal efektif mengikuti template global (hanya untuk jenis bermasa berlaku, mengikuti status aktif), nilai lama pada model tidak diubah saat edit, dan validasi data lama pada model tetap berlaku.
+- `ReminderScheduleValidationTest` (baru): aturan input jadwal global (negatif, desimal, teks, terlalu besar, duplikat, kosong ditolak; 0 diterima dan diurutkan menurun; mode interval dan inherit), menggantikan validasi yang dulu diuji lewat form jenis dokumen.
+
+**Definition of Done:** Seluruh suite hijau. Commit: `test(work-42): perbarui tes yang usang terhadap jadwal pengingat global`.
+
+---
+
+### WORK 43: Filter dan Pencarian Lanjutan Dokumen
+
+**Tujuan:** Dokumen dapat dicari berdasarkan pihak lawan dan rentang tanggal berakhir, selain filter badan usaha, jenis, status, PIC, dan format yang sudah ada.
 
 **Cakupan:**
-- Widget dashboard "Dokumen Berakhir per Badan Usaha" (lebar penuh, di bawah daftar 30 hari) untuk user yang boleh melihat dokumen.
-- Kolom per badan usaha: 0-30 hari, 31-60 hari, 61-90 hari (dihitung dari hari ini, kedua ujung termasuk), dan Kedaluwarsa. Dihitung dari versi aktif dokumen bermasa berlaku yang belum dihapus; dokumen tanpa masa tenggang dan versi lama tidak dihitung.
-- Badan usaha tanpa dokumen dalam 90 hari maupun kedaluwarsa tidak ditampilkan. Urutan: paling banyak berakhir dalam 30 hari, lalu paling banyak kedaluwarsa, lalu nama.
-- Setiap angka di atas nol menjadi tautan ke daftar dokumen yang sudah terfilter badan usaha dan rentang tanggalnya (atau status Kedaluwarsa), memakai filter dari Work 43. Angka nol tidak berupa tautan.
-- Scope `Document::expiringBetween($dariHari, $sampaiHari)` ditambahkan; `expiringWithin` tetap berperilaku sama dengan memakainya.
+- Filter "Pihak Lawan": cocok sebagian nama, tidak peduli huruf besar atau kecil, spasi di tepi diabaikan. Karakter `%` dan `_` diperlakukan sebagai huruf biasa.
+- Filter "Tanggal Berakhir" (dari dan sampai, keduanya inklusif dan boleh salah satu): memakai tanggal berakhir versi aktif. Dokumen tanpa masa berlaku tidak muncul saat rentang dipakai. Rentang terbalik tidak menghasilkan dokumen dan menampilkan "Dokumen tidak ditemukan".
+- Pencarian tabel kini juga mencari pihak lawan, dan ada kolom "Pihak Lawan" yang dapat ditampilkan.
+- Indikator filter aktif yang terbaca ("Pihak lawan: ...", "Berakhir dari ..."). Berlaku sama di tampilan tabel dan grid, dan dapat digabung dengan filter lain.
 
-**Definition of Done:** Tes mencakup batas tiap rentang, dokumen yang tidak dihitung (tanpa masa tenggang, dihapus, versi lama), badan usaha yang disembunyikan dan urutan, tautan yang cocok dengan hasil daftar terfilter, akses dan kemunculan di dashboard, keadaan kosong, serta scope 30 hari yang tidak berubah. Commit: `feat(work-45): ringkasan dokumen berakhir per badan usaha`.
+**Definition of Done:** Tes mencakup pencocokan sebagian tanpa pembeda huruf, wildcard literal, rentang inklusif dengan versi aktif, rentang terbalik, pencarian pihak lawan digabung filter, indikator, dan tampilan grid. Commit: `feat(work-43): filter pihak lawan dan rentang tanggal berakhir`.
 
 ---
 
@@ -456,57 +467,46 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
-### WORK 43: Filter dan Pencarian Lanjutan Dokumen
+### WORK 45: Ringkasan Dokumen Berakhir per Badan Usaha
 
-**Tujuan:** Dokumen dapat dicari berdasarkan pihak lawan dan rentang tanggal berakhir, selain filter badan usaha, jenis, status, PIC, dan format yang sudah ada.
+**Tujuan:** Dari dashboard terlihat badan usaha mana yang paling banyak punya dokumen akan berakhir, tanpa membuka daftar satu per satu.
 
 **Cakupan:**
-- Filter "Pihak Lawan": cocok sebagian nama, tidak peduli huruf besar atau kecil, spasi di tepi diabaikan. Karakter `%` dan `_` diperlakukan sebagai huruf biasa.
-- Filter "Tanggal Berakhir" (dari dan sampai, keduanya inklusif dan boleh salah satu): memakai tanggal berakhir versi aktif. Dokumen tanpa masa berlaku tidak muncul saat rentang dipakai. Rentang terbalik tidak menghasilkan dokumen dan menampilkan "Dokumen tidak ditemukan".
-- Pencarian tabel kini juga mencari pihak lawan, dan ada kolom "Pihak Lawan" yang dapat ditampilkan.
-- Indikator filter aktif yang terbaca ("Pihak lawan: ...", "Berakhir dari ..."). Berlaku sama di tampilan tabel dan grid, dan dapat digabung dengan filter lain.
+- Widget dashboard "Dokumen Berakhir per Badan Usaha" (lebar penuh, di bawah daftar 30 hari) untuk user yang boleh melihat dokumen.
+- Kolom per badan usaha: 0-30 hari, 31-60 hari, 61-90 hari (dihitung dari hari ini, kedua ujung termasuk), dan Kedaluwarsa. Dihitung dari versi aktif dokumen bermasa berlaku yang belum dihapus; dokumen tanpa masa tenggang dan versi lama tidak dihitung.
+- Badan usaha tanpa dokumen dalam 90 hari maupun kedaluwarsa tidak ditampilkan. Urutan: paling banyak berakhir dalam 30 hari, lalu paling banyak kedaluwarsa, lalu nama.
+- Setiap angka di atas nol menjadi tautan ke daftar dokumen yang sudah terfilter badan usaha dan rentang tanggalnya (atau status Kedaluwarsa), memakai filter dari Work 43. Angka nol tidak berupa tautan.
+- Scope `Document::expiringBetween($dariHari, $sampaiHari)` ditambahkan; `expiringWithin` tetap berperilaku sama dengan memakainya.
 
-**Definition of Done:** Tes mencakup pencocokan sebagian tanpa pembeda huruf, wildcard literal, rentang inklusif dengan versi aktif, rentang terbalik, pencarian pihak lawan digabung filter, indikator, dan tampilan grid. Commit: `feat(work-43): filter pihak lawan dan rentang tanggal berakhir`.
+**Definition of Done:** Tes mencakup batas tiap rentang, dokumen yang tidak dihitung (tanpa masa tenggang, dihapus, versi lama), badan usaha yang disembunyikan dan urutan, tautan yang cocok dengan hasil daftar terfilter, akses dan kemunculan di dashboard, keadaan kosong, serta scope 30 hari yang tidak berubah. Commit: `feat(work-45): ringkasan dokumen berakhir per badan usaha`.
 
 ---
 
-### WORK 42: Perbaikan Tes yang Usang
+### WORK 46: Pengajuan yang Menunggu Terlalu Lama di Dashboard dan Daftar
 
-**Tujuan:** Suite tes hijau, sehingga kegagalan baru langsung terlihat. Sebelumnya 17 tes gagal sejak jadwal pengingat dipindah ke template global (Work 11) dan sejak permission pengajuan ditambahkan ke Shield (Work 12).
+**Tujuan:** Staf langsung melihat pengajuan yang menggantung dan dapat menyaringnya, tanpa menunggu pengingat WhatsApp.
 
-**Cakupan:** hanya tes yang diperbarui; tidak ada perubahan perilaku aplikasi.
-- `AdminMonitoringAccessTest`: seeder permission kustom diuji terhadap seluruh daftar `filament-shield.custom_permissions` dan dijalankan dua kali (idempoten), bukan angka tetap 3.
-- `DocumentStatusDashboardTest` dan `DummyAcceptanceTest`: status Segera Berakhir kini menyiapkan jadwal pada template global, bukan `reminder_days` per jenis dokumen.
-- `DocumentTypeResourceTest`: tiga tes yang mengisi `reminder_days` lewat form diganti. Form jenis dokumen tidak punya kolom itu lagi, sehingga yang diuji adalah: kolom tidak ada, jadwal efektif mengikuti template global (hanya untuk jenis bermasa berlaku, mengikuti status aktif), nilai lama pada model tidak diubah saat edit, dan validasi data lama pada model tetap berlaku.
-- `ReminderScheduleValidationTest` (baru): aturan input jadwal global (negatif, desimal, teks, terlalu besar, duplikat, kosong ditolak; 0 diterima dan diurutkan menurun; mode interval dan inherit), menggantikan validasi yang dulu diuji lewat form jenis dokumen.
+**Cakupan:**
+- Kolom `status_changed_at` pada `document_requests`, diisi setiap pengajuan berpindah tahap (bersama riwayat) dan diisi ulang dari riwayat terakhir untuk data lama oleh migrasi. `waitingSince()` kini memakai kolom ini, lalu riwayat, lalu `updated_at`.
+- Scope `DocumentRequest::waitingLongerThan($hari)`: hanya status Diperiksa dan Menunggu Persetujuan, batas inklusif. Data tanpa `status_changed_at` memakai `updated_at`.
+- Filter "Menunggu lebih dari N hari" (toggle) di daftar pengajuan. N mengikuti pengaturan "Mulai setelah" pada pengingat pengajuan (bawaan 2), dan dapat digabung dengan filter status.
+- Widget dashboard "Pengajuan Menunggu Tindakan": dua kartu (Menunggu Pemeriksaan dan Menunggu Persetujuan) berisi jumlah pengajuan yang boleh dilihat user, dengan keterangan berapa yang menunggu lebih dari N hari. Kartu menaut ke daftar terfilter status, dan filter menunggu lama bila ada yang menunggu. Widget hanya tampil bagi user yang boleh melihat pengajuan dan hanya bila ada pengajuan yang menunggu.
+- Pengingat pengajuan (Work 37) memakai daftar status menunggu yang sama.
 
-**Definition of Done:** Seluruh suite hijau. Commit: `test(work-42): perbarui tes yang usang terhadap jadwal pengingat global`.
+**Definition of Done:** Tes mencakup batas inklusif dan status yang diabaikan, cadangan ke `updated_at`, prioritas `waitingSince`, transisi yang mereset waktu tunggu, filter tabel beserta ambang yang mengikuti pengaturan, jumlah dan tautan kartu, pembatasan sesuai hak lihat, serta visibilitas widget. Commit: `feat(work-46): pengajuan menunggu terlalu lama di dashboard dan daftar`.
 
 ---
 
-### WORK 41: Sembunyikan Nama PIC di Halaman Publik
+### WORK 47: Uji Alur Lengkap dari Ujung ke Ujung
 
-**Tujuan:** Pengaju tidak perlu mengetahui siapa staf internal yang menangani pengajuannya.
+**Tujuan:** Memastikan seluruh perjalanan pengajuan sampai dokumen berjalan utuh dan saling nyambung, bukan hanya tiap bagian sendiri-sendiri.
 
-**Cakupan:**
-- Baris "PIC" dihapus dari ringkasan halaman status publik `/pengajuan/{token}`. Halaman publik tidak lagi memuat nama staf mana pun (PIC maupun pelaku di riwayat).
-- Notifikasi WhatsApp ke pengaju tidak berubah; variabel `{pic}` pada template tetap tersedia bagi admin yang ingin memakainya.
+**Cakupan:** `FullLifecycleFlowTest`, memakai akun dummy per role (`DummyAccountSeeder`), WagHub dipalsukan, dan waktu dimajukan sesuai alur.
+- Alur utama: pengaju publik mengisi form dan mengunggah lampiran → pengaju dan pemeriksa menerima WhatsApp → halaman status menampilkan tahap dan riwayat tanpa nama staf → 2 hari tanpa tindakan memicu pengingat ke pemeriksa (tidak ganda bila command diulang) → pemeriksa meminta revisi dan pengaju menerima catatannya → pengaju mengirim revisi lewat tautan → pemeriksa meneruskan, penyetuju menyetujui → dokumen final diarsipkan (dokumen, versi 1, berkas di S3, PIC, pihak lawan) → muncul di daftar dan pencarian tim legal → pengingat masa berlaku: jadwal terlewat dikirim terlambat sekali, lalu tepat waktu di H-7 → tim legal memperpanjang (form terisi otomatis, versi 2, versi lama menjadi arsip) → pengingat versi baru dihitung ulang dari awal → ekspor Excel memuat versi aktif terbaru.
+- Pemulihan: pesan gagal dikirim ulang dari halaman riwayat dengan kunci idempotensi yang sama dan tanpa pengiriman ganda.
+- Penolakan: pengajuan ditolak, pengaju menerima alasannya, halaman status menandai tahap dihentikan, dan pengingat tidak lagi dikirim.
 
-**Definition of Done:** Tes memastikan nama PIC dan nama staf pada riwayat tidak tampil di halaman status. Commit: `feat(work-41): sembunyikan nama PIC di halaman status publik`.
-
----
-
-### WORK 40: Akun Dummy per Role untuk Pengujian
-
-**Tujuan:** Pengujian manual (oleh developer maupun agen) dapat memakai akun dari setiap role tanpa membuat akun satu per satu.
-
-**Cakupan:**
-- Seeder `DummyAccountSeeder`, dijalankan manual: `php artisan db:seed --class=DummyAccountSeeder`. Tidak dipanggil oleh `DatabaseSeeder` dan menolak berjalan di production.
-- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@dummy.test` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
-- Role dasar berawalan `dummy_` agar tidak menimpa role buatan sendiri, dengan izin untuk menguji alur dokumen dan pengajuan: `dummy_legal` (kelola dokumen, lihat master, log, template, pemeriksa pengajuan, penerima pengingat), `dummy_viewer` (lihat dokumen), `dummy_pemeriksa` (periksa pengajuan), `dummy_penyetuju` (setujui pengajuan dan arsipkan dokumen final), `dummy_pengaju` (buat dan ubah pengajuan). Izin role buatan sendiri tidak diubah.
-- Nomor WhatsApp akun dummy dikosongkan agar pesan tidak sampai ke nomor sungguhan. Variabel `.env` `LMS_DUMMY_PHONE` mengisi nomor milik sendiri untuk menguji pengiriman.
-
-**Definition of Done:** Tes mencakup akun per role (termasuk role kustom) dapat membuka panel, seeder idempoten, izin tiap role dasar, role kustom tidak ditimpa, nama akun, dan penolakan di production. Commit: `feat(work-40): seeder akun dummy per role`.
+**Definition of Done:** Ketiga skenario lulus. Commit: `test(work-47): uji alur lengkap pengajuan sampai perpanjangan`.
 
 ---
 
