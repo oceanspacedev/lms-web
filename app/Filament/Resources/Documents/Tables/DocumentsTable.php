@@ -4,11 +4,15 @@ namespace App\Filament\Resources\Documents\Tables;
 
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Models\Document;
+use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
@@ -37,9 +41,9 @@ class DocumentsTable
                     'records' => $livewire->getTableRecords(),
                     'table' => $livewire->getTable(),
                 ]) : null)
-            ->searchPlaceholder('Cari judul, nomor, badan usaha, atau file')
+            ->searchPlaceholder('Cari judul, nomor, pihak lawan, badan usaha, atau file')
             ->columns([
-                TextColumn::make('title')->label('Dokumen')->searchable(['title', 'document_number'])->sortable()->weight('medium')->limit(45)->wrap()->width('28%')->tooltip(fn (Document $record): string => $record->title)
+                TextColumn::make('title')->label('Dokumen')->searchable(['title', 'document_number', 'counterparty'])->sortable()->weight('medium')->limit(45)->wrap()->width('28%')->tooltip(fn (Document $record): string => $record->title)
                     ->description(fn (Document $record): ?string => $record->document_number),
                 TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap(),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap(),
@@ -47,6 +51,7 @@ class DocumentsTable
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
+                TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
                 TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap(),
                 TextColumn::make('currentVersion.file_name')->label('Nama File')->searchable()->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -57,6 +62,27 @@ class DocumentsTable
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->withExpiryStatus($data['value']) : $query),
                 SelectFilter::make('pic')->label('PIC')->relationship('pic', 'name')->searchable()->preload(),
+                Filter::make('counterparty')->label('Pihak Lawan')
+                    ->schema([TextInput::make('counterparty')->label('Pihak Lawan')->maxLength(255)->placeholder('Sebagian nama pihak lawan')])
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['counterparty'] ?? null)
+                        ? $query->whereRaw("lower(documents.counterparty) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim((string) $data['counterparty']))).'%'])
+                        : $query)
+                    ->indicateUsing(fn (array $data): ?string => filled($data['counterparty'] ?? null) ? 'Pihak lawan: '.trim((string) $data['counterparty']) : null),
+                Filter::make('expiry_range')->label('Tanggal Berakhir')
+                    ->schema([
+                        DatePicker::make('expiry_from')->label('Berakhir dari')->native(false),
+                        DatePicker::make('expiry_until')->label('Berakhir sampai')->native(false),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        filled($data['expiry_from'] ?? null) || filled($data['expiry_until'] ?? null),
+                        fn (Builder $query): Builder => $query->whereHas('currentVersion', fn (Builder $version): Builder => $version
+                            ->when(filled($data['expiry_from'] ?? null), fn (Builder $version): Builder => $version->whereDate('expiry_date', '>=', $data['expiry_from']))
+                            ->when(filled($data['expiry_until'] ?? null), fn (Builder $version): Builder => $version->whereDate('expiry_date', '<=', $data['expiry_until'])))
+                    ))
+                    ->indicateUsing(fn (array $data): array => array_values(array_filter([
+                        filled($data['expiry_from'] ?? null) ? 'Berakhir dari '.CarbonImmutable::parse($data['expiry_from'])->format('d M Y') : null,
+                        filled($data['expiry_until'] ?? null) ? 'Berakhir sampai '.CarbonImmutable::parse($data['expiry_until'])->format('d M Y') : null,
+                    ]))),
                 SelectFilter::make('file_format')->label('Format File')
                     ->options([
                         'application/pdf' => 'PDF',

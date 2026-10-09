@@ -397,6 +397,20 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 43: Filter dan Pencarian Lanjutan Dokumen
+
+**Tujuan:** Dokumen dapat dicari berdasarkan pihak lawan dan rentang tanggal berakhir, selain filter badan usaha, jenis, status, PIC, dan format yang sudah ada.
+
+**Cakupan:**
+- Filter "Pihak Lawan": cocok sebagian nama, tidak peduli huruf besar atau kecil, spasi di tepi diabaikan. Karakter `%` dan `_` diperlakukan sebagai huruf biasa.
+- Filter "Tanggal Berakhir" (dari dan sampai, keduanya inklusif dan boleh salah satu): memakai tanggal berakhir versi aktif. Dokumen tanpa masa berlaku tidak muncul saat rentang dipakai. Rentang terbalik tidak menghasilkan dokumen dan menampilkan "Dokumen tidak ditemukan".
+- Pencarian tabel kini juga mencari pihak lawan, dan ada kolom "Pihak Lawan" yang dapat ditampilkan.
+- Indikator filter aktif yang terbaca ("Pihak lawan: ...", "Berakhir dari ..."). Berlaku sama di tampilan tabel dan grid, dan dapat digabung dengan filter lain.
+
+**Definition of Done:** Tes mencakup pencocokan sebagian tanpa pembeda huruf, wildcard literal, rentang inklusif dengan versi aktif, rentang terbalik, pencarian pihak lawan digabung filter, indikator, dan tampilan grid. Commit: `feat(work-43): filter pihak lawan dan rentang tanggal berakhir`.
+
+---
+
 ### WORK 42: Perbaikan Tes yang Usang
 
 **Tujuan:** Suite tes hijau, sehingga kegagalan baru langsung terlihat. Sebelumnya 17 tes gagal sejak jadwal pengingat dipindah ke template global (Work 11) dan sejak permission pengajuan ditambahkan ke Shield (Work 12).
@@ -477,5 +491,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 40 | Seeder akun dummy per role | `ahtar-dev` |
 | 41 | Sembunyikan nama PIC di halaman publik | `ahtar-dev` |
 | 42 | Perbaikan tes yang usang | `ahtar-dev` |
+| 43 | Filter pihak lawan dan rentang tanggal berakhir | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
