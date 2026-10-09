@@ -397,6 +397,19 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 47: Uji Alur Lengkap dari Ujung ke Ujung
+
+**Tujuan:** Memastikan seluruh perjalanan pengajuan sampai dokumen berjalan utuh dan saling nyambung, bukan hanya tiap bagian sendiri-sendiri.
+
+**Cakupan:** `FullLifecycleFlowTest`, memakai akun dummy per role (`DummyAccountSeeder`), WagHub dipalsukan, dan waktu dimajukan sesuai alur.
+- Alur utama: pengaju publik mengisi form dan mengunggah lampiran → pengaju dan pemeriksa menerima WhatsApp → halaman status menampilkan tahap dan riwayat tanpa nama staf → 2 hari tanpa tindakan memicu pengingat ke pemeriksa (tidak ganda bila command diulang) → pemeriksa meminta revisi dan pengaju menerima catatannya → pengaju mengirim revisi lewat tautan → pemeriksa meneruskan, penyetuju menyetujui → dokumen final diarsipkan (dokumen, versi 1, berkas di S3, PIC, pihak lawan) → muncul di daftar dan pencarian tim legal → pengingat masa berlaku: jadwal terlewat dikirim terlambat sekali, lalu tepat waktu di H-7 → tim legal memperpanjang (form terisi otomatis, versi 2, versi lama menjadi arsip) → pengingat versi baru dihitung ulang dari awal → ekspor Excel memuat versi aktif terbaru.
+- Pemulihan: pesan gagal dikirim ulang dari halaman riwayat dengan kunci idempotensi yang sama dan tanpa pengiriman ganda.
+- Penolakan: pengajuan ditolak, pengaju menerima alasannya, halaman status menandai tahap dihentikan, dan pengingat tidak lagi dikirim.
+
+**Definition of Done:** Ketiga skenario lulus. Commit: `test(work-47): uji alur lengkap pengajuan sampai perpanjangan`.
+
+---
+
 ### WORK 46: Pengajuan yang Menunggu Terlalu Lama di Dashboard dan Daftar
 
 **Tujuan:** Staf langsung melihat pengajuan yang menggantung dan dapat menyaringnya, tanpa menunggu pengingat WhatsApp.
@@ -541,5 +554,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 44 | Ekspor Excel daftar dokumen | `ahtar-dev` |
 | 45 | Ringkasan dokumen berakhir per badan usaha | `ahtar-dev` |
 | 46 | Pengajuan menunggu terlalu lama di dashboard dan daftar | `ahtar-dev` |
+| 47 | Uji alur lengkap dari ujung ke ujung | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
