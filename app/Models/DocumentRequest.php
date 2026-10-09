@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\DocumentRequestNotifier;
+use Carbon\CarbonImmutable;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,6 +28,13 @@ class DocumentRequest extends Model
     use HasFactory;
 
     public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'rejected' => 'Ditolak', 'archived' => 'Selesai'];
+
+    public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan', 'archived' => 'Selesai'];
+
+    public const TIMELINE_LABELS = [
+        'submitted' => 'Pengajuan diterima', 'review' => 'Diteruskan untuk persetujuan', 'approved' => 'Disetujui, menunggu tanda tangan',
+        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen final diarsipkan',
+    ];
 
     protected $attributes = ['details' => '{}', 'attachments' => '{}', 'requirements' => '{}', 'history' => '[]', 'status' => 'draft'];
 
@@ -63,6 +71,70 @@ class DocumentRequest extends Model
     public function revisionNumber(): int
     {
         return collect($this->history)->where('status', 'revision')->count();
+    }
+
+    /**
+     * Tahap utama yang ditampilkan di halaman status publik.
+     *
+     * @return list<array{label: string, state: 'done'|'current'|'stopped'|'pending'}>
+     */
+    public function progressSteps(): array
+    {
+        $statusBeforeLast = collect($this->history)->slice(-2, 1)->first()['status'] ?? null;
+        $stage = match ($this->status) {
+            'revision' => 'submitted',
+            'rejected' => $statusBeforeLast === 'review' ? 'review' : 'submitted',
+            default => $this->status,
+        };
+        $position = array_search($stage, array_keys(self::PROGRESS_STEPS), true);
+        $position = $position === false ? 0 : $position;
+        $steps = [];
+        foreach (array_values(self::PROGRESS_STEPS) as $index => $label) {
+            $state = match (true) {
+                $index < $position => 'done',
+                $index === $position => match ($this->status) {
+                    'archived' => 'done', 'rejected' => 'stopped', default => 'current',
+                },
+                default => 'pending',
+            };
+            $steps[] = ['label' => $label, 'state' => $state];
+        }
+
+        return $steps;
+    }
+
+    /**
+     * Riwayat untuk pengaju, terbaru di atas. Hanya peran, tidak memuat nama staf.
+     *
+     * @return list<array{label: string, actor: string, at: ?CarbonImmutable, note: ?string, tone: 'normal'|'warning'|'danger'}>
+     */
+    public function publicTimeline(): array
+    {
+        $entries = [];
+        $previous = null;
+        foreach ($this->history as $event) {
+            $status = $event['status'] ?? null;
+            if ($status !== 'draft' && isset(self::TIMELINE_LABELS[$status])) {
+                $entries[] = [
+                    'label' => $status === 'submitted' && $previous === 'revision' ? 'Revisi dikirim' : self::TIMELINE_LABELS[$status],
+                    'actor' => match ($status) {
+                        'submitted' => 'Pengaju',
+                        'review' => 'Pemeriksa',
+                        'approved' => 'Penyetuju',
+                        'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Pemeriksa',
+                        default => 'Tim pemeriksa',
+                    },
+                    'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
+                    'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
+                    'tone' => match ($status) {
+                        'revision' => 'warning', 'rejected' => 'danger', default => 'normal',
+                    },
+                ];
+            }
+            $previous = $status;
+        }
+
+        return array_reverse($entries);
     }
 
     public function notifications(): HasMany

@@ -343,6 +343,22 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 38: Timeline Status di Halaman Publik
+
+**Tujuan:** Pengaju memahami posisi pengajuannya dan apa yang sudah terjadi, tidak hanya melihat status terakhir.
+
+**Cakupan:**
+- Halaman `/pengajuan/{token}` menampilkan indikator tahap: Diperiksa, Menunggu Persetujuan, Menunggu Tanda Tangan, Selesai. Tahap berjalan disorot (`aria-current`), tahap yang dilewati ditandai selesai.
+- Status Perlu Revisi kembali ke tahap pertama. Status Ditolak menandai tahap tempat penolakan terjadi (Diperiksa atau Menunggu Persetujuan) sebagai dihentikan.
+- Riwayat berurutan, terbaru di atas: nama tahap, peran pelaku, waktu (WIB), dan catatan reviewer bila ada. Pengiriman ulang setelah revisi tampil sebagai "Revisi dikirim". Draf internal tidak ditampilkan.
+- Halaman publik hanya menyebut peran (Pengaju, Pemeriksa, Penyetuju), tidak memuat nama staf dari riwayat. Keputusan setelah tahap persetujuan dicatat sebagai Penyetuju, selain itu Pemeriksa. Baris PIC yang sudah ada di ringkasan tidak diubah.
+- Data diambil dari kolom `history` yang sudah ada, tanpa migrasi. Riwayat lama tanpa waktu atau catatan tetap tampil.
+- Estimasi selesai tidak ditampilkan karena form publik tidak mengisi tanggal target.
+
+**Definition of Done:** Tes mencakup status tiap tahap, revisi, penolakan oleh pemeriksa dan penyetuju, urutan dan zona waktu riwayat, riwayat tanpa waktu atau catatan, nama staf tidak muncul di halaman, dan form revisi tetap berfungsi. Commit: `feat(work-38): timeline status pengajuan di halaman publik`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -377,5 +393,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 34 | Pengingat setelah kedaluwarsa | `ahtar-dev` |
 | 35 | Tombol perpanjang dokumen | `ahtar-dev` |
 | 36 | Template pesan kedaluwarsa dapat diubah | `ahtar-dev` |
+| 38 | Timeline status pengajuan di halaman publik | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
