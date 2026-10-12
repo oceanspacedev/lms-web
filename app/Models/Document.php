@@ -269,12 +269,28 @@ class Document extends Model
         ];
     }
 
+    /**
+     * Path file di bucket: satu folder per jenis dokumen, nama file dari judul, ID dokumen, dan nomor versi.
+     */
+    public function storagePath(int $versionNumber, string $extension): string
+    {
+        $folder = self::pathSegment($this->documentType()->value('name') ?? '', 'lainnya');
+        $title = Str::limit(self::pathSegment($this->title, 'dokumen'), 80, '');
+
+        return "{$folder}/".rtrim($title, '-')."-dok{$this->id}-v{$versionNumber}.".strtolower($extension);
+    }
+
+    private static function pathSegment(string $value, string $fallback): string
+    {
+        return Str::slug(preg_replace('/[^\pL\pN]+/u', ' ', $value)) ?: $fallback;
+    }
+
     /** @param array<string, mixed> $data */
     private function storeVersion(array $data, UploadedFile $file, User $uploader, int $number, ?string &$path): DocumentVersion
     {
-        $directory = "lms/documents/{$this->company_id}/{$this->id}/v{$number}";
-        $filename = Str::uuid().'.'.strtolower($file->getClientOriginalExtension());
-        $path = $directory.'/'.$filename;
+        $path = $this->storagePath($number, $file->getClientOriginalExtension());
+        $directory = dirname($path);
+        $filename = basename($path);
 
         if ($file->storeAs($directory, $filename, ['disk' => 's3', 'visibility' => 'private']) === false) {
             throw new \RuntimeException('Penyimpanan file gagal.');

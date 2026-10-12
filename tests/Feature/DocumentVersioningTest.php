@@ -69,6 +69,8 @@ class DocumentVersioningTest extends TestCase
         $this->assertSame('2027-01-01', $old->fresh()->expiry_date->toDateString());
         $this->assertSame('2028-01-01', $new->expiry_date->toDateString());
         Storage::disk('s3')->assertExists([$old->file_path, $new->file_path]);
+        $this->assertSame(dirname($old->file_path), dirname($new->file_path));
+        $this->assertStringEndsWith("-dok{$document->id}-v2.pdf", $new->file_path);
         $this->assertSame(1, $document->versions()->where('is_current', true)->count());
         $stale = $document->fresh();
         $this->update($document);

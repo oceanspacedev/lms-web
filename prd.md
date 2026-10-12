@@ -177,7 +177,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Filament Resource `Document`:
   - Form: perusahaan, jenis dokumen, judul, nomor dokumen, pihak lawan, PIC (user), tanggal terbit, tanggal berakhir (wajib bila jenis `has_expiry`), catatan, upload file.
   - Saat create: otomatis membuat `document_versions` versi 1 dengan `is_current = true`.
-- File disimpan di S3 pada disk **private**, path terstruktur (misal `documents/{company_id}/{document_id}/v{n}/{nama-file}`).
+- File disimpan di S3 pada disk **private**, path terstruktur (sejak Work 48: `{jenis-dokumen}/{judul}-dok{id}-v{n}.{ext}`).
 - Batas file: PDF, DOC, DOCX, JPG, PNG; maksimal 20 MB (konfigurable).
 - Unduh/preview memakai **temporary signed URL** (bukan URL publik).
 - Tabel: kolom perusahaan, jenis, judul, tanggal berakhir, PIC; filter perusahaan, jenis; pencarian judul/nomor.
@@ -510,6 +510,19 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 48: Struktur Folder File per Jenis Dokumen
+
+**Tujuan:** Isi bucket mudah dibaca kalau dibuka langsung, tanpa folder bertingkat `lms/documents/{perusahaan}/{dokumen}/v{n}/` dan nama file acak.
+
+**Cakupan:**
+- File baru disimpan langsung di root bucket dengan satu folder per jenis dokumen: `{jenis-dokumen}/{judul}-dok{id}-v{n}.{ext}`, contoh `perjanjian-kerja-sama/pks-gudang-dok12-v2.pdf`. Nama dibentuk dengan slug; judul dipotong maksimal 80 karakter; nama yang tidak menghasilkan slug memakai `lainnya` dan `dokumen`. ID dokumen menjaga nama tetap unik.
+- Nama file asli tetap tersimpan di `file_name` dan tetap dipakai saat diunduh.
+- Command `lms:reorganize-files` (dengan opsi `--dry-run`) memindahkan file lama ke struktur baru, termasuk versi arsip dan dokumen yang dihapus lunak: salin, perbarui `file_path`, lalu hapus file lama. Command dapat diulang, melanjutkan pemindahan yang terputus, tidak menimpa file lain di tujuan, dan melaporkan file asal yang hilang tanpa menghentikan file lainnya.
+
+**Definition of Done:** Tes mencakup format path dan fallback nama, versi baru di folder yang sama, pemindahan beserta isi file, dry-run, pengulangan, file asal hilang, pemindahan terputus, dan tujuan yang bentrok. Commit: `feat(work-48): struktur folder file per jenis dokumen`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -555,5 +568,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 45 | Ringkasan dokumen berakhir per badan usaha | `ahtar-dev` |
 | 46 | Pengajuan menunggu terlalu lama di dashboard dan daftar | `ahtar-dev` |
 | 47 | Uji alur lengkap dari ujung ke ujung | `ahtar-dev` |
+| 48 | Struktur folder file per jenis dokumen | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

@@ -39,7 +39,7 @@ class DummyBackupRestoreTest extends TestCase
             $document->appendVersion(['change_note' => 'Revisi dummy'], UploadedFile::fake()->createWithContent('dummy-v2.pdf', "%PDF-1.4\nDummy versi 2"), $user);
             ReminderLog::create(['document_version_id' => $document->current_version_id, 'offset_days' => 30, 'status' => 'accepted', 'attempts' => 1]);
             $files = [];
-            foreach (Storage::disk('s3')->allFiles('lms/documents') as $path) {
+            foreach (Storage::disk('s3')->allFiles() as $path) {
                 $files[$path] = Storage::disk('s3')->get($path);
             }
             DB::statement('VACUUM INTO ?', [$snapshot]);

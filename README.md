@@ -47,7 +47,7 @@ AWS_VERIFY_SSL=true
 LMS_MAX_UPLOAD_SIZE_KB=20480
 ```
 
-Kredensial hanya di `.env`. File dokumen menggunakan disk `s3` secara eksplisit dan prefix `lms/documents/{company}/{document}/v{versi}/`. Bucket harus menolak akses publik. Signed URL berlaku lima menit. Batas unggah default 20 MB; tipe yang diterima PDF, DOC, DOCX, JPG, dan PNG. Sesuaikan pula batas upload PHP/server.
+Kredensial hanya di `.env`. File dokumen menggunakan disk `s3` secara eksplisit dengan satu folder per jenis dokumen langsung di root bucket, misalnya `perjanjian-kerja-sama/pks-gudang-dok12-v2.pdf` (judul, ID dokumen, dan nomor versi). File lama dengan struktur `lms/documents/...` dipindahkan dengan `php artisan lms:reorganize-files` (coba dulu dengan `--dry-run`). Bucket harus menolak akses publik. Signed URL berlaku lima menit. Batas unggah default 20 MB; tipe yang diterima PDF, DOC, DOCX, JPG, dan PNG. Sesuaikan pula batas upload PHP/server.
 
 ## Akun dan permission
 
@@ -174,7 +174,7 @@ Untuk backup operasional, hentikan sementara penulisan aplikasi, scheduler, dan 
 VACUUM INTO '/direktori-backup/lms-snapshot.sqlite';
 ```
 
-`VACUUM INTO` menghasilkan snapshot konsisten tanpa mengganti database sumber; target tidak boleh berisi database lama. Lihat [dokumentasi SQLite](https://www.sqlite.org/lang_vacuum.html). Salin semua objek dalam prefix `lms/documents/`, termasuk versi arsip, dengan path utuh. Buat manifest path, ukuran, dan SHA-256; simpan bersama snapshot. Kredensial dan APP_KEY dicadangkan secara terpisah di penyimpanan terbatas, bukan di Git. Tetapkan jadwal, retensi, kapasitas, dan lokasi backup terpisah sesuai kebutuhan operasional.
+`VACUUM INTO` menghasilkan snapshot konsisten tanpa mengganti database sumber; target tidak boleh berisi database lama. Lihat [dokumentasi SQLite](https://www.sqlite.org/lang_vacuum.html). Salin seluruh objek di bucket dokumen, termasuk versi arsip, dengan path utuh. Buat manifest path, ukuran, dan SHA-256; simpan bersama snapshot. Kredensial dan APP_KEY dicadangkan secara terpisah di penyimpanan terbatas, bukan di Git. Tetapkan jadwal, retensi, kapasitas, dan lokasi backup terpisah sesuai kebutuhan operasional.
 
 Untuk restore, gunakan lingkungan terisolasi terlebih dahulu. Pulihkan snapshot database dan file ke path asal dari backup yang sama, kemudian jalankan:
 

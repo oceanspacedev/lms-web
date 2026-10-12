@@ -45,7 +45,7 @@ class DocumentArchiveTest extends TestCase
     {
         $user = User::factory()->create();
         $file = UploadedFile::fake()->create('perjanjian.pdf', 64, 'application/pdf');
-        $document = Document::archive($this->archiveData(), $file, $user);
+        $document = Document::archive($this->archiveData(DocumentType::factory()->create(['name' => 'Izin Usaha/NIB'])), $file, $user);
         $version = $document->currentVersion;
 
         $this->assertNotNull($version);
@@ -56,8 +56,7 @@ class DocumentArchiveTest extends TestCase
         $this->assertSame(65536, $version->file_size);
         $this->assertSame('application/pdf', $version->mime_type);
         $this->assertSame('2027-01-01', $version->expiry_date->toDateString());
-        $this->assertStringStartsWith("lms/documents/{$document->company_id}/{$document->id}/v1/", $version->file_path);
-        $this->assertStringEndsWith('.pdf', $version->file_path);
+        $this->assertSame("izin-usaha-nib/perjanjian-uji-dok{$document->id}-v1.pdf", $version->file_path);
         Storage::disk('s3')->assertExists($version->file_path);
         $this->assertDatabaseCount('documents', 1);
         $this->assertDatabaseCount('document_versions', 1);
@@ -161,8 +160,8 @@ class DocumentArchiveTest extends TestCase
     {
         $disk = Mockery::mock(FilesystemAdapter::class);
         $disk->shouldReceive('putFileAs')->once()
-            ->withArgs(fn (string $directory, UploadedFile $file, string $name, array $options): bool => $options['visibility'] === 'private' && str_starts_with($directory, 'lms/documents/') && str_ends_with($name, '.pdf'))
-            ->andReturn('lms/documents/private.pdf');
+            ->withArgs(fn (string $directory, UploadedFile $file, string $name, array $options): bool => $options['visibility'] === 'private' && ! str_contains($directory, '/') && str_ends_with($name, '-v1.pdf'))
+            ->andReturn('jenis/private.pdf');
         Storage::shouldReceive('disk')->with('s3')->andReturn($disk);
         $document = Document::archive($this->archiveData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), User::factory()->create());
         $this->assertNotNull($document->current_version_id);
