@@ -36,7 +36,7 @@ class S3StorageTest extends TestCase
         try {
             $document = Document::archive([
                 'company_id' => Company::factory()->create()->id,
-                'document_type_id' => DocumentType::factory()->withoutExpiry()->create()->id,
+                'document_type_id' => DocumentType::factory()->withoutExpiry()->create(['name' => 'Uji Koneksi S3'])->id,
                 'pic_user_id' => User::factory()->create()->id,
                 'title' => 'Uji koneksi S3 Work 5',
             ], UploadedFile::fake()->createWithContent('uji-lms.pdf', $content), User::factory()->create());
