@@ -177,7 +177,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Filament Resource `Document`:
   - Form: perusahaan, jenis dokumen, judul, nomor dokumen, pihak lawan, PIC (user), tanggal terbit, tanggal berakhir (wajib bila jenis `has_expiry`), catatan, upload file.
   - Saat create: otomatis membuat `document_versions` versi 1 dengan `is_current = true`.
-- File disimpan di S3 pada disk **private**, path terstruktur (sejak Work 48: `{jenis-dokumen}/{judul}-dok{id}-v{n}.{ext}`).
+- File disimpan di S3 pada disk **private** (sejak Work 49 mengikuti `FILESYSTEM_DISK`), path terstruktur (sejak Work 48: `{jenis-dokumen}/{judul}-dok{id}-v{n}.{ext}`).
 - Batas file: PDF, DOC, DOCX, JPG, PNG; maksimal 20 MB (konfigurable).
 - Unduh/preview memakai **temporary signed URL** (bukan URL publik).
 - Tabel: kolom perusahaan, jenis, judul, tanggal berakhir, PIC; filter perusahaan, jenis; pencarian judul/nomor.
@@ -523,6 +523,21 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 49: Disk Penyimpanan Mengikuti `FILESYSTEM_DISK`
+
+**Tujuan:** Tempat penyimpanan file dokumen dapat diganti lewat `.env` tanpa mengubah kode: `local`, `s3`, atau `public`.
+
+**Cakupan:**
+- Upload versi baru disimpan ke disk `FILESYSTEM_DISK` dengan visibility bawaan disk tersebut. Kolom baru `document_versions.disk` mencatat disk tiap versi; data lama bernilai `s3`. Kolom ini ikut immutable.
+- Unduh dan preview membaca dari disk yang tercatat pada versi: disk ber-driver S3 tetap lewat signed URL, disk lokal dikirim langsung oleh aplikasi setelah otorisasi dengan header `no-store` dan `nosniff`. Mengganti `FILESYSTEM_DISK` tidak memutus file lama.
+- `lms:reorganize-files` memindahkan file di disk masing-masing versi.
+- `lms:check-production` menolak disk `public` dan hanya mewajibkan konfigurasi S3 bila disk dokumen memakai S3.
+- Lampiran pengajuan dan file sementara upload tetap di disk `local`.
+
+**Definition of Done:** Tes mencakup penyimpanan di tiap disk, unduhan dan preview lokal, penolakan tanpa izin, file lokal hilang, versi lama di S3 tetap terunduh setelah disk diganti, pembersihan file saat gagal simpan, kolom disk immutable dan default `s3`, command pemindahan di disk lokal, serta pemeriksaan produksi. Commit: `feat(work-49): disk penyimpanan mengikuti FILESYSTEM_DISK`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -569,5 +584,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 46 | Pengajuan menunggu terlalu lama di dashboard dan daftar | `ahtar-dev` |
 | 47 | Uji alur lengkap dari ujung ke ujung | `ahtar-dev` |
 | 48 | Struktur folder file per jenis dokumen | `ahtar-dev` |
+| 49 | Disk penyimpanan mengikuti FILESYSTEM_DISK | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

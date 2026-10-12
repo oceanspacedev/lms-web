@@ -8,7 +8,6 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 #[Signature('lms:reorganize-files {--dry-run : Tampilkan rencana pemindahan tanpa mengubah file atau database}')]
@@ -17,11 +16,11 @@ class ReorganizeDocumentFiles extends Command
 {
     public function handle(): int
     {
-        $disk = Storage::disk('s3');
         $dryRun = (bool) $this->option('dry-run');
         $counts = ['moved' => 0, 'unchanged' => 0, 'failed' => 0];
 
-        DocumentVersion::query()->orderBy('id')->each(function (DocumentVersion $version) use ($disk, $dryRun, &$counts): void {
+        DocumentVersion::query()->orderBy('id')->each(function (DocumentVersion $version) use ($dryRun, &$counts): void {
+            $disk = $version->storage();
             $document = Document::withTrashed()->find($version->document_id);
             $source = $version->file_path;
             $target = $document->storagePath($version->version_number, pathinfo($source, PATHINFO_EXTENSION));

@@ -37,6 +37,7 @@ APP_NAME="LMS Legal"
 APP_URL=http://127.0.0.1:8000
 APP_LOCALE=id
 DB_CONNECTION=sqlite
+FILESYSTEM_DISK=s3
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_DEFAULT_REGION=us-east-1
@@ -47,7 +48,7 @@ AWS_VERIFY_SSL=true
 LMS_MAX_UPLOAD_SIZE_KB=20480
 ```
 
-Kredensial hanya di `.env`. File dokumen menggunakan disk `s3` secara eksplisit dengan satu folder per jenis dokumen langsung di root bucket, misalnya `perjanjian-kerja-sama/pks-gudang-dok12-v2.pdf` (judul, ID dokumen, dan nomor versi). File lama dengan struktur `lms/documents/...` dipindahkan dengan `php artisan lms:reorganize-files` (coba dulu dengan `--dry-run`). Bucket harus menolak akses publik. Signed URL berlaku lima menit. Batas unggah default 20 MB; tipe yang diterima PDF, DOC, DOCX, JPG, dan PNG. Sesuaikan pula batas upload PHP/server.
+Kredensial hanya di `.env`. File dokumen disimpan ke disk yang dipilih lewat `FILESYSTEM_DISK`: `s3` (bucket S3, unduh lewat signed URL), `local` (`storage/app/private`, dikirim aplikasi setelah cek izin), atau `public` (`storage/app/public`, **dapat dibuka siapa saja tanpa login** lewat `/storage/...` setelah `php artisan storage:link`, jangan dipakai untuk dokumen legal). Setiap versi mencatat disk penyimpanannya, jadi mengganti `FILESYSTEM_DISK` hanya memengaruhi upload berikutnya dan file lama tetap diunduh dari disk asalnya. Di setiap disk, file disusun satu folder per jenis dokumen, misalnya `perjanjian-kerja-sama/pks-gudang-dok12-v2.pdf` (judul, ID dokumen, dan nomor versi). File lama dengan struktur `lms/documents/...` dipindahkan dengan `php artisan lms:reorganize-files` (coba dulu dengan `--dry-run`). Bucket harus menolak akses publik. Signed URL berlaku lima menit. Batas unggah default 20 MB; tipe yang diterima PDF, DOC, DOCX, JPG, dan PNG. Sesuaikan pula batas upload PHP/server.
 
 ## Akun dan permission
 

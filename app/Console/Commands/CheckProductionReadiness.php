@@ -12,6 +12,8 @@ class CheckProductionReadiness extends Command
 {
     public function handle(): int
     {
+        $disk = (string) config('filesystems.default');
+        $usesS3 = config("filesystems.disks.{$disk}.driver") === 's3';
         $checks = [
             'APP_ENV production' => config('app.env') === 'production',
             'APP_DEBUG nonaktif' => config('app.debug') === false,
@@ -22,10 +24,10 @@ class CheckProductionReadiness extends Command
             'Sesi persisten' => ! in_array(config('session.driver'), ['array', 'null'], true),
             'Cache persisten untuk lock scheduler' => ! in_array(config('cache.default'), ['array', 'null'], true),
             'Debugbar nonaktif' => ! (config('debugbar.enabled') ?? config('app.debug')),
-            'Storage dokumen privat' => config('filesystems.disks.s3.visibility') === 'private',
-            'Kredensial S3 dan bucket tersedia' => filled(config('filesystems.disks.s3.key')) && filled(config('filesystems.disks.s3.secret')) && filled(config('filesystems.disks.s3.bucket')),
-            'Endpoint S3 HTTPS' => blank(config('filesystems.disks.s3.endpoint')) || parse_url((string) config('filesystems.disks.s3.endpoint'), PHP_URL_SCHEME) === 'https',
-            'Sertifikat S3 diverifikasi' => config('filesystems.disks.s3.http.verify') === true,
+            "Disk dokumen ({$disk}) privat" => in_array(config("filesystems.disks.{$disk}.driver"), ['local', 's3'], true) && config("filesystems.disks.{$disk}.visibility", 'private') === 'private',
+            'Kredensial S3 dan bucket tersedia' => ! $usesS3 || filled(config('filesystems.disks.s3.key')) && filled(config('filesystems.disks.s3.secret')) && filled(config('filesystems.disks.s3.bucket')),
+            'Endpoint S3 HTTPS' => ! $usesS3 || blank(config('filesystems.disks.s3.endpoint')) || parse_url((string) config('filesystems.disks.s3.endpoint'), PHP_URL_SCHEME) === 'https',
+            'Sertifikat S3 diverifikasi' => ! $usesS3 || config('filesystems.disks.s3.http.verify') === true,
             'WagHub HTTPS dan token tersedia' => parse_url((string) config('services.waghub.url'), PHP_URL_SCHEME) === 'https' && filled(config('services.waghub.token')),
             'Purpose WagHub tersedia' => filled(config('services.waghub.purpose')),
             'Scheduler Asia/Jakarta' => config('lms.reminder_timezone') === 'Asia/Jakarta',

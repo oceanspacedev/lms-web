@@ -210,7 +210,7 @@ class Document extends Model
         } catch (Throwable $exception) {
             if ($path !== null) {
                 try {
-                    Storage::disk('s3')->delete($path);
+                    Storage::disk(self::storageDisk())->delete($path);
                 } catch (Throwable $cleanupException) {
                     report($cleanupException);
                 }
@@ -245,7 +245,7 @@ class Document extends Model
         } catch (Throwable $exception) {
             if ($path !== null) {
                 try {
-                    Storage::disk('s3')->delete($path);
+                    Storage::disk(self::storageDisk())->delete($path);
                 } catch (Throwable $cleanupException) {
                     report($cleanupException);
                 }
@@ -267,6 +267,14 @@ class Document extends Model
             'expiry_date' => [Rule::requiredIf($hasExpiry), 'nullable', 'date', ...(! empty($issuedDate) ? ['after_or_equal:issued_date'] : [])],
             'file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))],
         ];
+    }
+
+    /**
+     * Disk untuk file versi baru, mengikuti FILESYSTEM_DISK. Versi lama tetap dibaca dari disk yang tercatat padanya.
+     */
+    public static function storageDisk(): string
+    {
+        return config('filesystems.default');
     }
 
     /**
@@ -292,12 +300,15 @@ class Document extends Model
         $directory = dirname($path);
         $filename = basename($path);
 
-        if ($file->storeAs($directory, $filename, ['disk' => 's3', 'visibility' => 'private']) === false) {
+        $disk = self::storageDisk();
+
+        if ($file->storeAs($directory, $filename, ['disk' => $disk, 'visibility' => config("filesystems.disks.{$disk}.visibility", 'private')]) === false) {
             throw new \RuntimeException('Penyimpanan file gagal.');
         }
 
         $version = $this->versions()->create([
             'version_number' => $number,
+            'disk' => $disk,
             'file_path' => $path,
             'file_name' => basename(str_replace('\\', '/', $file->getClientOriginalName())),
             'file_size' => $file->getSize(),
