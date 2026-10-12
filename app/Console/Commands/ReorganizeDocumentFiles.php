@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 #[Signature('lms:reorganize-files {--dry-run : Tampilkan rencana pemindahan tanpa mengubah file atau database}')]
-#[Description('Pindahkan file dokumen ke struktur folder per jenis dokumen')]
+#[Description('Pindahkan file dokumen ke struktur folder dan format nama terbaru')]
 class ReorganizeDocumentFiles extends Command
 {
     public function handle(): int
@@ -23,7 +23,7 @@ class ReorganizeDocumentFiles extends Command
             $disk = $version->storage();
             $document = Document::withTrashed()->find($version->document_id);
             $source = $version->file_path;
-            $target = $document->storagePath($version->version_number, pathinfo($source, PATHINFO_EXTENSION));
+            $target = $document->storagePath($version->version_number, pathinfo($source, PATHINFO_EXTENSION), $version->created_at);
 
             if ($source === $target) {
                 $counts['unchanged']++;

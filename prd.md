@@ -177,7 +177,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Filament Resource `Document`:
   - Form: perusahaan, jenis dokumen, judul, nomor dokumen, pihak lawan, PIC (user), tanggal terbit, tanggal berakhir (wajib bila jenis `has_expiry`), catatan, upload file.
   - Saat create: otomatis membuat `document_versions` versi 1 dengan `is_current = true`.
-- File disimpan di S3 pada disk **private** (sejak Work 49 mengikuti `FILESYSTEM_DISK`), path terstruktur (sejak Work 48: `{jenis-dokumen}/{judul}-dok{id}-v{n}.{ext}`).
+- File disimpan di S3 pada disk **private** (sejak Work 49 mengikuti `FILESYSTEM_DISK`), path terstruktur (sejak Work 50: `{jenis-dokumen}/{badan-usaha}_{jenis-dokumen}_{nomor}_{judul}_dok{id}-v{n}_{waktu}.{ext}`).
 - Batas file: PDF, DOC, DOCX, JPG, PNG; maksimal 20 MB (konfigurable).
 - Unduh/preview memakai **temporary signed URL** (bukan URL publik).
 - Tabel: kolom perusahaan, jenis, judul, tanggal berakhir, PIC; filter perusahaan, jenis; pencarian judul/nomor.
@@ -538,6 +538,19 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 50: Nama File yang Mudah Dilacak
+
+**Tujuan:** Saat ada insiden, asal sebuah file langsung terbaca dari namanya tanpa membuka database.
+
+**Cakupan:**
+- Nama file dokumen: `{jenis-dokumen}/{badan-usaha}_{jenis-dokumen}_{nomor-dokumen}_{judul}_dok{id}-v{n}_{yyyymmdd-hhmmss}.{ext}`. Badan usaha memakai bentuk usaha + nama (tanpa mengulang bila nama sudah diawali bentuk usaha). Waktu dalam WIB dan sama dengan `created_at` versi. Bagian kosong dilewati, tiap bagian maksimal 50 karakter.
+- Lampiran pengajuan tidak lagi memakai UUID: `lms/requests/{jenis-dokumen}/{badan-usaha atau nama usaha lain}_{jenis-dokumen}_{nama-lampiran}_{yyyymmdd-hhmmss}.{ext}`, dengan akhiran `-2`, `-3` bila nama sudah dipakai.
+- Pembentukan nama dipusatkan di `App\Services\StorageFileName`. `lms:reorganize-files` memakai waktu upload versi sehingga hasilnya stabil saat diulang.
+
+**Definition of Done:** Tes mencakup format lengkap dengan nomor dokumen, bentuk usaha yang tidak berulang, bagian kosong dan batas panjang, pemindahan file lama ke nama baru, serta nama lampiran untuk badan usaha terdaftar, usaha lain, dan nama yang bentrok. Commit: `feat(work-50): nama file yang mudah dilacak`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -585,5 +598,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 47 | Uji alur lengkap dari ujung ke ujung | `ahtar-dev` |
 | 48 | Struktur folder file per jenis dokumen | `ahtar-dev` |
 | 49 | Disk penyimpanan mengikuti FILESYSTEM_DISK | `ahtar-dev` |
+| 50 | Nama file yang mudah dilacak | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

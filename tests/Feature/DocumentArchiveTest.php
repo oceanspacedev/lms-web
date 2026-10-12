@@ -56,7 +56,8 @@ class DocumentArchiveTest extends TestCase
         $this->assertSame(65536, $version->file_size);
         $this->assertSame('application/pdf', $version->mime_type);
         $this->assertSame('2027-01-01', $version->expiry_date->toDateString());
-        $this->assertSame("izin-usaha-nib/perjanjian-uji-dok{$document->id}-v1.pdf", $version->file_path);
+        $this->assertStringStartsWith('izin-usaha-nib/', $version->file_path);
+        $this->assertStringEndsWith("_izin-usaha-nib_perjanjian-uji_dok{$document->id}-v1_".$version->created_at->setTimezone('Asia/Jakarta')->format('Ymd-His').'.pdf', $version->file_path);
         Storage::disk('s3')->assertExists($version->file_path);
         $this->assertDatabaseCount('documents', 1);
         $this->assertDatabaseCount('document_versions', 1);
@@ -160,7 +161,7 @@ class DocumentArchiveTest extends TestCase
     {
         $disk = Mockery::mock(FilesystemAdapter::class);
         $disk->shouldReceive('putFileAs')->once()
-            ->withArgs(fn (string $directory, UploadedFile $file, string $name, array $options): bool => $options['visibility'] === 'private' && ! str_contains($directory, '/') && str_ends_with($name, '-v1.pdf'))
+            ->withArgs(fn (string $directory, UploadedFile $file, string $name, array $options): bool => $options['visibility'] === 'private' && ! str_contains($directory, '/') && str_contains($name, '-v1_') && str_ends_with($name, '.pdf'))
             ->andReturn('jenis/private.pdf');
         Storage::shouldReceive('disk')->with('s3')->andReturn($disk);
         $document = Document::archive($this->archiveData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), User::factory()->create());

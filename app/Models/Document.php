@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Services\StorageFileName;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,7 +19,6 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 use Throwable;
@@ -278,25 +279,27 @@ class Document extends Model
     }
 
     /**
-     * Path file di bucket: satu folder per jenis dokumen, nama file dari judul, ID dokumen, dan nomor versi.
+     * Path file: folder per jenis dokumen, nama file berisi badan usaha, jenis, nomor, judul, ID dan versi, serta waktu upload.
      */
-    public function storagePath(int $versionNumber, string $extension): string
+    public function storagePath(int $versionNumber, string $extension, ?CarbonInterface $uploadedAt = null): string
     {
-        $folder = self::pathSegment($this->documentType()->value('name') ?? '', 'lainnya');
-        $title = Str::limit(self::pathSegment($this->title, 'dokumen'), 80, '');
+        $type = $this->documentType()->value('name');
+        $filename = StorageFileName::build([
+            StorageFileName::companyName(Company::find($this->company_id)),
+            $type,
+            $this->document_number,
+            $this->title,
+            "dok{$this->id}-v{$versionNumber}",
+        ], $uploadedAt ?? now(), $extension);
 
-        return "{$folder}/".rtrim($title, '-')."-dok{$this->id}-v{$versionNumber}.".strtolower($extension);
-    }
-
-    private static function pathSegment(string $value, string $fallback): string
-    {
-        return Str::slug(preg_replace('/[^\pL\pN]+/u', ' ', $value)) ?: $fallback;
+        return StorageFileName::folder($type).'/'.$filename;
     }
 
     /** @param array<string, mixed> $data */
     private function storeVersion(array $data, UploadedFile $file, User $uploader, int $number, ?string &$path): DocumentVersion
     {
-        $path = $this->storagePath($number, $file->getClientOriginalExtension());
+        $uploadedAt = now()->startOfSecond();
+        $path = $this->storagePath($number, $file->getClientOriginalExtension(), $uploadedAt);
         $directory = dirname($path);
         $filename = basename($path);
 
@@ -306,7 +309,7 @@ class Document extends Model
             throw new \RuntimeException('Penyimpanan file gagal.');
         }
 
-        $version = $this->versions()->create([
+        $version = $this->versions()->make([
             'version_number' => $number,
             'disk' => $disk,
             'file_path' => $path,
@@ -319,6 +322,8 @@ class Document extends Model
             'change_note' => $data['change_note'] ?? null,
             'uploaded_by' => $uploader->id,
         ]);
+        $version->created_at = $uploadedAt;
+        $version->save();
 
         $this->activities()->create([
             'document_version_id' => $version->id,

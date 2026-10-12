@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\DocumentRequestNotifier;
+use App\Services\StorageFileName;
 use Carbon\CarbonImmutable;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -212,10 +213,7 @@ class DocumentRequest extends Model
                     $value = $data['attachments'][$item['key']] ?? null;
                     if ($value instanceof UploadedFile) {
                         Validator::make(['file' => $value], ['file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]])->validate();
-                        $path = $value->storeAs('lms/requests/public', Str::uuid().'.'.strtolower($value->getClientOriginalExtension()), ['disk' => 'local', 'visibility' => 'private']);
-                        if ($path === false) {
-                            throw new \RuntimeException('Lampiran gagal disimpan.');
-                        }
+                        $path = $request->storeAttachment($value, $item);
                         $storedPaths[] = $path;
                         $attachments[$item['key']] = $path;
                     } elseif ($value !== null) {
@@ -276,10 +274,7 @@ class DocumentRequest extends Model
                     $value = $data['attachments'][$item['key']] ?? null;
                     if ($value instanceof UploadedFile) {
                         Validator::make(['file' => $value], ['file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]])->validate();
-                        $path = $value->storeAs('lms/requests/'.$user->id, Str::uuid().'.'.strtolower($value->getClientOriginalExtension()), ['disk' => 'local', 'visibility' => 'private']);
-                        if ($path === false) {
-                            throw new \RuntimeException('Lampiran gagal disimpan.');
-                        }
+                        $path = $request->storeAttachment($value, $item);
                         $storedPaths[] = $path;
                         $attachments[$item['key']] = $path;
                     } elseif ($value === null) {
@@ -302,6 +297,31 @@ class DocumentRequest extends Model
             }
             throw $exception;
         }
+    }
+
+    /**
+     * Simpan lampiran di `lms/requests/{jenis-dokumen}/` dengan nama berisi badan usaha, jenis, nama lampiran, nomor pengajuan, dan waktu upload.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private function storeAttachment(UploadedFile $file, array $item): string
+    {
+        $disk = Storage::disk('local');
+        $type = DocumentType::whereKey($this->document_type_id)->value('name');
+        $directory = 'lms/requests/'.StorageFileName::folder($type);
+        $filename = StorageFileName::available($disk, $directory, StorageFileName::build([
+            StorageFileName::companyName(Company::find($this->company_id)) ?? $this->other_business_name,
+            $type,
+            $item['label'] ?? $item['key'],
+            $this->exists ? "pengajuan{$this->id}" : null,
+        ], now(), $file->getClientOriginalExtension()));
+
+        $path = $file->storeAs($directory, $filename, ['disk' => 'local', 'visibility' => 'private']);
+        if ($path === false) {
+            throw new \RuntimeException('Lampiran gagal disimpan.');
+        }
+
+        return $path;
     }
 
     /** @param array<string, mixed> $item */

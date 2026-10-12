@@ -61,7 +61,8 @@ class DocumentStorageDiskTest extends TestCase
         $version = $this->document()->currentVersion;
 
         $this->assertSame($disk, $version->disk);
-        $this->assertSame("akta-pendirian/akta-pt-uji-dok{$version->document_id}-v1.pdf", $version->file_path);
+        $this->assertSame($version->document->storagePath(1, 'pdf', $version->created_at), $version->file_path);
+        $this->assertStringStartsWith('akta-pendirian/', $version->file_path);
         Storage::disk($disk)->assertExists($version->file_path);
         foreach (array_diff(['local', 'public', 's3'], [$disk]) as $other) {
             $this->assertSame([], Storage::disk($other)->allFiles());
