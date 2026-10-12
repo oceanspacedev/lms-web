@@ -42,7 +42,7 @@ class ActivitiesRelationManager extends RelationManager
                 TextColumn::make('event')->label('Aktivitas')->formatStateUsing(fn (string $state): string => DocumentActivity::EVENTS[$state] ?? $state),
                 TextColumn::make('user.name')->label('Pengguna')->placeholder('Sistem / pengguna tidak tersedia'),
                 TextColumn::make('version.version_number')->label('Versi')->prefix('v')->placeholder('-'),
-                TextColumn::make('version.file_name')->label('File')->wrap(),
+                TextColumn::make('version.stored_name')->label('File')->wrap(),
             ])->defaultSort('id', 'desc')->paginationPageOptions([5, 10, 25])->defaultPaginationPageOption(5)
             ->emptyStateHeading('Belum ada aktivitas')->emptyStateDescription('Aktivitas baru akan dicatat setelah fitur ini diaktifkan.')
             ->headerActions([])->recordActions([])->toolbarActions([]);

@@ -147,6 +147,8 @@ class DocumentResourceTest extends TestCase
             ->call('setDocumentView', $view)
             ->searchTable('kemitraan-final.pdf')
             ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
+            ->searchTable(strtoupper($first->currentVersion->stored_name))
+            ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
             ->searchTable('')->filterTable('pic', $firstData['pic_user_id'])
             ->assertCanSeeTableRecords([$first])->assertCanNotSeeTableRecords([$second])
             ->filterTable('pic', null)->filterTable('file_format', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
@@ -189,7 +191,7 @@ class DocumentResourceTest extends TestCase
         $document = Document::archive($this->documentData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), $user);
 
         Livewire::test(ListDocuments::class)->callTableAction('gridView')
-            ->assertCanSeeTableRecords([$document])->assertSee('test.pdf')
+            ->assertCanSeeTableRecords([$document])->assertSee($document->currentVersion->stored_name)->assertDontSee('test.pdf')
             ->assertDontSeeHtml('href="'.DocumentResource::getUrl('view', ['record' => $document]).'"')
             ->assertDontSeeHtml('href="'.route('documents.download', $document).'"')
             ->searchTable('TidakAdaDokumenIni')->assertCanNotSeeTableRecords([$document])
@@ -213,7 +215,7 @@ class DocumentResourceTest extends TestCase
         $user = $this->signInWithPermissions(['ViewAny:Document', 'View:Document']);
         $document = Document::archive($this->documentData(), UploadedFile::fake()->create('test.pdf', 1, 'application/pdf'), $user);
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSuccessful()->assertSee('test.pdf')
+            ->assertSuccessful()->assertSee($document->currentVersion->stored_name)->assertSee('Nama File Asli')->assertSee('test.pdf')
             ->assertSee('Informasi Dokumen')->assertSee('File Aktif')
             ->assertSee($document->title)->assertSee('Tidak ada catatan');
         Livewire::test(CreateDocument::class)->assertForbidden();

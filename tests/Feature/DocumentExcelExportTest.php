@@ -107,7 +107,7 @@ class DocumentExcelExportTest extends TestCase
         $this->assertSame('Segera Berakhir', $row[8]);
         $this->assertSame(10, $row[9]);
         $this->assertSame('v1', $row[10]);
-        $this->assertSame('kontrak-soon.pdf', $row[11]);
+        $this->assertSame($soon->currentVersion->stored_name, $row[11]);
         $this->assertSame('2026-10-09', $row[12]->format('Y-m-d'));
 
         $this->assertSame(['Kedaluwarsa', -3], [$byTitle['Kontrak Lewat'][8], $byTitle['Kontrak Lewat'][9]]);

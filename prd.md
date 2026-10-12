@@ -547,7 +547,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Lampiran pengajuan tidak lagi memakai UUID: `lms/requests/{jenis-dokumen}/{badan-usaha atau nama usaha lain}_{jenis-dokumen}_{nama-lampiran}_{yyyymmdd-hhmmss}.{ext}`, dengan akhiran `-2`, `-3` bila nama sudah dipakai.
 - Pembentukan nama dipusatkan di `App\Services\StorageFileName`. `lms:reorganize-files` memakai waktu upload versi sehingga hasilnya stabil saat diulang.
 
-**Definition of Done:** Tes mencakup format lengkap dengan nomor dokumen, bentuk usaha yang tidak berulang, bagian kosong dan batas panjang, pemindahan file lama ke nama baru, serta nama lampiran untuk badan usaha terdaftar, usaha lain, dan nama yang bentrok. Commit: `feat(work-50): nama file yang mudah dilacak`.
+**Definition of Done:** Tes mencakup format lengkap dengan nomor dokumen, bentuk usaha yang tidak berulang, bagian kosong dan batas panjang, pemindahan file lama ke nama baru, serta nama lampiran untuk badan usaha terdaftar, usaha lain, dan nama yang bentrok, nama unduhan dan tampilan web, serta pencarian nama tersimpan maupun asli. Commit: `feat(work-50): nama file yang mudah dilacak`.
 
 ---
 

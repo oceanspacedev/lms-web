@@ -58,7 +58,8 @@ class DocumentDownloadTest extends TestCase
             ->assertHeader('Cache-Control', 'no-store, private');
         $this->assertSame($document->currentVersion->file_path, $captured['path']);
         $this->assertSame(now()->addMinutes(5)->getTimestamp(), $captured['expiration']->getTimestamp());
-        $this->assertSame('attachment; filename=dokumen.pdf', $captured['options']['ResponseContentDisposition']);
+        $this->assertSame('attachment; filename='.$document->currentVersion->stored_name, $captured['options']['ResponseContentDisposition']);
+        $this->assertStringContainsString('_dokumen-unduhan_dok', $document->currentVersion->stored_name);
         $this->assertSame('application/pdf', $captured['options']['ResponseContentType']);
     }
 

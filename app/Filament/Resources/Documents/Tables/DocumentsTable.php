@@ -62,7 +62,10 @@ class DocumentsTable
                     ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
                 TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
                 TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap(),
-                TextColumn::make('currentVersion.file_name')->label('Nama File')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->orWhereHas('currentVersion', fn (Builder $version): Builder => $version
+                        ->whereRaw("lower(file_path) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%'])
+                        ->orWhereRaw("lower(file_name) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%']))),
             ])
             ->filters([
                 SelectFilter::make('company')->label('Badan Usaha')->relationship('company', 'name')->searchable()->preload(),

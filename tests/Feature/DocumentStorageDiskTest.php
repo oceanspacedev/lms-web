@@ -80,7 +80,7 @@ class DocumentStorageDiskTest extends TestCase
             ->assertHeader('X-Content-Type-Options', 'nosniff');
 
         $this->assertSame('isi lokal', $response->streamedContent());
-        $this->assertStringStartsWith('attachment; filename="Akta Asli.pdf"', $response->headers->get('Content-Disposition'));
+        $this->assertSame('attachment; filename='.$document->currentVersion->stored_name, $response->headers->get('Content-Disposition'));
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         $this->assertDatabaseHas('document_activities', ['document_id' => $document->id, 'user_id' => $user->id, 'event' => 'downloaded']);
     }

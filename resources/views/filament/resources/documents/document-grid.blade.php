@@ -8,7 +8,7 @@
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'DOCX',
                 'image/jpeg' => 'JPG',
                 'image/png' => 'PNG',
-                default => strtoupper(pathinfo($version?->file_name ?? '', PATHINFO_EXTENSION)) ?: 'FILE',
+                default => strtoupper(pathinfo($version?->stored_name ?? '', PATHINFO_EXTENSION)) ?: 'FILE',
             };
             $isImage = in_array($format, ['JPG', 'PNG'], true);
             $status = $record->expiry_status;
@@ -40,7 +40,7 @@
                     <span>{{ $format }} <span aria-hidden="true">·</span> {{ $fileSize }}</span>
                 </div>
 
-                <h3 class="document-card__title" title="{{ $version?->file_name }}">
+                <h3 class="document-card__title" title="{{ $version?->stored_name }}">
                     @if ($canView)
                         <a href="{{ \App\Filament\Resources\Documents\DocumentResource::getUrl('view', ['record' => $record]) }}">{{ $record->title }}</a>
                     @else

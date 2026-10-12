@@ -75,7 +75,7 @@ class DocumentSpreadsheetExporter
                 Cell::fromValue(Document::EXPIRY_STATUSES[$document->expiry_status]),
                 Cell::fromValue($hasExpiry ? (int) $today->diffInDays($expiry, false) : ''),
                 Cell::fromValue($version ? 'v'.$version->version_number : ''),
-                Cell::fromValue($version?->file_name ?? ''),
+                Cell::fromValue($version?->stored_name ?? ''),
                 $this->dateCell($document->created_at?->timezone($timezone)->toDateString(), $timezone, $dateStyle),
             ]));
         });

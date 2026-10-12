@@ -21,7 +21,7 @@ class DocumentInfolist
                     ->schema([
                         View::make('requests.attachment-preview')->viewData(fn (Document $record): array => [
                             'url' => route('documents.download', ['document' => $record, 'preview' => 1]),
-                            'label' => $record->currentVersion?->file_name ?? $record->title,
+                            'label' => $record->currentVersion?->stored_name ?? $record->title,
                             'isImage' => $record->currentVersion?->mime_type !== 'application/pdf',
                             'showNewTabLink' => false,
                         ]),
@@ -44,8 +44,10 @@ class DocumentInfolist
                     ->columnSpan(['default' => 1, 'xl' => 1])
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('currentVersion.file_name')->label('Nama File')
+                        TextEntry::make('currentVersion.stored_name')->label('Nama File')
                             ->icon('heroicon-o-document-text')->wrap()->columnSpanFull()->placeholder('Belum ada file'),
+                        TextEntry::make('currentVersion.file_name')->label('Nama File Asli')
+                            ->helperText('Nama file di komputer pengunggah.')->wrap()->columnSpanFull()->placeholder('—'),
                         TextEntry::make('currentVersion.version_number')->label('Versi')->prefix('v')->placeholder('—'),
                         TextEntry::make('currentVersion.file_size')->label('Ukuran File')
                             ->formatStateUsing(fn (int $state): string => Number::fileSize($state, precision: 1))->placeholder('—'),
