@@ -9,9 +9,11 @@
         tag="a"
         :href="route('filament.admin.auth.whatsapp-login')"
         color="gray"
-        icon="heroicon-o-chat-bubble-left-right"
         class="w-full"
     >
-        Masuk dengan kode WhatsApp
+        <span style="display: inline-flex; align-items: center; gap: .5rem;">
+            <x-whatsapp-icon :size="18" style="color: #25D366;" />
+            Masuk dengan kode WhatsApp
+        </span>
     </x-filament::button>
 </div>

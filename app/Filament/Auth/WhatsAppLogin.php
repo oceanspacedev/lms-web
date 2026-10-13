@@ -18,6 +18,8 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 
@@ -166,6 +168,7 @@ class WhatsAppLogin extends SimplePage
                     Actions::make([
                         Action::make('submit')
                             ->label(fn (): string => $this->step === 'phone' ? 'Kirim kode' : 'Masuk')
+                            ->icon(fn (): ?Htmlable => $this->step === 'phone' ? new HtmlString(Blade::render('<x-whatsapp-icon :size="20" />')) : null)
                             ->submit('submit'),
                     ])->fullWidth(),
                     Actions::make([$this->resendCodeAction(), $this->changeNumberAction()])
