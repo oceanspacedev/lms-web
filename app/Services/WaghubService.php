@@ -8,6 +8,11 @@ use RuntimeException;
 
 class WaghubService
 {
+    /**
+     * Mask Alpine untuk input nomor WhatsApp: hanya angka, boleh diawali "+".
+     */
+    public const PHONE_INPUT_MASK = "\$input.startsWith('+') ? '+99999999999999' : '999999999999999'";
+
     public function normalizePhone(?string $phone): ?string
     {
         if ($phone === null || preg_match('/[^0-9+\s().-]/', $phone)) {

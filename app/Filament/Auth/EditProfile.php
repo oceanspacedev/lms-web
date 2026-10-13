@@ -8,6 +8,7 @@ use Closure;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Filament\Support\RawJs;
 
 class EditProfile extends BaseEditProfile
 {
@@ -16,7 +17,7 @@ class EditProfile extends BaseEditProfile
         return $schema->components([
             $this->getNameFormComponent(),
             $this->getEmailFormComponent(),
-            TextInput::make('phone')->label('Nomor WhatsApp')->tel()->maxLength(30)
+            TextInput::make('phone')->label('Nomor WhatsApp')->tel()->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])->maxLength(30)
                 ->helperText('Digunakan untuk pengingat dokumen dan masuk dengan kode WhatsApp. Contoh: 081234567890.')
                 ->rules([fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
                     $phone = app(WaghubService::class)->normalizePhone($value);

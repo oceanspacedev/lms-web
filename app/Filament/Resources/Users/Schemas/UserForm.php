@@ -8,6 +8,7 @@ use Closure;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 
@@ -18,7 +19,7 @@ class UserForm
         return $schema->components([
             TextInput::make('name')->label('Nama')->required()->maxLength(255),
             TextInput::make('email')->label('Email')->email()->required()->maxLength(255)->unique(ignoreRecord: true),
-            TextInput::make('phone')->label('Nomor HP / WhatsApp')->tel()->maxLength(30)
+            TextInput::make('phone')->label('Nomor HP / WhatsApp')->tel()->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])->maxLength(30)
                 ->helperText('Digunakan untuk pengingat dokumen dan masuk dengan kode WhatsApp. Contoh: 081234567890.')
                 ->rules([fn (?User $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
                     $phone = app(WaghubService::class)->normalizePhone($value);

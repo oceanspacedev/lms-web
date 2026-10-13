@@ -42,6 +42,23 @@ class CompanyResourceTest extends TestCase
         $this->assertDatabaseHas('companies', ['name' => 'PT Contoh Legal', 'legal_form' => 'PT', 'npwp' => null, 'address' => null, 'is_active' => true]);
     }
 
+    public function test_npwp_accepts_only_fifteen_or_sixteen_digit_formats(): void
+    {
+        $this->signInWithPermissions(['ViewAny:Company', 'Create:Company']);
+
+        Livewire::test(CreateCompany::class)->assertSeeHtml('x-mask:dynamic')
+            ->fillForm(['name' => 'PT Huruf', 'legal_form' => 'PT', 'npwp' => '12.ABC.678.9-012.000'])
+            ->call('create')->assertHasFormErrors(['npwp' => 'regex']);
+        Livewire::test(CreateCompany::class)->fillForm(['name' => 'PT Pendek', 'legal_form' => 'PT', 'npwp' => '12345'])
+            ->call('create')->assertHasFormErrors(['npwp' => 'regex']);
+
+        foreach (['PT Lama' => '12.345.678.9-012.000', 'PT Polos' => '123456789012000', 'PT Baru' => '3201234567890001'] as $name => $npwp) {
+            Livewire::test(CreateCompany::class)->fillForm(['name' => $name, 'legal_form' => 'PT', 'npwp' => $npwp])
+                ->call('create')->assertHasNoFormErrors();
+            $this->assertDatabaseHas('companies', ['name' => $name, 'npwp' => $npwp]);
+        }
+    }
+
     public function test_required_fields_and_unique_name_are_validated(): void
     {
         $this->signInWithPermissions(['ViewAny:Company', 'Create:Company']);

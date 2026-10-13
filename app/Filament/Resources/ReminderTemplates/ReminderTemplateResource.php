@@ -25,6 +25,17 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReminderTemplateResource extends Resource
 {
+    /**
+     * Input tag jumlah hari hanya menerima angka.
+     *
+     * @var array<string, string>
+     */
+    private const DAY_TAG_INPUT_ATTRIBUTES = [
+        'inputmode' => 'numeric',
+        'maxlength' => '4',
+        'x-on:input' => "\$el.value = \$el.value.replace(/\\D/g, ''); newTag = \$el.value",
+    ];
+
     protected static ?string $model = ReminderTemplate::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
@@ -104,11 +115,11 @@ class ReminderTemplateResource extends Resource
                 TextInput::make('interval_days')->label('Ulangi setiap')->suffix('hari')->numeric()->integer()->minValue(1)->maxValue(3650)->default(7)->required()
                     ->visible(fn (Get $get): bool => $get('schedule_mode') === 'interval')->live(onBlur: true),
             ])->visible(fn (Get $get): bool => $get('schedule_mode') === 'interval'),
-            TagsInput::make('scheduled_days')->label('Hari sebelum berakhir')->default([30, 7, 1])->required()->splitKeys([','])->live()
+            TagsInput::make('scheduled_days')->label('Hari sebelum berakhir')->default([30, 7, 1])->required()->splitKeys([','])->live()->extraInputAttributes(self::DAY_TAG_INPUT_ATTRIBUTES)
                 ->nestedRecursiveRules(['integer', 'min:0', 'max:3650', 'distinct'])
                 ->visible(fn (Get $get): bool => $get('schedule_mode') === 'specific_days')
                 ->helperText('Angka = hari sebelum berakhir. 0 = tanggal berakhir.'),
-            TagsInput::make('overdue_days')->label('Setelah kedaluwarsa (opsional)')->default([])->splitKeys([','])
+            TagsInput::make('overdue_days')->label('Setelah kedaluwarsa (opsional)')->default([])->splitKeys([','])->extraInputAttributes(self::DAY_TAG_INPUT_ATTRIBUTES)
                 ->nestedRecursiveRules(['integer', 'min:1', 'max:3650', 'distinct'])
                 ->helperText('Angka = hari setelah tanggal berakhir, misalnya 1 dan 7. Kosongkan bila tidak perlu.'),
             TextEntry::make('schedule_time')->label('Waktu pengiriman')->state(self::reminderTimeLabel()),

@@ -118,6 +118,17 @@ class WhatsAppLoginTest extends TestCase
         $this->assertDatabaseCount('login_codes', 0);
     }
 
+    public function test_phone_fields_only_accept_digits_in_the_browser(): void
+    {
+        Livewire::test(WhatsAppLogin::class)->assertSeeHtml('x-mask:dynamic')->assertSeeHtml('+99999999999999')->assertSeeHtml('inputmode="tel"');
+
+        $admin = $this->panelUser('6289999999999');
+        $admin->givePermissionTo([Permission::findOrCreate('ViewAny:User', 'web'), Permission::findOrCreate('Create:User', 'web')]);
+        $this->actingAs($admin);
+        Livewire::test(EditProfile::class)->assertSeeHtml('+99999999999999');
+        Livewire::test(CreateUser::class)->assertSeeHtml('+99999999999999');
+    }
+
     public function test_invalid_number_is_rejected(): void
     {
         $this->requestCode('12345')->assertHasFormErrors(['phone'])->assertSet('step', 'phone');

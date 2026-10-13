@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ReminderTemplates\Pages;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
 use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
+use App\Services\WaghubService;
 use App\Services\WhatsAppTemplateTester;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -18,6 +19,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -207,7 +209,7 @@ class ManageReminderTemplates extends Page
                 ->modalDescription('Mengirim template tersimpan dengan data contoh. Pesan ditandai [PESAN UJI].')
                 ->modalSubmitActionLabel('Kirim pesan uji')->modalWidth('lg')
                 ->schema([
-                    TextInput::make('phone')->label('Nomor WhatsApp tujuan')->tel()->required()->maxLength(30)
+                    TextInput::make('phone')->label('Nomor WhatsApp tujuan')->tel()->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])->required()->maxLength(30)
                         ->default(fn (): ?string => auth()->user()->phone)->placeholder('08xxxxxxxxxx'),
                     TextEntry::make('test_preview')->label('Pesan yang dikirim')->state(fn (): string => "[PESAN UJI]\n".ReminderTemplate::renderBody($this->templateBody($event),
                         match ($event) {

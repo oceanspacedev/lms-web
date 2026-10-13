@@ -17,6 +17,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Schema;
+use Filament\Support\RawJs;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
@@ -136,7 +137,8 @@ class WhatsAppLogin extends SimplePage
             TextInput::make('phone')
                 ->label('Nomor WhatsApp')
                 ->tel()
-                ->placeholder('0812 3456 7890')
+                ->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])
+                ->placeholder('081234567890')
                 ->maxLength(30)
                 ->required()
                 ->autofocus()
