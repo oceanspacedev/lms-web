@@ -82,12 +82,17 @@ Buka `http://127.0.0.1:8000/admin`. Untuk pengembangan frontend, jalankan `npm r
 WAGHUB_URL=https://waghub.mekayastudio.com
 WAGHUB_TOKEN=
 WAGHUB_PURPOSE=otp
+WAGHUB_OTP_PURPOSE=otp
 WAGHUB_MODE=sync
 WAGHUB_ROUTE_KEY=default
 LMS_REMINDER_MAX_ATTEMPTS=3
 ```
 
 `otp` adalah nilai dari contoh API yang telah diterima WagHub pada uji integrasi; konfirmasikan purpose yang sesuai untuk pesan pengingat kepada pengelola WagHub sebelum penggunaan operasional. Token tidak boleh masuk kode, README, log, atau Git.
+
+### Login dengan kode WhatsApp
+
+Selain email dan password, user bisa masuk lewat `/admin/login/whatsapp` (tombol "Masuk dengan kode WhatsApp" di halaman login): isi nomor WhatsApp di profil, lalu masukkan kode 6 digit yang dikirim lewat WagHub. Kode berlaku 5 menit, hangus setelah 5 kali salah, kirim ulang paling cepat 60 detik, maksimal 5 kode per jam per nomor dan 10 permintaan per 10 menit per IP. Hanya hash kode yang disimpan di tabel `login_codes`; record lebih dari 7 hari dihapus oleh `model:prune` harian. Kode hanya dikirim bila nomor milik tepat satu user yang berhak membuka panel, dan tampilan layar sama untuk nomor yang tidak terdaftar. Karena itu nomor WhatsApp harus unik per user (divalidasi di profil dan form User). Pesan memakai `WAGHUB_OTP_PURPOSE`; bila kosong, memakai `WAGHUB_PURPOSE`.
 
 Scheduler mengirim pukul 08.00 Asia/Jakarta. Pastikan scheduler Laravel dijalankan oleh server:
 

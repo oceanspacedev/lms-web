@@ -2,6 +2,7 @@
 
 namespace App\Filament\Auth;
 
+use App\Models\User;
 use App\Services\WaghubService;
 use Closure;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
@@ -16,10 +17,13 @@ class EditProfile extends BaseEditProfile
             $this->getNameFormComponent(),
             $this->getEmailFormComponent(),
             TextInput::make('phone')->label('Nomor WhatsApp')->tel()->maxLength(30)
-                ->helperText('Digunakan untuk pengingat dokumen. Contoh: 081234567890.')
+                ->helperText('Digunakan untuk pengingat dokumen dan masuk dengan kode WhatsApp. Contoh: 081234567890.')
                 ->rules([fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
-                    if (filled($value) && app(WaghubService::class)->normalizePhone($value) === null) {
+                    $phone = app(WaghubService::class)->normalizePhone($value);
+                    if (filled($value) && $phone === null) {
                         $fail('Masukkan nomor WhatsApp Indonesia yang valid.');
+                    } elseif ($phone !== null && User::phoneIsTaken($phone, $this->getUser()->getKey())) {
+                        $fail('Nomor WhatsApp sudah dipakai user lain.');
                     }
                 }])
                 ->dehydrateStateUsing(fn (?string $state): ?string => app(WaghubService::class)->normalizePhone($state)),

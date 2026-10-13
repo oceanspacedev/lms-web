@@ -55,7 +55,7 @@ Dokumen legal perusahaan (perjanjian kerja sama, dokumen perusahaan, dan sejenis
 ### Non-Goals (di luar cakupan saat ini)
 
 - Tanda tangan digital / e-sign.
-- Workflow persetujuan (approval) dokumen.
+- Workflow persetujuan (approval) dokumen. *(Tidak berlaku lagi: alur pengajuan dan persetujuan dokumen kini sudah tersedia di aplikasi.)*
 - OCR / pencarian isi dokumen.
 - Integrasi dengan sistem eksternal selain WagHub dan S3.
 
@@ -552,6 +552,21 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 51: Login dengan Kode OTP WhatsApp
+
+**Tujuan:** User bisa masuk ke panel tanpa password dengan kode yang dikirim ke WhatsApp, sebagai pilihan tambahan di samping email dan password.
+
+**Cakupan:**
+- Halaman `/admin/login/whatsapp` (tombol "Masuk dengan kode WhatsApp" di halaman login): isi nomor WhatsApp, terima kode 6 digit lewat WagHub, lalu masuk. Ada kirim ulang, ganti nomor, "Ingat saya", dan tautan kembali ke login email.
+- Kode berlaku 5 menit, hangus setelah 5 kali salah, hanya bisa dipakai sekali, dan kode lama hangus saat kode baru diminta. Kirim ulang paling cepat 60 detik, maksimal 5 kode per jam per nomor dan 10 permintaan per 10 menit per IP.
+- Kode hanya dikirim bila nomor milik tepat satu user yang berhak membuka panel. Tampilan untuk nomor tidak terdaftar, nomor ganda, atau user tanpa akses sama persis agar nomor terdaftar tidak bisa ditebak.
+- Tabel `login_codes` hanya menyimpan HMAC kode, status pengiriman, galat, dan IP; dibersihkan setelah 7 hari lewat `model:prune` harian.
+- Nomor WhatsApp divalidasi unik di profil dan form User. Pesan memakai `WAGHUB_OTP_PURPOSE` (fallback `WAGHUB_PURPOSE`), dan `lms:check-production` memeriksanya.
+
+**Definition of Done:** Tes mencakup tautan dan akses tamu, pengiriman ke nomor ternormalisasi dengan purpose OTP dan hanya hash yang tersimpan, login berhasil sekali pakai, nomor tidak terdaftar/ganda/tanpa akses tanpa pengiriman, nomor tidak valid, batas percobaan salah, kode kedaluwarsa, kirim ulang dan penggantian kode, batas per nomor dan per IP, kegagalan WagHub, "Ingat saya", properti yang tidak bisa diubah dari browser, redirect bila sudah login, nomor unik di profil dan form User, cek produksi, dan pruning. Commit: `feat(work-51): login dengan kode OTP WhatsApp`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -600,5 +615,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 48 | Struktur folder file per jenis dokumen | `ahtar-dev` |
 | 49 | Disk penyimpanan mengikuti FILESYSTEM_DISK | `ahtar-dev` |
 | 50 | Nama file yang mudah dilacak | `ahtar-dev` |
+| 51 | Login dengan kode OTP WhatsApp | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

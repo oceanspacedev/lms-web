@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\LoginCode;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -19,3 +20,5 @@ Schedule::command('lms:send-request-reminders')
     ->dailyAt(config('lms.reminder_time'))
     ->timezone(config('lms.reminder_timezone'))
     ->withoutOverlapping(30);
+
+Schedule::command('model:prune', ['--model' => [LoginCode::class]])->daily();

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Schemas;
 
+use App\Models\User;
 use App\Services\WaghubService;
 use Closure;
 use Filament\Forms\Components\Select;
@@ -18,10 +19,13 @@ class UserForm
             TextInput::make('name')->label('Nama')->required()->maxLength(255),
             TextInput::make('email')->label('Email')->email()->required()->maxLength(255)->unique(ignoreRecord: true),
             TextInput::make('phone')->label('Nomor HP / WhatsApp')->tel()->maxLength(30)
-                ->helperText('Digunakan untuk pengingat dokumen. Contoh: 081234567890.')
-                ->rules([fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
-                    if (filled($value) && app(WaghubService::class)->normalizePhone($value) === null) {
+                ->helperText('Digunakan untuk pengingat dokumen dan masuk dengan kode WhatsApp. Contoh: 081234567890.')
+                ->rules([fn (?User $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                    $phone = app(WaghubService::class)->normalizePhone($value);
+                    if (filled($value) && $phone === null) {
                         $fail('Masukkan nomor WhatsApp Indonesia yang valid.');
+                    } elseif ($phone !== null && User::phoneIsTaken($phone, $record?->getKey())) {
+                        $fail('Nomor WhatsApp sudah dipakai user lain.');
                     }
                 }])
                 ->dehydrateStateUsing(fn (?string $state): ?string => app(WaghubService::class)->normalizePhone($state)),

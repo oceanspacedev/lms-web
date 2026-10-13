@@ -27,6 +27,14 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Nomor WhatsApp dipakai untuk login OTP, jadi satu nomor hanya boleh milik satu user.
+     */
+    public static function phoneIsTaken(string $normalizedPhone, int|string|null $ignoreId = null): bool
+    {
+        return static::where('phone', $normalizedPhone)->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))->exists();
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

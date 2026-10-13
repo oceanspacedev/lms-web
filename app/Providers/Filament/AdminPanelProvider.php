@@ -3,8 +3,10 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\EditProfile;
+use App\Filament\Auth\WhatsAppLogin;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Auth\Pages\Login;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -23,6 +25,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -35,6 +38,12 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->profile(EditProfile::class)
+            ->routes(fn () => Route::get('/login/whatsapp', WhatsAppLogin::class)->name('auth.whatsapp-login'))
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn (): View => view('filament.auth.whatsapp-login-link'),
+                scopes: Login::class,
+            )
             ->renderHook(
                 PanelsRenderHook::PAGE_HEADER_ACTIONS_AFTER,
                 fn (): View => view('filament.resources.documents.filters'),

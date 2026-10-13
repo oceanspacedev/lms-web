@@ -15,7 +15,7 @@ class ProductionReadinessTest extends TestCase
             'session.secure' => true, 'session.http_only' => true, 'session.driver' => 'database', 'cache.default' => 'database', 'debugbar.enabled' => false,
             'filesystems.default' => 's3',             'filesystems.disks.s3.key' => 'dummy-key', 'filesystems.disks.s3.secret' => 'dummy-secret', 'filesystems.disks.s3.bucket' => 'dummy-lms',
             'filesystems.disks.s3.endpoint' => 'https://storage.example.test', 'filesystems.disks.s3.visibility' => 'private', 'filesystems.disks.s3.http.verify' => true,
-            'services.waghub.url' => 'https://waghub.example.test', 'services.waghub.token' => 'dummy-token', 'services.waghub.purpose' => 'dummy-reminder',
+            'services.waghub.url' => 'https://waghub.example.test', 'services.waghub.token' => 'dummy-token', 'services.waghub.purpose' => 'dummy-reminder', 'services.waghub.otp_purpose' => 'dummy-otp',
         ]);
         $this->app->instance('config_loaded_from_cache', true);
     }
@@ -31,7 +31,7 @@ class ProductionReadinessTest extends TestCase
     public static function unsafeSettings(): array
     {
         return [['app.debug', true], ['app.url', 'http://lms.example.test'], ['session.secure', false], ['cache.default', 'array'], ['filesystems.disks.s3.visibility', 'public'],
-            ['filesystems.default', 'public'], ['filesystems.disks.s3.http.verify', false], ['services.waghub.token', null]];
+            ['filesystems.default', 'public'], ['filesystems.disks.s3.http.verify', false], ['services.waghub.token', null], ['services.waghub.otp_purpose', null]];
     }
 
     public function test_local_document_disk_does_not_require_s3_credentials(): void
