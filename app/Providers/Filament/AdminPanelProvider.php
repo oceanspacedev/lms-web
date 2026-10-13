@@ -35,6 +35,7 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
+            ->brandName('LMS Legal')
             ->path('admin')
             ->login()
             ->profile(EditProfile::class)
