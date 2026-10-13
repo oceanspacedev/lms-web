@@ -145,11 +145,17 @@ class WhatsAppLogin extends SimplePage
             TextInput::make('code')
                 ->label('Kode dari WhatsApp')
                 ->placeholder(str_repeat('•', WhatsAppLoginService::CODE_LENGTH))
-                ->maxLength(WhatsAppLoginService::CODE_LENGTH + 2)
+                ->mask(str_repeat('9', WhatsAppLoginService::CODE_LENGTH))
+                ->length(WhatsAppLoginService::CODE_LENGTH)
+                ->regex('/^[0-9]+$/')
+                ->validationMessages([
+                    'regex' => 'Kode hanya berisi angka.',
+                    'size' => 'Kode terdiri dari '.WhatsAppLoginService::CODE_LENGTH.' angka.',
+                ])
                 ->required()
                 ->autofocus()
                 ->autocomplete('one-time-code')
-                ->extraInputAttributes(['inputmode' => 'numeric', 'style' => 'letter-spacing:.4em;font-size:1.25rem;text-align:center'])
+                ->extraInputAttributes(['inputmode' => 'numeric', 'pattern' => '[0-9]*', 'style' => 'letter-spacing:.4em;font-size:1.25rem;text-align:center'])
                 ->helperText('Kode berlaku '.WhatsAppLoginService::TTL_MINUTES.' menit. Kirim ulang tersedia setelah '.WhatsAppLoginService::RESEND_SECONDS.' detik.')
                 ->visible(fn (): bool => $this->step === 'code'),
             Checkbox::make('remember')

@@ -142,6 +142,18 @@ class WhatsAppLoginTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_code_field_accepts_only_six_digits(): void
+    {
+        $this->panelUser();
+        $component = $this->requestCode()->assertSeeHtml('inputmode="numeric"')->assertSeeHtml('x-mask');
+
+        $component->fillForm(['code' => '12ab56'])->call('submit')->assertHasFormErrors(['code' => 'regex']);
+        $component->fillForm(['code' => '123'])->call('submit')->assertHasFormErrors(['code']);
+
+        $this->assertSame(0, LoginCode::sole()->attempts);
+        $this->assertGuest();
+    }
+
     public function test_expired_code_is_rejected(): void
     {
         $this->panelUser();
