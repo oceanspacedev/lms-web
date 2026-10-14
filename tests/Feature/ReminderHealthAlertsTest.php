@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\ReminderLogs\Pages\ListReminderLogs;
 use App\Filament\Widgets\ReminderHealthAlerts;
 use App\Models\Document;
 use App\Models\DocumentType;
@@ -14,6 +15,7 @@ use Database\Seeders\ReminderLogSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use ReflectionMethod;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -124,6 +126,26 @@ class ReminderHealthAlertsTest extends TestCase
         Livewire::test(ReminderHealthAlerts::class)
             ->assertSee('Pengingat WhatsApp belum aktif')
             ->assertSee('Periksa');
+    }
+
+    public function test_failed_alert_link_opens_the_reminder_log_already_filtered_to_failed(): void
+    {
+        $this->activeTemplate();
+        $version = $this->document()->currentVersion;
+        $failed = ReminderLog::factory()->create(['document_version_id' => $version->id, 'offset_days' => 30, 'status' => 'failed']);
+        $accepted = ReminderLog::factory()->create(['document_version_id' => $version->id, 'offset_days' => 7, 'status' => 'accepted']);
+        $this->actingAs(tap(User::factory()->create())->givePermissionTo(['ViewAny:ReminderLog', 'View:ReminderLog']));
+
+        $alerts = (new ReflectionMethod(ReminderHealthAlerts::class, 'getViewData'))->invoke(Livewire::test(ReminderHealthAlerts::class)->instance())['alerts'];
+        $url = collect($alerts)->firstWhere('key', 'failed')['url'];
+
+        // Daftar log Filament 5 hanya membaca `?filters=`; `?tableFilters=` diabaikan sehingga log yang diterima ikut tampil.
+        $this->assertStringContainsString('filters', $url);
+        $this->assertStringNotContainsString('tableFilters', $url);
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $list = Livewire::withQueryParams($query)->test(ListReminderLogs::class);
+        Livewire::withQueryParams([]);
+        $list->assertCanSeeTableRecords([$failed])->assertCanNotSeeTableRecords([$accepted]);
     }
 
     public function test_widget_is_hidden_from_users_without_reminder_permissions(): void

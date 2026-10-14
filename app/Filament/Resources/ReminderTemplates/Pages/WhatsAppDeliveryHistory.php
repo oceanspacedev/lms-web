@@ -3,19 +3,19 @@
 namespace App\Filament\Resources\ReminderTemplates\Pages;
 
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
+use App\Filament\Resources\ReminderLogs\ReminderLogResource;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
 use App\Models\DocumentRequestNotification;
 use App\Models\ReminderLog;
-use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentReminderSender;
 use App\Services\DocumentRequestNotifier;
 use Filament\Actions\Action;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 
 class WhatsAppDeliveryHistory extends Page
@@ -26,13 +26,26 @@ class WhatsAppDeliveryHistory extends Page
 
     protected string $view = 'filament.resources.reminder-templates.delivery-history';
 
+    #[Url]
     public string $source = 'all';
 
+    #[Url]
     public string $deliveryStatus = 'all';
 
     public function getTitle(): string
     {
         return 'Riwayat pengiriman WhatsApp';
+    }
+
+    /** Filter dari URL yang tidak dikenal atau di luar hak akses dikembalikan ke "semua". */
+    public function mount(): void
+    {
+        if (! array_key_exists($this->source, $this->sources())) {
+            $this->source = 'all';
+        }
+        if ($this->deliveryStatus !== 'all' && ! array_key_exists($this->deliveryStatus, ReminderLog::STATUSES)) {
+            $this->deliveryStatus = 'all';
+        }
     }
 
     protected function getHeaderActions(): array
@@ -86,14 +99,15 @@ class WhatsAppDeliveryHistory extends Page
             ->when($this->deliveryStatus !== 'all', fn (Builder $query): Builder => $query->where('status', $this->deliveryStatus))
             ->orderByDesc('created_at')->orderBy('source')->orderByDesc('id')->paginate(15);
         $names = User::whereIn('id', $deliveries->getCollection()->pluck('resent_by')->filter()->unique())->pluck('name', 'id');
-        $deliveries->getCollection()->transform(function (object $delivery) use ($names): object {
+        $canResend = null;
+        $deliveries->getCollection()->transform(function (object $delivery) use ($names, &$canResend): object {
             if ($delivery->source !== 'test') {
                 $payload = json_decode($delivery->message ?? '{}', true);
                 $delivery->message = $payload['message']['text'] ?? '';
             }
             $delivery->status_label = ReminderLog::STATUSES[$delivery->status] ?? $delivery->status;
             $delivery->resent_by_name = $names[$delivery->resent_by] ?? null;
-            $delivery->can_resend = $delivery->status === 'failed' && in_array($delivery->source, ['reminder', 'notification'], true) && $this->canResend();
+            $delivery->can_resend = $delivery->status === 'failed' && in_array($delivery->source, ['reminder', 'notification'], true) && ($canResend ??= $this->canResend());
 
             return $delivery;
         });
@@ -104,25 +118,19 @@ class WhatsAppDeliveryHistory extends Page
     /** Hanya user yang boleh mengubah pengaturan WhatsApp yang boleh mengirim ulang. */
     public function canResend(): bool
     {
-        $setting = ReminderTemplate::globalSetting();
-
-        return $setting !== null && ReminderTemplateResource::canEdit($setting);
+        return ReminderLogResource::canResend();
     }
 
     public function resend(string $source, int $id): void
     {
         abort_unless($this->canResend() && isset($this->sources()[$source]) && in_array($source, ['reminder', 'notification'], true), 403);
         if ($source === 'reminder') {
-            $outcome = app(DocumentReminderSender::class)->resend(ReminderLog::findOrFail($id), auth()->user());
-        } else {
-            $notification = DocumentRequestNotification::whereIn('document_request_id', DocumentRequestResource::getEloquentQuery()->select('document_requests.id')->toBase())->findOrFail($id);
-            $outcome = app(DocumentRequestNotifier::class)->resend($notification, auth()->user());
+            $log = ReminderLog::findOrFail($id);
+            ReminderLogResource::resendAndNotify(fn (): ?string => app(DocumentReminderSender::class)->resend($log, auth()->user()), fn (): ?string => $log->error_message);
+
+            return;
         }
-        match ($outcome) {
-            'accepted' => Notification::make()->title('Pesan diterima WagHub')->body('Status ini belum memastikan pesan diterima di WhatsApp tujuan.')->success()->send(),
-            'failed' => Notification::make()->title('Pengiriman gagal lagi')->body('Periksa nomor penerima dan konfigurasi WagHub, lalu coba lagi.')->danger()->send(),
-            'cancelled' => Notification::make()->title('Pesan tidak dikirim')->body('Pengajuan atau dokumen sudah berpindah tahap, sehingga pesan ini tidak berlaku lagi.')->warning()->send(),
-            default => Notification::make()->title('Pesan ini tidak dapat dikirim ulang')->body('Hanya pesan berstatus Gagal yang dapat dikirim ulang.')->warning()->send(),
-        };
+        $notification = DocumentRequestNotification::whereIn('document_request_id', DocumentRequestResource::getEloquentQuery()->select('document_requests.id')->toBase())->findOrFail($id);
+        ReminderLogResource::resendAndNotify(fn (): ?string => app(DocumentRequestNotifier::class)->resend($notification, auth()->user()));
     }
 }

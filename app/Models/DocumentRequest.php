@@ -31,6 +31,8 @@ class DocumentRequest extends Model
 
     public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'rejected' => 'Ditolak', 'archived' => 'Selesai'];
 
+    public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
+
     /** Status saat pengajuan menunggu tindakan staf. */
     public const WAITING_STATUSES = ['submitted', 'review'];
 
@@ -177,6 +179,27 @@ class DocumentRequest extends Model
         return $this->requester_name ?? $this->requester?->name ?? 'Pengaju';
     }
 
+    /**
+     * Pihak lawan dokumen, atau null bila tidak ada.
+     * Pengajuan publik lama mengisi kolom ini dengan nama badan usaha pengaju sendiri; nilai itu bukan pihak lawan dan diabaikan.
+     */
+    public function counterpartyName(): ?string
+    {
+        $name = trim((string) $this->partner_name);
+        if ($name === '') {
+            return null;
+        }
+        if ($this->public_token !== null) {
+            foreach ([$this->company?->name, $this->other_business_name] as $ownBusiness) {
+                if (filled($ownBusiness) && mb_strtolower(trim($ownBusiness)) === mb_strtolower($name)) {
+                    return null;
+                }
+            }
+        }
+
+        return $name;
+    }
+
     /** @param array<string, mixed> $data */
     public static function submitPublic(array $data, ?self $existing = null): self
     {
@@ -263,7 +286,7 @@ class DocumentRequest extends Model
                     'company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)],
                     'document_type_id' => ['required', 'exists:document_types,id'],
                     'pic_user_id' => ['required', 'exists:users,id'], 'title' => ['required', 'string', 'max:255'],
-                    'partner_name' => ['required', 'string', 'max:255'], 'purpose' => ['required', 'in:new,renewal,amendment'],
+                    'partner_name' => ['nullable', 'string', 'max:255'], 'purpose' => ['required', 'in:new,renewal,amendment'],
                     'partner_pic' => ['nullable', 'string', 'max:255'], 'partner_contact' => ['nullable', 'string', 'max:255'],
                     'start_date' => ['nullable', 'date'], 'expiry_date' => ['nullable', 'date', 'after_or_equal:start_date'],
                     'target_date' => ['nullable', 'date'], 'has_cost' => ['boolean'], 'amount' => ['nullable', 'numeric', 'min:0', 'max:9999999999999999'],
@@ -404,7 +427,7 @@ class DocumentRequest extends Model
             $companyId = $request->company_id ?? $companyId;
             Validator::make(['company_id' => $companyId], ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
             $request->company_id = $companyId;
-            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->partner_name, 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user);
+            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user);
             $request->document_id = $document->id;
             $request->status = 'archived';
             $request->recordEvent('archived', $user);

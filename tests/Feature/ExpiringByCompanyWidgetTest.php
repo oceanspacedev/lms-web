@@ -13,6 +13,7 @@ use Database\Seeders\DocumentSeeder;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -46,6 +47,16 @@ class ExpiringByCompanyWidgetTest extends TestCase
     private function company(string $name): Company
     {
         return Company::factory()->create(['name' => $name]);
+    }
+
+    /** Membuka daftar dokumen dengan query string persis seperti tautan dari widget. */
+    private function openDocumentListFrom(string $url): Testable
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $list = Livewire::withQueryParams($query)->test(ListDocuments::class);
+        Livewire::withQueryParams([]);
+
+        return $list;
     }
 
     public function test_documents_are_counted_in_the_right_bucket_including_both_edges(): void
@@ -114,7 +125,11 @@ class ExpiringByCompanyWidgetTest extends TestCase
         $row = $component->instance()->getTableRecords()->firstWhere('id', $company->id);
 
         $first = $table->getColumn('due_30')->record($row)->getUrl();
-        $this->assertStringContainsString('tableFilters', $first);
+        // Daftar dokumen Filament 5 hanya membaca `?filters=`; `?tableFilters=` diabaikan sehingga daftar terbuka tanpa filter.
+        $this->assertStringContainsString('filters', $first);
+        $this->assertStringNotContainsString('tableFilters', $first);
+        $this->openDocumentListFrom($first)->assertCanSeeTableRecords([$inFirst])->assertCanNotSeeTableRecords([$inSecond, $overdue, $other]);
+        $this->openDocumentListFrom($table->getColumn('overdue')->record($row)->getUrl())->assertCanSeeTableRecords([$overdue])->assertCanNotSeeTableRecords([$inFirst, $inSecond, $other]);
         $this->assertStringContainsString('2026-10-09', rawurldecode($first));
         $this->assertStringContainsString('2026-11-08', rawurldecode($first));
         $this->assertStringContainsString((string) $company->id, rawurldecode($first));
@@ -130,6 +145,19 @@ class ExpiringByCompanyWidgetTest extends TestCase
         Livewire::test(ListDocuments::class)
             ->filterTable('company', $company->id)->filterTable('expiry_status', 'expired')
             ->assertCanSeeTableRecords([$overdue])->assertCanNotSeeTableRecords([$inFirst, $inSecond]);
+    }
+
+    public function test_bucket_link_lists_exactly_the_documents_that_were_counted(): void
+    {
+        $company = $this->company('PT Campuran');
+        $counted = $this->document($company, 10);
+        $withoutExpiry = $this->document($company, 11, hasExpiry: false);
+
+        $component = Livewire::test(ExpiringByCompany::class)->assertTableColumnStateSet('due_30', 1, $company);
+        $row = $component->instance()->getTableRecords()->firstWhere('id', $company->id);
+        $url = $component->instance()->getTable()->getColumn('due_30')->record($row)->getUrl();
+
+        $this->openDocumentListFrom($url)->assertCanSeeTableRecords([$counted])->assertCanNotSeeTableRecords([$withoutExpiry])->assertCountTableRecords(1);
     }
 
     public function test_widget_is_on_the_dashboard_for_document_viewers_and_hidden_otherwise(): void

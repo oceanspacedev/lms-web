@@ -16,7 +16,9 @@ use Filament\Pages\SimplePage;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\TextSize;
 use Filament\Support\RawJs;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Blade;
@@ -30,6 +32,28 @@ use Livewire\Attributes\Locked;
 class WhatsAppLogin extends SimplePage
 {
     use WithRateLimiting;
+
+    public const PHONE_FIELD_ID = 'whatsapp-login-phone';
+
+    public const CODE_FIELD_ID = 'whatsapp-login-code';
+
+    /** Event browser yang menyelaraskan hitung mundur kirim ulang dengan sisa waktu dari server. */
+    public const RESEND_COUNTDOWN_EVENT = 'whatsapp-resend-countdown';
+
+    /**
+     * Hitung mundur berjalan di browser (Alpine) tanpa polling ke server, dimulai dari sisa detik yang dihitung server.
+     * Saat Livewire merender ulang, Alpine memakai sisa detik terbaru dari server; batas kirim ulang tetap diputuskan server.
+     */
+    private const RESEND_COUNTDOWN_DATA = <<<'JS'
+    {
+        endsAt: Date.now() + %d * 1000,
+        now: Date.now(),
+        timer: null,
+        get secondsLeft() { return Math.max(0, Math.ceil((this.endsAt - this.now) / 1000)) },
+        init() { this.timer = setInterval(() => this.now = Date.now(), 1000) },
+        destroy() { clearInterval(this.timer) },
+    }
+    JS;
 
     /** @var array<string, mixed> | null */
     public ?array $data = [];
@@ -72,6 +96,7 @@ class WhatsAppLogin extends SimplePage
         $this->phone = $phone;
         $this->step = 'code';
         $this->form->fill();
+        $this->focusField(self::CODE_FIELD_ID);
     }
 
     public function authenticate(): ?LoginResponse
@@ -92,15 +117,19 @@ class WhatsAppLogin extends SimplePage
     public function resendCodeAction(): Action
     {
         return Action::make('resendCode')
-            ->label('Kirim ulang kode')
+            ->label(fn (): Htmlable => $this->resendCodeLabel())
             ->link()
+            ->extraAttributes(fn (): array => $this->resendCountdownAttributes())
             ->action(function (): void {
                 try {
                     app(WhatsAppLoginService::class)->requestCode((string) $this->phone, request()->ip());
                     Notification::make()->success()->title('Kode baru dikirim')->body('Kode sebelumnya tidak berlaku lagi.')->send();
+                    $this->focusField(self::CODE_FIELD_ID);
                 } catch (ValidationException $exception) {
                     Notification::make()->danger()->title(collect($exception->errors())->flatten()->first())->send();
                 }
+
+                $this->dispatch(self::RESEND_COUNTDOWN_EVENT, seconds: $this->secondsUntilResend());
             });
     }
 
@@ -114,6 +143,7 @@ class WhatsAppLogin extends SimplePage
                 $this->step = 'phone';
                 $this->phone = null;
                 $this->form->fill();
+                $this->focusField(self::PHONE_FIELD_ID);
             });
     }
 
@@ -141,6 +171,7 @@ class WhatsAppLogin extends SimplePage
                 ->placeholder('081234567890')
                 ->maxLength(30)
                 ->required()
+                ->id(self::PHONE_FIELD_ID)
                 ->autofocus()
                 ->autocomplete('tel')
                 ->visible(fn (): bool => $this->step === 'phone'),
@@ -155,6 +186,7 @@ class WhatsAppLogin extends SimplePage
                     'size' => 'Kode terdiri dari '.WhatsAppLoginService::CODE_LENGTH.' angka.',
                 ])
                 ->required()
+                ->id(self::CODE_FIELD_ID)
                 ->autofocus()
                 ->autocomplete('one-time-code')
                 ->extraInputAttributes(['inputmode' => 'numeric', 'pattern' => '[0-9]*', 'style' => 'letter-spacing:.4em;font-size:1.25rem;text-align:center'])
@@ -179,6 +211,9 @@ class WhatsAppLogin extends SimplePage
                             ->icon(fn (): ?Htmlable => $this->step === 'phone' ? new HtmlString(Blade::render('<x-whatsapp-icon :size="20" />')) : null)
                             ->submit('submit'),
                     ])->fullWidth(),
+                    Text::make('Tidak menerima kode? Pastikan nomor sama dengan nomor di profil Anda, tunggu beberapa saat, lalu kirim ulang atau masuk dengan email dan password.')
+                        ->size(TextSize::Small)
+                        ->visible(fn (): bool => $this->step === 'code'),
                     Actions::make([$this->resendCodeAction(), $this->changeNumberAction()])
                         ->alignBetween()
                         ->visible(fn (): bool => $this->step === 'code'),
@@ -204,6 +239,43 @@ class WhatsAppLogin extends SimplePage
         }
 
         return 'Kami kirim kode ke nomor WhatsApp yang terdaftar di profil Anda.';
+    }
+
+    /**
+     * Fokuskan input setelah Livewire selesai merender langkah baru (atribut autofocus tidak menyala ulang saat render ulang).
+     */
+    private function focusField(string $fieldId): void
+    {
+        $this->js("document.getElementById('{$fieldId}')?.focus()");
+    }
+
+    private function secondsUntilResend(): int
+    {
+        return app(WhatsAppLoginService::class)->secondsUntilResend((string) $this->phone);
+    }
+
+    private function resendCodeLabel(): Htmlable
+    {
+        $seconds = $this->secondsUntilResend();
+
+        return new HtmlString('Kirim ulang kode <span x-show="secondsLeft > 0" x-text="`(${secondsLeft})`"'.($seconds > 0 ? '' : ' style="display: none"').'>('.$seconds.')</span>');
+    }
+
+    /**
+     * Atribut Alpine untuk tombol kirim ulang: nonaktif selama hitung mundur masih berjalan.
+     *
+     * @return array<string, string|bool>
+     */
+    private function resendCountdownAttributes(): array
+    {
+        $seconds = $this->secondsUntilResend();
+
+        return [
+            'x-data' => sprintf(self::RESEND_COUNTDOWN_DATA, $seconds),
+            'x-on:'.self::RESEND_COUNTDOWN_EVENT.'.window' => 'endsAt = Date.now() + $event.detail.seconds * 1000; now = Date.now()',
+            'x-bind:disabled' => 'secondsLeft > 0',
+            'disabled' => $seconds > 0,
+        ];
     }
 
     private function maskedPhone(): string

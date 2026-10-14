@@ -241,6 +241,135 @@ class DocumentReminderTest extends TestCase
         $this->assertDatabaseCount('reminder_logs', 0);
     }
 
+    public function test_reminder_that_was_pending_when_the_document_was_deleted_is_sent_after_the_document_is_restored(): void
+    {
+        $document = $this->document();
+        config(['testing.waghub_status' => 500]);
+        app(DocumentReminderSender::class)->run();
+        $log = ReminderLog::sole();
+        $this->assertSame('failed', $log->status);
+        Http::assertSentCount(1);
+
+        $document->delete();
+        config(['testing.waghub_status' => 202]);
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(1);
+        $this->assertSame(['cancelled', ReminderLog::DOCUMENT_DELETED_MESSAGE], [$log->fresh()->status, $log->fresh()->error_message]);
+
+        $document->restore();
+        $reopened = $log->fresh();
+        $this->assertSame(['pending', 0, null], [$reopened->status, $reopened->attempts, $reopened->error_message]);
+
+        app(DocumentReminderSender::class)->run();
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Idempotency-Key', "lms-reminder-{$document->current_version_id}-30") && str_contains($request['message']['text'], 'Sisa waktu: 30 hari'));
+        $this->assertSame('accepted', $log->fresh()->status);
+        $this->assertSame(1, ReminderLog::count());
+    }
+
+    public function test_restoring_does_not_reopen_logs_cancelled_for_other_reasons_or_of_replaced_versions(): void
+    {
+        $document = $this->document();
+        config(['testing.waghub_status' => 500]);
+        app(DocumentReminderSender::class)->run();
+        $oldVersion = $document->currentVersion;
+        $replaced = ReminderLog::sole();
+        $replaced->update(['status' => 'cancelled', 'error_message' => ReminderLog::DOCUMENT_DELETED_MESSAGE]);
+        $oldVersion->update(['is_current' => false]);
+        $new = DocumentVersion::factory()->create(['document_id' => $document->id, 'version_number' => 2, 'expiry_date' => today('Asia/Jakarta')->addDays(30)]);
+        $document->current_version_id = $new->id;
+        $document->save();
+        $other = ReminderLog::factory()->create(['document_version_id' => $new->id, 'offset_days' => 7, 'status' => 'cancelled', 'error_message' => 'Versi atau jadwal pengingat sudah tidak berlaku.']);
+
+        $document->delete();
+        $document->restore();
+
+        $this->assertSame('cancelled', $replaced->fresh()->status);
+        $this->assertSame('cancelled', $other->fresh()->status);
+    }
+
+    public function test_reopened_reminder_is_cancelled_again_when_it_is_no_longer_scheduled(): void
+    {
+        $document = $this->document();
+        config(['testing.waghub_status' => 500]);
+        app(DocumentReminderSender::class)->run();
+        $document->delete();
+        app(DocumentReminderSender::class)->run();
+        $document->restore();
+        ReminderTemplate::globalSetting()->update(['scheduled_days' => [7]]);
+        config(['testing.waghub_status' => 202]);
+
+        app(DocumentReminderSender::class)->run();
+
+        Http::assertSentCount(1);
+        $this->assertSame('cancelled', ReminderLog::sole()->status);
+    }
+
+    public function test_restoring_after_a_nearer_schedule_became_due_sends_only_the_current_reminder(): void
+    {
+        $document = $this->document();
+        config(['testing.waghub_status' => 500]);
+        app(DocumentReminderSender::class)->run();
+        $outdated = ReminderLog::sole();
+        $document->delete();
+        app(DocumentReminderSender::class)->run();
+
+        $this->travel(24)->days();
+        $document->restore();
+        config(['testing.waghub_status' => 202]);
+        app(DocumentReminderSender::class)->run();
+
+        $this->assertSame(['cancelled', ReminderLog::OUTDATED_SCHEDULE_MESSAGE], [$outdated->fresh()->status, $outdated->fresh()->error_message]);
+        Http::assertSentCount(2);
+        $keys = collect(Http::recorded())->map(fn (array $pair): string => $pair[0]->header('Idempotency-Key')[0])->all();
+        $this->assertSame(["lms-reminder-{$document->current_version_id}-30", "lms-reminder-{$document->current_version_id}-7"], $keys);
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Idempotency-Key', "lms-reminder-{$document->current_version_id}-7")
+            && str_contains($request['message']['text'], 'Sisa waktu: 6 hari'));
+    }
+
+    public function test_restoring_does_not_restart_a_reminder_that_had_used_up_its_attempts(): void
+    {
+        $document = $this->document();
+        config(['testing.waghub_status' => 500]);
+        for ($day = 0; $day < 3; $day++) {
+            app(DocumentReminderSender::class)->run();
+            $this->travel(1)->days();
+        }
+        $log = ReminderLog::sole();
+        $this->assertSame(['failed', 3], [$log->fresh()->status, $log->fresh()->attempts]);
+        $document->delete();
+        app(DocumentReminderSender::class)->run();
+
+        $document->restore();
+        config(['testing.waghub_status' => 202]);
+        app(DocumentReminderSender::class)->run();
+
+        Http::assertSentCount(3);
+        $log->refresh();
+        $this->assertSame(['failed', 3, ReminderLog::EXHAUSTED_BEFORE_DELETION_MESSAGE], [$log->status, $log->attempts, $log->error_message]);
+    }
+
+    public function test_reopened_reminder_rebuilds_its_message_and_recipient(): void
+    {
+        $document = $this->document();
+        config(['testing.waghub_status' => 500]);
+        app(DocumentReminderSender::class)->run();
+        $document->delete();
+        app(DocumentReminderSender::class)->run();
+        $document->pic->update(['phone' => '081298765432']);
+
+        $this->travel(2)->days();
+        $document->restore();
+        $this->assertNull(ReminderLog::sole()->request_payload);
+        config(['testing.waghub_status' => 202]);
+        app(DocumentReminderSender::class)->run();
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => $request['recipient']['value'] === '6281298765432'
+            && str_contains($request['message']['text'], 'Sisa waktu: 28 hari'));
+        $this->assertSame(['accepted', '6281298765432'], [ReminderLog::sole()->status, ReminderLog::sole()->recipient_phone]);
+    }
+
     public function test_archived_and_non_expiring_documents_are_excluded(): void
     {
         $this->document()->delete();

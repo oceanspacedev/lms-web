@@ -41,7 +41,7 @@ class DocumentGlobalSearchTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertSame('Perjanjian Kemitraan', $results->first()->title);
         $this->assertSame(DocumentResource::getUrl('view', ['record' => $document]), $results->first()->url);
-        $this->assertSame('OceanSpace', $results->first()->details['Perusahaan']);
+        $this->assertSame('OceanSpace', $results->first()->details['Badan Usaha']);
     }
 
     public function test_search_is_unavailable_without_resource_permission_and_hides_unviewable_results(): void

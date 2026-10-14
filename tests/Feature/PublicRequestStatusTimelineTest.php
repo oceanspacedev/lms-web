@@ -104,7 +104,7 @@ class PublicRequestStatusTimelineTest extends TestCase
         $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
             ->assertSee('Tahap pengajuan')->assertSee('Menunggu Persetujuan')->assertSee('Riwayat')
             ->assertSee('Diteruskan untuk persetujuan')->assertSee('Pengajuan diterima')->assertSee('Pemeriksa')
-            ->assertSee('02 Oct 2026 10:15 WIB')->assertSee('aria-current="step"', false)
+            ->assertSee('02 Okt 2026 10:15 WIB')->assertSee('aria-current="step"', false)
             ->assertDontSee('Nama Staf Rahasia')->assertDontSee('Nama PIC Rahasia');
     }
 

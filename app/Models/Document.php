@@ -30,15 +30,42 @@ class Document extends Model
         'active' => 'Aktif',
         'expiring' => 'Segera Berakhir',
         'expired' => 'Kedaluwarsa',
-        'no_expiry' => 'Tanpa Masa Tenggang',
+        'no_expiry' => 'Tanpa Masa Berlaku',
     ];
 
     public const EXPIRY_STATUS_COLORS = [
         'active' => 'success', 'expiring' => 'warning', 'expired' => 'danger', 'no_expiry' => 'gray',
     ];
 
+    /** Pengganti label status masa berlaku untuk dokumen yang sudah dihapus (daftar, grid, dan ekspor Excel). */
+    public const DELETED_STATUS_LABEL = 'Dihapus';
+
+    /** Tipe file yang bisa dibuka inline (pratinjau) oleh browser. */
+    public const PREVIEWABLE_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+
+    /** Jendela "Segera Berakhir" (hari) bila jadwal pengingat kosong atau nonaktif; sama dengan widget "Berakhir dalam 30 Hari". */
+    public const DEFAULT_EXPIRING_DAYS = 30;
+
+    /**
+     * Berapa hari sebelum berakhir dokumen berstatus "Segera Berakhir": hari terjauh pada jadwal pengingat,
+     * atau DEFAULT_EXPIRING_DAYS bila jenis dokumen tidak punya hari pengingat sebelum tanggal berakhir.
+     */
+    public static function expiringWindowDays(DocumentType $type): int
+    {
+        $furthestReminder = max([0, ...$type->effectiveReminderDays()]);
+
+        return $furthestReminder > 0 ? $furthestReminder : self::DEFAULT_EXPIRING_DAYS;
+    }
+
     /** @use HasFactory<DocumentFactory> */
     use HasFactory, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::restored(function (Document $document): void {
+            ReminderLog::reopenForRestoredDocument($document);
+        });
+    }
 
     public function company(): BelongsTo
     {
@@ -84,10 +111,20 @@ class Document extends Model
                 return 'expired';
             }
 
-            $threshold = max([0, ...($this->documentType->effectiveReminderDays() ?? [])]);
-
-            return $threshold > 0 && $expiryDate->lte($today->addDays($threshold)) ? 'expiring' : 'active';
+            return $expiryDate->lte($today->addDays(self::expiringWindowDays($this->documentType))) ? 'expiring' : 'active';
         });
+    }
+
+    /** Keterangan waktu penghapusan dalam zona waktu aplikasi, mis. "Dihapus pada 05/10/2026 22:00 WIB"; null bila belum dihapus. */
+    public function deletedAtLabel(): ?string
+    {
+        if ($this->deleted_at === null) {
+            return null;
+        }
+
+        $timezone = config('lms.reminder_timezone');
+
+        return 'Dihapus pada '.$this->deleted_at->copy()->timezone($timezone)->format('d/m/Y H:i').' '.($timezone === 'Asia/Jakarta' ? 'WIB' : $timezone);
     }
 
     public function scopeWithExpiryStatus(Builder $query, string $status): Builder
@@ -109,26 +146,19 @@ class Document extends Model
             return $query->whereRaw('1 = 0');
         }
 
-        $typesByThreshold = DocumentType::query()->where('has_expiry', true)->get()
-            ->groupBy(fn (DocumentType $type): int => max([0, ...$type->effectiveReminderDays()]));
+        $today = CarbonImmutable::today(config('lms.reminder_timezone'));
+        $typesByWindow = DocumentType::query()->where('has_expiry', true)->get()
+            ->groupBy(fn (DocumentType $type): int => self::expiringWindowDays($type));
 
-        return $query->where(function (Builder $query) use ($status, $typesByThreshold): void {
+        return $query->where(function (Builder $query) use ($status, $typesByWindow, $today): void {
             $query->whereRaw('1 = 0');
-            foreach ($typesByThreshold as $threshold => $types) {
-                $query->orWhere(function (Builder $query) use ($status, $threshold, $types): void {
+            foreach ($typesByWindow as $window => $types) {
+                $cutoff = $today->addDays((int) $window)->toDateString();
+                $query->orWhere(function (Builder $query) use ($status, $types, $today, $cutoff): void {
                     $query->whereIn('document_type_id', $types->modelKeys())
-                        ->whereHas('currentVersion', function (Builder $version) use ($status, $threshold): void {
-                            $cutoff = today(config('lms.reminder_timezone'))->addDays((int) $threshold)->toDateString();
-                            if ($status === 'expiring') {
-                                if ((int) $threshold === 0) {
-                                    $version->whereRaw('1 = 0');
-                                } else {
-                                    $version->whereDate('expiry_date', '>=', today(config('lms.reminder_timezone'))->toDateString())->whereDate('expiry_date', '<=', $cutoff);
-                                }
-                            } else {
-                                $version->whereDate('expiry_date', (int) $threshold === 0 ? '>=' : '>', $cutoff);
-                            }
-                        });
+                        ->whereHas('currentVersion', fn (Builder $version): Builder => $status === 'expiring'
+                            ? $version->whereDate('expiry_date', '>=', $today->toDateString())->whereDate('expiry_date', '<=', $cutoff)
+                            : $version->whereDate('expiry_date', '>', $cutoff));
                 });
             }
         });

@@ -6,6 +6,7 @@ use App\Models\Document;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use OpenSpout\Common\Entity\Cell;
+use OpenSpout\Common\Entity\Cell\StringCell;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Options;
@@ -62,25 +63,35 @@ class DocumentSpreadsheetExporter
         $query->with(['company', 'documentType', 'pic', 'currentVersion'])->lazy(self::CHUNK_SIZE)->each(function (Document $document) use ($writer, $dateStyle, $timezone, $today): void {
             $version = $document->currentVersion;
             $expiry = $version?->expiry_date ? CarbonImmutable::parse($version->expiry_date->toDateString(), $timezone) : null;
-            $hasExpiry = (bool) $document->documentType?->has_expiry && $expiry !== null;
+            $isDeleted = $document->trashed();
+            $hasExpiry = ! $isDeleted && (bool) $document->documentType?->has_expiry && $expiry !== null;
             $writer->addRow(new Row([
-                Cell::fromValue($document->title),
-                Cell::fromValue($document->document_number ?? ''),
-                Cell::fromValue($document->company?->name ?? ''),
-                Cell::fromValue($document->documentType?->name ?? ''),
-                Cell::fromValue($document->counterparty ?? ''),
-                Cell::fromValue($document->pic?->name ?? ''),
+                $this->textCell($document->title),
+                $this->textCell($document->document_number),
+                $this->textCell($document->company?->name),
+                $this->textCell($document->documentType?->name),
+                $this->textCell($document->counterparty),
+                $this->textCell($document->pic?->name),
                 $this->dateCell($version?->issued_date?->toDateString(), $timezone, $dateStyle),
                 $this->dateCell($version?->expiry_date?->toDateString(), $timezone, $dateStyle),
-                Cell::fromValue(Document::EXPIRY_STATUSES[$document->expiry_status]),
+                Cell::fromValue($isDeleted ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$document->expiry_status]),
                 Cell::fromValue($hasExpiry ? (int) $today->diffInDays($expiry, false) : ''),
                 Cell::fromValue($version ? 'v'.$version->version_number : ''),
-                Cell::fromValue($version?->stored_name ?? ''),
+                $this->textCell($version?->stored_name),
                 $this->dateCell($document->created_at?->timezone($timezone)->toDateString(), $timezone, $dateStyle),
             ]));
         });
 
         $writer->close();
+    }
+
+    /**
+     * Isian bebas (judul, pihak lawan, nama file, dan sebagainya) selalu ditulis sebagai teks. Cell::fromValue() mengubah
+     * teks yang diawali "=" menjadi rumus, padahal sebagian isian berasal dari form publik.
+     */
+    private function textCell(?string $value): Cell
+    {
+        return $value === null || $value === '' ? Cell::fromValue('') : new StringCell($value, null);
     }
 
     private function dateCell(?string $date, string $timezone, Style $style): Cell

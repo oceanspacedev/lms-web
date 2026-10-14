@@ -28,7 +28,7 @@ class DocumentDownloadController extends Controller
         $disk = $version->storage();
         abort_unless($disk->exists($version->file_path), 404);
 
-        $inline = $request->boolean('preview') && in_array($version->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true);
+        $inline = $request->boolean('preview') && in_array($version->mime_type, Document::PREVIEWABLE_MIME_TYPES, true);
         $filename = str_replace(["\r", "\n", '/', '\\'], '_', $version->stored_name);
         $fallback = str_replace('%', '_', Str::ascii($filename));
         $disposition = HeaderUtils::makeDisposition($inline ? 'inline' : 'attachment', $filename, $fallback);

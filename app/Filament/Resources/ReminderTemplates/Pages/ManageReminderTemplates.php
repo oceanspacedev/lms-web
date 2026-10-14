@@ -66,9 +66,15 @@ class ManageReminderTemplates extends Page
                     TextEntry::make('reminder_interval')->label('Ulangi')->weight(FontWeight::SemiBold)
                         ->state(fn (): string => 'Setiap '.ReminderTemplate::globalSetting()?->interval_days.' hari')
                         ->visible(fn (): bool => ReminderTemplate::globalSetting()?->schedule_mode === 'interval'),
-                    TextEntry::make('reminder_days')->label('Sebelum berakhir')->columnSpanFull()->badge()->color('gray')
-                        ->state(fn (): array => array_map(fn (int $day): string => $day === 0 ? 'Tanggal berakhir' : $day.' hari', ReminderTemplate::globalSetting()?->reminderOffsets() ?? []))
-                        ->visible(fn (): bool => ReminderTemplate::globalSetting()?->schedule_mode === 'specific_days'),
+                    TextEntry::make('reminder_days')->label('Pengingat dikirim pada')->columnSpanFull()->badge()->color('gray')
+                        ->state(function (): array {
+                            $labels = array_map(ReminderTemplateResource::reminderDayLabel(...), ReminderTemplate::globalSetting()?->reminderOffsets() ?? []);
+                            $total = count($labels);
+
+                            return $total > ReminderTemplateResource::MAX_LISTED_REMINDERS ? [...ReminderTemplateResource::shortenReminderLabels($labels), "Total {$total} pengingat"] : $labels;
+                        })
+                        ->placeholder('Belum ada jadwal')
+                        ->visible(fn (): bool => ReminderTemplate::globalSetting()?->reminderOffsets() !== null),
                     TextEntry::make('reminder_overdue')->label('Setelah kedaluwarsa')->columnSpanFull()->badge()->color('gray')
                         ->state(fn (): array => array_map(fn (int $day): string => $day.' hari', ReminderTemplate::globalSetting()?->overdueOffsets() ?? []))
                         ->placeholder('Tidak ada')
@@ -158,17 +164,34 @@ class ManageReminderTemplates extends Page
             ])
             ->action(function () use ($days): void {
                 abort_unless($this->canEditSettings(), 403);
-                DB::transaction(function () use ($days): void {
+                $setting = DB::transaction(function () use ($days): ReminderTemplate {
                     $setting = ReminderTemplate::where('global_key', 'global')->lockForUpdate()->first();
-                    $setting ??= new ReminderTemplate([
-                        'name' => 'Pengingat Semua Dokumen', 'is_active' => false, 'body' => ReminderTemplate::DEFAULT_BODY,
-                        'request_templates' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES,
-                    ]);
+                    // Pemasangan baru: memilih jadwal berarti ingin pengingat berjalan, jadi pengaturan baru langsung aktif.
+                    $setting ??= $this->newGlobalSetting(isActive: true);
                     $setting->fill(['schedule_mode' => 'interval', 'interval_days' => $days]);
                     $setting->save();
+
+                    return $setting;
                 });
-                Notification::make()->title('Jadwal pengingat disimpan')->success()->send();
+                $this->notifyScheduleSaved($setting);
             }), [1, 3, 7], ['Setiap hari', '3 hari sekali', '7 hari sekali']);
+    }
+
+    private function newGlobalSetting(bool $isActive): ReminderTemplate
+    {
+        return new ReminderTemplate([
+            'name' => 'Pengingat Semua Dokumen', 'is_active' => $isActive, 'body' => ReminderTemplate::DEFAULT_BODY,
+            'schedule_mode' => 'interval', 'request_templates' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES,
+        ]);
+    }
+
+    /** Jadwal yang tersimpan tetapi belum aktif tidak boleh dilaporkan seolah-olah pengingat sudah berjalan. */
+    private function notifyScheduleSaved(ReminderTemplate $setting): void
+    {
+        $notification = $setting->is_active
+            ? Notification::make()->title('Jadwal pengingat disimpan')->success()
+            : Notification::make()->title("Jadwal disimpan, tetapi pengingat otomatis masih nonaktif. Aktifkan lewat 'Atur jadwal'.")->warning();
+        $notification->send();
     }
 
     private function canEditSettings(): bool
@@ -272,10 +295,7 @@ class ManageReminderTemplates extends Page
                 abort_unless($this->canEditSettings(), 403);
                 DB::transaction(function () use ($data): void {
                     $setting = ReminderTemplate::where('global_key', 'global')->lockForUpdate()->first();
-                    $setting ??= new ReminderTemplate([
-                        'name' => 'Pengingat Semua Dokumen', 'is_active' => false, 'body' => ReminderTemplate::DEFAULT_BODY,
-                        'schedule_mode' => 'interval', 'request_templates' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES,
-                    ]);
+                    $setting ??= $this->newGlobalSetting(isActive: false);
                     $setting->fill(Arr::only($data, ['request_reminder_enabled', 'request_reminder_after_days', 'request_reminder_interval_days', 'request_reminder_max']));
                     $setting->save();
                 });
@@ -313,12 +333,10 @@ class ManageReminderTemplates extends Page
             })
             ->action(function (array $data) use ($event): void {
                 abort_unless($this->canEditSettings(), 403);
-                DB::transaction(function () use ($event, $data): void {
+                $setting = DB::transaction(function () use ($event, $data): ReminderTemplate {
                     $setting = ReminderTemplate::where('global_key', 'global')->lockForUpdate()->first();
-                    $setting ??= new ReminderTemplate([
-                        'name' => 'Pengingat Semua Dokumen', 'is_active' => false, 'body' => ReminderTemplate::DEFAULT_BODY,
-                        'schedule_mode' => 'interval', 'request_templates' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES,
-                    ]);
+                    // Hanya form jadwal yang membawa pilihan aktif/nonaktif; mengubah isi pesan tidak menyalakan pengingat.
+                    $setting ??= $this->newGlobalSetting(isActive: false);
                     if ($event === 'schedule') {
                         $setting->fill(Arr::only($data, ['is_active', 'schedule_mode', 'start_before_days', 'interval_days', 'scheduled_days', 'overdue_days']));
                     } elseif ($event === 'reminder') {
@@ -331,8 +349,19 @@ class ManageReminderTemplates extends Page
                         $setting->request_templates = [...($setting->request_templates ?? []), $event => $data['request_templates'][$event]];
                     }
                     $setting->save();
+
+                    return $setting;
                 });
-                Notification::make()->title($event === 'schedule' ? 'Jadwal pengingat disimpan' : 'Template WhatsApp disimpan')->success()->send();
+                if ($event === 'schedule') {
+                    $this->notifyScheduleSaved($setting);
+
+                    return;
+                }
+                $notification = Notification::make()->title('Template WhatsApp disimpan')->success();
+                if (in_array($event, ['reminder', 'overdue'], true) && ! $setting->is_active) {
+                    $notification->body("Pengingat masa berlaku otomatis masih nonaktif. Aktifkan lewat 'Atur jadwal'.");
+                }
+                $notification->send();
             });
     }
 }

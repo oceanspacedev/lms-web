@@ -112,7 +112,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->get(route('requests.public.create'))->assertOk()->assertSee('Perjanjian Kerja Sama')->assertSee('PT Alur Lengkap');
         $response = $this->post(route('requests.public.store'), [
             'requester_name' => 'Budi Pengaju', 'requester_phone' => '081355550000', 'requester_division' => 'Operasional',
-            'request_reason' => 'Kerja sama distribusi', 'title' => 'Kerja Sama Distribusi 2026',
+            'request_reason' => 'Kerja sama distribusi', 'title' => 'Kerja Sama Distribusi 2026', 'partner_name' => 'PT Mitra Distribusi',
             'company_id' => $this->company->id, 'document_type_id' => $type->id,
             'attachments' => ['supporting-document' => UploadedFile::fake()->create('pendukung.pdf', 50, 'application/pdf')],
         ]);
@@ -120,6 +120,7 @@ class FullLifecycleFlowTest extends TestCase
         $response->assertRedirect(route('requests.public.status', ['token' => $request->public_token]));
         $this->token = $request->public_token;
         $this->assertSame('submitted', $request->status);
+        $this->assertSame('PT Mitra Distribusi', $request->partner_name);
         $this->assertSame($this->reviewer->id, $request->pic_user_id);
         $this->assertSame($this->approver->id, $request->approver_id);
 
@@ -152,7 +153,7 @@ class FullLifecycleFlowTest extends TestCase
         // 5. Pengaju mengirim revisi lewat tautannya; pemeriksa diberi tahu lagi.
         $this->post(route('requests.public.revise', ['token' => $this->token]), [
             'requester_name' => 'Budi Pengaju', 'requester_phone' => '081355550000', 'requester_division' => 'Operasional',
-            'request_reason' => 'Kerja sama distribusi (revisi)', 'title' => 'Kerja Sama Distribusi 2026',
+            'request_reason' => 'Kerja sama distribusi (revisi)', 'title' => 'Kerja Sama Distribusi 2026', 'partner_name' => 'PT Mitra Distribusi',
         ])->assertRedirect();
         $this->assertSame('submitted', $request->fresh()->status);
         $this->deliver();
@@ -178,7 +179,8 @@ class FullLifecycleFlowTest extends TestCase
         $this->assertSame($document->id, $request->document_id);
         $this->assertSame('PKS/2026/001', $document->document_number);
         $this->assertSame('PT Alur Lengkap', $document->company->name);
-        $this->assertSame('PT Alur Lengkap', $document->counterparty);
+        // Pihak lawan adalah mitra yang diisi pengaju, bukan badan usaha pengaju sendiri.
+        $this->assertSame('PT Mitra Distribusi', $document->counterparty);
         $this->assertSame($this->reviewer->id, $document->pic_user_id);
         $this->assertSame(1, $document->currentVersion->version_number);
         Storage::disk('s3')->assertExists($document->currentVersion->file_path);
@@ -244,6 +246,7 @@ class FullLifecycleFlowTest extends TestCase
         @unlink($path);
         $this->assertCount(2, $rows);
         $this->assertSame(['Kerja Sama Distribusi 2026', 'PKS/2026/001', 'PT Alur Lengkap'], array_slice($rows[1], 0, 3));
+        $this->assertSame('PT Mitra Distribusi', $rows[1][4]);
         $this->assertSame('v2', $rows[1][10]);
         $this->assertSame(26, $rows[1][9]);
     }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Tables;
 
+use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Models\Document;
 use App\Services\DocumentSpreadsheetExporter;
@@ -15,6 +16,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -56,10 +58,11 @@ class DocumentsTable
                     ->description(fn (Document $record): ?string => $record->document_number),
                 TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap(),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap(),
-                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa batas')->sortable(),
+                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->sortable(),
                 TextColumn::make('expiry_status')->label('Status')->badge()
-                    ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
-                    ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
+                    ->formatStateUsing(fn (string $state, Document $record): string => $record->trashed() ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$state])
+                    ->color(fn (string $state, Document $record): string => $record->trashed() ? 'gray' : Document::EXPIRY_STATUS_COLORS[$state])
+                    ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null),
                 TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
                 TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap(),
                 TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)
@@ -87,9 +90,10 @@ class DocumentsTable
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query->when(
                         filled($data['expiry_from'] ?? null) || filled($data['expiry_until'] ?? null),
-                        fn (Builder $query): Builder => $query->whereHas('currentVersion', fn (Builder $version): Builder => $version
-                            ->when(filled($data['expiry_from'] ?? null), fn (Builder $version): Builder => $version->whereDate('expiry_date', '>=', $data['expiry_from']))
-                            ->when(filled($data['expiry_until'] ?? null), fn (Builder $version): Builder => $version->whereDate('expiry_date', '<=', $data['expiry_until'])))
+                        fn (Builder $query): Builder => $query->whereHas('documentType', fn (Builder $type): Builder => $type->where('has_expiry', true))
+                            ->whereHas('currentVersion', fn (Builder $version): Builder => $version
+                                ->when(filled($data['expiry_from'] ?? null), fn (Builder $version): Builder => $version->whereDate('expiry_date', '>=', $data['expiry_from']))
+                                ->when(filled($data['expiry_until'] ?? null), fn (Builder $version): Builder => $version->whereDate('expiry_date', '<=', $data['expiry_until'])))
                     ))
                     ->indicateUsing(fn (array $data): array => array_values(array_filter([
                         filled($data['expiry_from'] ?? null) ? 'Berakhir dari '.CarbonImmutable::parse($data['expiry_from'])->format('d M Y') : null,
@@ -106,6 +110,8 @@ class DocumentsTable
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->whereHas('currentVersion', fn (Builder $version): Builder => $version->where('mime_type', $data['value']))
                         : $query),
+                TrashedFilter::make()->label('Dokumen Dihapus')
+                    ->placeholder('Tanpa dokumen dihapus')->trueLabel('Dengan dokumen dihapus')->falseLabel('Hanya dokumen dihapus'),
             ], layout: FiltersLayout::Hidden)
             ->filtersFormColumns(1)
             ->deferFilters(false)
@@ -115,7 +121,8 @@ class DocumentsTable
                 Action::make('download')->label('Unduh')->icon('heroicon-o-arrow-down-tray')
                     ->iconButton()->tooltip('Unduh file')
                     ->url(fn (Document $record): string => route('documents.download', $record))->openUrlInNewTab()
-                    ->visible(fn (Document $record): bool => Gate::allows('view', $record)),
+                    ->visible(fn (Document $record): bool => ! $record->trashed() && Gate::allows('view', $record)),
+                DocumentResource::restoreAction()->iconButton()->tooltip('Pulihkan dokumen'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0

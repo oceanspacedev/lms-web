@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Gate;
 
 class DocumentStatusOverview extends StatsOverviewWidget
 {
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 2;
 
     protected ?string $heading = 'Masa Berlaku Dokumen';
 
@@ -31,6 +31,6 @@ class DocumentStatusOverview extends StatsOverviewWidget
         return collect(Document::EXPIRY_STATUSES)->map(fn (string $label, string $status): Stat => Stat::make(
             $label, Document::query()->withExpiryStatus($status)->count(),
         )->color(Document::EXPIRY_STATUS_COLORS[$status])
-            ->url(DocumentResource::getUrl('index', ['tableFilters' => ['expiry_status' => ['value' => $status]]])))->values()->all();
+            ->url(DocumentResource::getUrl('index', ['filters' => ['expiry_status' => ['value' => $status]]])))->values()->all();
     }
 }

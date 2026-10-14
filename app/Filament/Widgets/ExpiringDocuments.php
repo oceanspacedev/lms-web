@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Gate;
 
 class ExpiringDocuments extends TableWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -32,12 +32,12 @@ class ExpiringDocuments extends TableWidget
     public function table(Table $table): Table
     {
         return $table
-            ->heading('Berakhir dalam 30 Hari')
-            ->description('Dokumen yang berakhir hari ini hingga 30 hari ke depan, diurutkan dari tanggal terdekat.')
+            ->heading('Berakhir dalam '.Document::DEFAULT_EXPIRING_DAYS.' Hari')
+            ->description('Dokumen yang berakhir hari ini hingga '.Document::DEFAULT_EXPIRING_DAYS.' hari ke depan, diurutkan dari tanggal terdekat.')
             ->query(function (): Builder {
                 abort_unless(static::canView(), 403);
 
-                return Document::query()->expiringWithin(30)->with(['company', 'documentType', 'currentVersion', 'pic'])
+                return Document::query()->expiringWithin(Document::DEFAULT_EXPIRING_DAYS)->with(['company', 'documentType', 'currentVersion', 'pic'])
                     ->orderBy(DocumentVersion::query()->select('expiry_date')->whereColumn('id', 'documents.current_version_id')->limit(1))
                     ->orderBy('documents.id');
             })
@@ -56,7 +56,7 @@ class ExpiringDocuments extends TableWidget
                     ->action(function (self $livewire) {
                         abort_unless(static::canView(), 403);
 
-                        return app(DocumentSpreadsheetExporter::class)->download($livewire->getTableQueryForExport(), 'dokumen-berakhir-30-hari');
+                        return app(DocumentSpreadsheetExporter::class)->download($livewire->getTableQueryForExport(), 'dokumen-berakhir-'.Document::DEFAULT_EXPIRING_DAYS.'-hari');
                     }),
             ])
             ->recordActions([
@@ -65,7 +65,7 @@ class ExpiringDocuments extends TableWidget
                     ->visible(fn (Document $record): bool => Gate::allows('view', $record)),
             ])
             ->paginated([10, 25, 50])
-            ->emptyStateHeading('Tidak ada dokumen yang berakhir dalam 30 hari')
-            ->emptyStateDescription('Dokumen tanpa masa tenggang dan yang sudah kedaluwarsa tidak masuk daftar ini.');
+            ->emptyStateHeading('Tidak ada dokumen yang berakhir dalam '.Document::DEFAULT_EXPIRING_DAYS.' hari')
+            ->emptyStateDescription('Dokumen tanpa masa berlaku dan yang sudah kedaluwarsa tidak masuk daftar ini.');
     }
 }

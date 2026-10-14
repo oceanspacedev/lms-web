@@ -25,6 +25,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReminderTemplateResource extends Resource
 {
+    /** Daftar tanggal pengingat yang lebih panjang dari ini diringkas. */
+    public const MAX_LISTED_REMINDERS = 14;
+
     /**
      * Input tag jumlah hari hanya menerima angka.
      *
@@ -44,9 +47,10 @@ class ReminderTemplateResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Pengaturan WhatsApp';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Data Master';
+    protected static string|\UnitEnum|null $navigationGroup = 'Administrasi';
 
-    protected static ?int $navigationSort = 7;
+    /** Tepat di atas Log Pengingat (sort 1); Horizon dan Log Laravel di panel memakai 2 dan 3. */
+    protected static ?int $navigationSort = 0;
 
     protected static ?string $recordTitleAttribute = 'name';
 
@@ -122,8 +126,53 @@ class ReminderTemplateResource extends Resource
             TagsInput::make('overdue_days')->label('Setelah kedaluwarsa (opsional)')->default([])->splitKeys([','])->extraInputAttributes(self::DAY_TAG_INPUT_ATTRIBUTES)
                 ->nestedRecursiveRules(['integer', 'min:1', 'max:3650', 'distinct'])
                 ->helperText('Angka = hari setelah tanggal berakhir, misalnya 1 dan 7. Kosongkan bila tidak perlu.'),
+            TextEntry::make('schedule_preview')->hiddenLabel()->icon(Heroicon::OutlinedCalendarDays)
+                ->state(fn (Get $get): string => self::schedulePreview($get('schedule_mode'), $get('start_before_days'), $get('interval_days'), $get('scheduled_days'))),
             TextEntry::make('schedule_time')->label('Waktu pengiriman')->state(self::reminderTimeLabel()),
         ];
+    }
+
+    /**
+     * Pratinjau jadwal dari isian form yang sedang diubah, memakai perhitungan yang sama dengan jadwal tersimpan.
+     * Mode berulang dari H-30 setiap 7 hari berhenti di H-2 dan tidak pernah sampai tanggal berakhir.
+     */
+    public static function schedulePreview(mixed $scheduleMode, mixed $startBeforeDays, mixed $intervalDays, mixed $scheduledDays): string
+    {
+        $isDays = fn (mixed $value): bool => (is_int($value) || is_string($value)) && ctype_digit((string) $value) && (int) $value <= 3650;
+        $offsets = match (true) {
+            $scheduleMode === 'interval' && $isDays($startBeforeDays) && $isDays($intervalDays) && (int) $startBeforeDays >= 1 && (int) $intervalDays >= 1 => (new ReminderTemplate([
+                'schedule_mode' => 'interval', 'start_before_days' => (int) $startBeforeDays, 'interval_days' => (int) $intervalDays,
+            ]))->reminderOffsets(),
+            $scheduleMode === 'specific_days' && is_array($scheduledDays) => (new ReminderTemplate([
+                'schedule_mode' => 'specific_days', 'scheduled_days' => array_values(array_filter($scheduledDays, $isDays)),
+            ]))->reminderOffsets(),
+            default => [],
+        };
+        if ($offsets === null || $offsets === []) {
+            return 'Pengingat dikirim pada: lengkapi isian jadwal untuk melihat pratinjau.';
+        }
+        $labels = array_map(self::reminderDayLabel(...), $offsets);
+        $total = count($labels);
+
+        return 'Pengingat dikirim pada: '.implode(', ', self::shortenReminderLabels($labels))
+            .($total > self::MAX_LISTED_REMINDERS ? " ({$total} pengingat)" : '');
+    }
+
+    /** Label satu hari pengingat, sama di pratinjau form dan halaman pengaturan: "30 hari sebelum" atau "Tanggal berakhir". */
+    public static function reminderDayLabel(int $day): string
+    {
+        return $day === 0 ? 'Tanggal berakhir' : $day.' hari sebelum';
+    }
+
+    /**
+     * Daftar tanggal pengingat yang panjang diringkas: delapan pertama, tanda "…", lalu tiga terakhir. Dipakai pratinjau form dan halaman pengaturan.
+     *
+     * @param  list<string>  $labels
+     * @return list<string>
+     */
+    public static function shortenReminderLabels(array $labels): array
+    {
+        return count($labels) > self::MAX_LISTED_REMINDERS ? [...array_slice($labels, 0, 8), '…', ...array_slice($labels, -3)] : $labels;
     }
 
     public static function reminderTimeLabel(): string

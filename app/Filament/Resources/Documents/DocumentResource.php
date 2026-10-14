@@ -13,12 +13,17 @@ use App\Filament\Resources\Documents\Schemas\DocumentInfolist;
 use App\Filament\Resources\Documents\Tables\DocumentsTable;
 use App\Models\Document;
 use BackedEnum;
+use Filament\Actions\RestoreAction;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\DB;
+use Livewire\Component;
 
 class DocumentResource extends Resource
 {
@@ -35,6 +40,51 @@ class DocumentResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with(['company', 'documentType', 'pic', 'currentVersion']);
+    }
+
+    /** Halaman detail dokumen yang dihapus tetap bisa dibuka, supaya dokumen bisa dilihat dan dipulihkan. */
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return parent::getRecordRouteBindingEloquentQuery()->withoutGlobalScopes([SoftDeletingScope::class]);
+    }
+
+    /** Dokumen yang dihapus tidak bisa diubah; pulihkan dulu. */
+    public static function getEditAuthorizationResponse(Model $record): Response
+    {
+        if ($record instanceof Document && $record->trashed()) {
+            return Response::deny('Dokumen yang dihapus tidak dapat diubah. Pulihkan dokumen terlebih dahulu.');
+        }
+
+        return parent::getEditAuthorizationResponse($record);
+    }
+
+    /**
+     * Aksi Pulihkan yang sama untuk daftar dan halaman detail; hak aksesnya mengikuti DocumentPolicy::restore.
+     * Pemulihan tercatat di riwayat aktivitas, dan riwayat versi/aktivitas di halaman detail ikut dimuat ulang.
+     */
+    public static function restoreAction(): RestoreAction
+    {
+        return RestoreAction::make()->label('Pulihkan')
+            ->modalHeading('Pulihkan dokumen ini?')
+            ->modalDescription('Dokumen muncul kembali di daftar, file bisa diunduh lagi, dan pengingat masa berlaku berjalan lagi.')
+            ->modalSubmitActionLabel('Ya, pulihkan')
+            ->using(fn (Document $record): bool => static::changeTrashedState($record, 'restored'))
+            ->after(fn (Component $livewire) => $livewire->dispatch('document-version-updated'))
+            ->successNotificationTitle('Dokumen berhasil dipulihkan');
+    }
+
+    /** Hapus (soft delete) atau pulihkan dokumen sekaligus mencatat aktivitasnya ("deleted" / "restored") dalam satu transaksi. */
+    public static function changeTrashedState(Document $record, string $event): bool
+    {
+        return DB::transaction(function () use ($record, $event): bool {
+            $changed = $event === 'restored' ? $record->restore() : $record->delete();
+            if (! $changed) {
+                return false;
+            }
+            $record->activities()->create(['document_version_id' => $record->current_version_id, 'user_id' => auth()->id(), 'event' => $event]);
+
+            return true;
+        });
     }
 
     public static function canForceDelete(Model $record): bool
@@ -56,7 +106,7 @@ class DocumentResource extends Resource
 
     public static function getGlobalSearchResultDetails(Model $record): array
     {
-        return ['Perusahaan' => $record->company?->name ?? '-', 'Nomor' => $record->document_number ?? '-', 'Jenis Dokumen' => $record->documentType?->name ?? '-'];
+        return ['Badan Usaha' => $record->company?->name ?? '-', 'Nomor' => $record->document_number ?? '-', 'Jenis Dokumen' => $record->documentType?->name ?? '-'];
     }
 
     public static function form(Schema $schema): Schema

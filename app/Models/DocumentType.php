@@ -17,10 +17,29 @@ class DocumentType extends Model
     /** @return array<string, mixed> */
     public function publicRequirements(): array
     {
-        return ['fields' => [], 'has_expiry' => $this->has_expiry, 'attachments' => [
+        return ['fields' => $this->publicRequestFields(), 'has_expiry' => $this->has_expiry, 'attachments' => [
             ['key' => 'supporting-document', 'label' => 'Dokumen pendukung', 'required' => true, 'when' => 'always'],
             ...array_filter($this->request_attachments, fn (array $item): bool => $item['key'] !== 'supporting-document'),
         ]];
+    }
+
+    /**
+     * Isian tambahan jenis dokumen ini dalam bentuk yang disimpan pada pengajuan dan dirender di form publik.
+     *
+     * @return list<array{key: string, label: string, type: 'text'|'textarea'|'date'|'number', required: bool}>
+     */
+    private function publicRequestFields(): array
+    {
+        return collect($this->request_fields ?? [])
+            ->filter(fn (mixed $item): bool => is_array($item) && filled($item['key'] ?? null) && filled($item['label'] ?? null))
+            ->map(fn (array $item): array => [
+                'key' => (string) $item['key'],
+                'label' => (string) $item['label'],
+                'type' => in_array($item['type'] ?? null, ['text', 'textarea', 'date', 'number'], true) ? $item['type'] : 'text',
+                'required' => (bool) ($item['required'] ?? false),
+            ])
+            ->values()
+            ->all();
     }
 
     public function resolveRequestPic(): ?User

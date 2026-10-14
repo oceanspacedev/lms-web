@@ -50,9 +50,13 @@
                 <p class="document-card__company">{{ $record->company?->name ?? '—' }}</p>
 
                 <div class="document-card__status-row">
-                    <x-filament::badge :color="\App\Models\Document::EXPIRY_STATUS_COLORS[$status]">
-                        {{ \App\Models\Document::EXPIRY_STATUSES[$status] }}
-                    </x-filament::badge>
+                    @if ($record->trashed())
+                        <x-filament::badge color="gray" icon="heroicon-o-trash">{{ \App\Models\Document::DELETED_STATUS_LABEL }}</x-filament::badge>
+                    @else
+                        <x-filament::badge :color="\App\Models\Document::EXPIRY_STATUS_COLORS[$status]">
+                            {{ \App\Models\Document::EXPIRY_STATUSES[$status] }}
+                        </x-filament::badge>
+                    @endif
                 </div>
             </div>
         </article>

@@ -65,7 +65,7 @@ class ReminderTemplate extends Model
 
     protected $attributes = ['schedule_mode' => 'inherit', 'start_before_days' => 30, 'interval_days' => 7, 'scheduled_days' => '[]', 'overdue_days' => '[]', 'request_reminder_enabled' => true, 'request_reminder_after_days' => 2, 'request_reminder_interval_days' => 2, 'request_reminder_max' => 3];
 
-    public const VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Perusahaan', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'sisa_hari' => 'Sisa Hari', 'pic' => 'Nama PIC'];
+    public const VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Badan Usaha', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'sisa_hari' => 'Sisa Hari', 'pic' => 'Nama PIC'];
 
     /** @return list<int>|null */
     public function reminderOffsets(): ?array
@@ -109,7 +109,7 @@ class ReminderTemplate extends Model
     public const REQUEST_REMINDER_DEFAULTS = ['enabled' => true, 'after_days' => 2, 'interval_days' => 2, 'max' => 3];
 
     public const REQUEST_REMINDER_VARIABLE_LABELS = [
-        'nomor_pengajuan' => 'Nomor pengajuan', 'judul' => 'Judul pengajuan', 'pengaju' => 'Nama pengaju', 'perusahaan' => 'Nama perusahaan',
+        'nomor_pengajuan' => 'Nomor pengajuan', 'judul' => 'Judul pengajuan', 'pengaju' => 'Nama pengaju', 'perusahaan' => 'Nama badan usaha',
         'jenis_dokumen' => 'Jenis dokumen', 'status' => 'Tahap pengajuan', 'hari_menunggu' => 'Hari menunggu', 'tautan' => 'Tautan pengajuan',
     ];
 
@@ -118,7 +118,7 @@ class ReminderTemplate extends Model
         'jenis_dokumen' => 'Kontrak', 'status' => 'Diperiksa', 'hari_menunggu' => '3', 'tautan' => 'https://contoh.test/admin/document-requests/123/edit',
     ];
 
-    public const OVERDUE_VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Perusahaan', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'hari_terlambat' => 'Hari Terlambat', 'pic' => 'Nama PIC'];
+    public const OVERDUE_VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Badan Usaha', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'hari_terlambat' => 'Hari Terlambat', 'pic' => 'Nama PIC'];
 
     public const OVERDUE_EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'hari_terlambat' => '3', 'pic' => 'PIC Dummy'];
 
@@ -146,7 +146,7 @@ class ReminderTemplate extends Model
 
     public const REQUEST_VARIABLE_LABELS = [
         'nomor_pengajuan' => 'Nomor pengajuan', 'judul' => 'Judul pengajuan', 'pengaju' => 'Nama pengaju',
-        'perusahaan' => 'Nama perusahaan', 'jenis_dokumen' => 'Jenis dokumen', 'pic' => 'Nama PIC',
+        'perusahaan' => 'Nama badan usaha', 'jenis_dokumen' => 'Jenis dokumen', 'pic' => 'Nama PIC',
         'status' => 'Status pengajuan', 'catatan' => 'Catatan pemeriksa',
         'baris_catatan' => 'Baris catatan (hanya jika ada)', 'tautan' => 'Tautan pengajuan',
     ];

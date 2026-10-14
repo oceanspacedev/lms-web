@@ -69,8 +69,17 @@ class DocumentStatusDashboardTest extends TestCase
             'threshold' => ['2026-11-04', [30, 10], true, 'expiring'],
             'outside threshold' => ['2026-11-05', [30, 10], true, 'active'],
             'first reminder is largest' => ['2026-12-04', [10, 60, 30], true, 'expiring'],
-            'no reminders' => ['2026-10-06', [], true, 'active'],
-            'today without reminders' => ['2026-10-05', [], true, 'active'],
+            // Tanpa jadwal pengingat, jendela "Segera Berakhir" jatuh ke Document::DEFAULT_EXPIRING_DAYS (30 hari).
+            'no reminders' => ['2026-10-06', [], true, 'expiring'],
+            'today without reminders' => ['2026-10-05', [], true, 'expiring'],
+            'no reminders in 10 days' => ['2026-10-15', [], true, 'expiring'],
+            'no reminders at default window' => ['2026-11-04', [], true, 'expiring'],
+            'no reminders past default window' => ['2026-11-05', [], true, 'active'],
+            'no reminders in 40 days' => ['2026-11-14', [], true, 'active'],
+            'past without reminders' => ['2026-10-04', [], true, 'expired'],
+            'hari H only schedule falls back to default window' => ['2026-10-20', [0], true, 'expiring'],
+            'schedule narrower than default still wins' => ['2026-10-20', [7], true, 'active'],
+            'schedule wider than default still wins' => ['2026-12-04', [60], true, 'expiring'],
             'no expiry date' => [null, [30], true, 'no_expiry'],
             'type without expiry' => ['2026-10-04', [], false, 'no_expiry'],
         ];
@@ -99,6 +108,51 @@ class DocumentStatusDashboardTest extends TestCase
         $document->save();
         $this->assertSame('active', $document->fresh()->expiry_status);
         $this->assertFalse(Document::query()->withExpiryStatus('expiring')->whereKey($document->id)->exists());
+    }
+
+    public function test_without_a_reminder_schedule_the_expiring_window_is_the_default_thirty_days(): void
+    {
+        $soon = $this->document('2026-10-15', []);
+        $later = $this->document('2026-11-14', []);
+
+        $this->assertSame(30, Document::DEFAULT_EXPIRING_DAYS);
+        $this->assertSame(30, Document::expiringWindowDays($soon->documentType));
+        $this->assertSame('expiring', $soon->expiry_status);
+        $this->assertSame('active', $later->expiry_status);
+        $this->assertSame([$soon->id], Document::query()->withExpiryStatus('expiring')->pluck('id')->all());
+        $this->assertSame([$later->id], Document::query()->withExpiryStatus('active')->pluck('id')->all());
+    }
+
+    public function test_dashboard_counts_use_the_default_window_when_there_is_no_schedule(): void
+    {
+        $this->signIn();
+        $this->document('2026-10-15', []);
+        $this->document('2026-10-30', []);
+        $this->document('2026-11-14', []);
+        $this->document('2026-10-04', []);
+        $component = Livewire::test(DocumentStatusOverview::class)->assertSuccessful();
+        $stats = collect((new ReflectionMethod(DocumentStatusOverview::class, 'getStats'))->invoke($component->instance()))
+            ->mapWithKeys(fn ($stat): array => [$stat->getLabel() => $stat->getValue()]);
+
+        $this->assertSame(2, $stats[Document::EXPIRY_STATUSES['expiring']]);
+        $this->assertSame(1, $stats[Document::EXPIRY_STATUSES['active']]);
+        $this->assertSame(1, $stats[Document::EXPIRY_STATUSES['expired']]);
+        Livewire::test(ListDocuments::class)->filterTable('expiry_status', 'expiring')->assertCountTableRecords(2);
+    }
+
+    public function test_inactive_reminder_setting_falls_back_to_the_default_window_and_a_schedule_overrides_it(): void
+    {
+        $document = $this->document('2026-10-15', [7]);
+        $this->assertSame('active', $document->expiry_status);
+        $this->assertTrue(Document::query()->withExpiryStatus('active')->whereKey($document->id)->exists());
+
+        ReminderTemplate::globalSetting()->update(['is_active' => false]);
+        $this->assertSame('expiring', $document->fresh()->expiry_status);
+        $this->assertTrue(Document::query()->withExpiryStatus('expiring')->whereKey($document->id)->exists());
+        $this->assertFalse(Document::query()->withExpiryStatus('active')->whereKey($document->id)->exists());
+
+        ReminderTemplate::globalSetting()->update(['is_active' => true, 'scheduled_days' => [7]]);
+        $this->assertSame('active', $document->fresh()->expiry_status);
     }
 
     public function test_status_changes_after_midnight_without_database_update(): void
@@ -130,18 +184,28 @@ class DocumentStatusDashboardTest extends TestCase
     public function test_dashboard_counts_exclude_deleted_documents_and_link_to_filters(): void
     {
         $this->signIn();
-        $this->document('2027-10-05');
-        $this->document('2026-10-20');
-        $this->document('2026-10-04');
-        $this->document(null, [], false);
+        $active = $this->document('2027-10-05');
+        $expiring = $this->document('2026-10-20');
+        $expired = $this->document('2026-10-04');
+        $noExpiry = $this->document(null, [], false);
         $this->document('2027-10-05')->delete();
         $component = Livewire::test(DocumentStatusOverview::class)->assertSuccessful()->assertSee('Masa Berlaku Dokumen');
         $stats = (new ReflectionMethod(DocumentStatusOverview::class, 'getStats'))->invoke($component->instance());
         $this->assertCount(4, $stats);
-        foreach ($stats as $stat) {
+        $all = [$active, $expiring, $expired, $noExpiry];
+        $byStatus = ['active' => $active, 'expiring' => $expiring, 'expired' => $expired, 'no_expiry' => $noExpiry];
+        foreach (array_keys(Document::EXPIRY_STATUSES) as $index => $status) {
+            $stat = $stats[$index];
             $this->assertSame(1, $stat->getValue());
-            $this->assertStringContainsString('tableFilters', $stat->getUrl());
+            // Daftar dokumen Filament 5 hanya membaca `?filters=`; `?tableFilters=` diabaikan sehingga kartu membuka daftar tanpa filter.
+            $this->assertStringContainsString('filters', $stat->getUrl());
+            $this->assertStringNotContainsString('tableFilters', $stat->getUrl());
+            parse_str((string) parse_url($stat->getUrl(), PHP_URL_QUERY), $query);
+            Livewire::withQueryParams($query)->test(ListDocuments::class)
+                ->assertCanSeeTableRecords([$byStatus[$status]])
+                ->assertCanNotSeeTableRecords(array_filter($all, fn (Document $document): bool => $document->isNot($byStatus[$status])));
         }
+        Livewire::withQueryParams([]);
         $widgets = Livewire::test(Dashboard::class)->instance()->getVisibleWidgets();
         $this->assertContains(DocumentStatusOverview::class, $widgets);
         $this->assertContains(ExpiringDocuments::class, $widgets);
@@ -161,6 +225,19 @@ class DocumentStatusDashboardTest extends TestCase
         Livewire::test(ExpiringDocuments::class)->assertSuccessful()
             ->assertCanSeeTableRecords([$today, $last], inOrder: true)
             ->assertCanNotSeeTableRecords([$outside, $expired, $noExpiry, $deleted]);
+    }
+
+    public function test_expiring_list_widget_uses_the_default_expiring_window(): void
+    {
+        $this->signIn();
+        $today = today('Asia/Jakarta');
+        $lastDay = $this->document($today->copy()->addDays(Document::DEFAULT_EXPIRING_DAYS)->toDateString());
+        $dayAfter = $this->document($today->copy()->addDays(Document::DEFAULT_EXPIRING_DAYS + 1)->toDateString());
+
+        Livewire::test(ExpiringDocuments::class)
+            ->assertSee('Berakhir dalam '.Document::DEFAULT_EXPIRING_DAYS.' Hari')
+            ->assertSee('hingga '.Document::DEFAULT_EXPIRING_DAYS.' hari ke depan')
+            ->assertCanSeeTableRecords([$lastDay])->assertCanNotSeeTableRecords([$dayAfter]);
     }
 
     public function test_widgets_are_hidden_and_inaccessible_without_document_permissions(): void

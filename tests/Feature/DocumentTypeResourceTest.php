@@ -55,6 +55,17 @@ class DocumentTypeResourceTest extends TestCase
         $this->assertTrue($documentType->is_active);
     }
 
+    public function test_form_explains_expiry_reminders_and_where_request_fields_appear(): void
+    {
+        $this->signInWithPermissions(['ViewAny:DocumentType', 'Create:DocumentType']);
+        Livewire::test(CreateDocumentType::class)
+            ->assertSee('Jadwal pengingat diatur di Pengaturan WhatsApp dan berlaku untuk semua jenis dokumen bermasa berlaku.')
+            ->assertSee('Mematikan pilihan ini untuk jenis yang sudah punya dokumen menghentikan status dan pengingat masa berlaku dokumen tersebut.')
+            ->assertSee('Form Pengajuan')
+            ->assertSee('tampil di form publik dan form internal')
+            ->assertSee('hanya berlaku di form Tambah Pengajuan internal (form publik selalu berupa pengajuan baru tanpa biaya).');
+    }
+
     public function test_reminder_schedule_comes_from_the_global_template_for_expiring_types_only(): void
     {
         $expiring = DocumentType::factory()->create(['has_expiry' => true]);

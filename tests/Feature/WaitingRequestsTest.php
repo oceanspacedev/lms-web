@@ -3,6 +3,10 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
+use App\Filament\Widgets\DocumentStatusOverview;
+use App\Filament\Widgets\ExpiringByCompany;
+use App\Filament\Widgets\ExpiringDocuments;
+use App\Filament\Widgets\ReminderHealthAlerts;
 use App\Filament\Widgets\WaitingRequestsOverview;
 use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
@@ -178,5 +182,34 @@ class WaitingRequestsTest extends TestCase
         $this->actingAs(User::factory()->create());
         $this->assertFalse(WaitingRequestsOverview::canView());
         Livewire::test(WaitingRequestsOverview::class)->assertForbidden();
+    }
+
+    public function test_polling_after_the_last_waiting_request_was_processed_does_not_fail(): void
+    {
+        $this->signIn();
+        $waiting = $this->request('submitted', 0);
+        $widget = Livewire::test(WaitingRequestsOverview::class)->assertSuccessful()->assertSee('Menunggu Pemeriksaan');
+
+        $waiting->forceFill(['status' => 'approved'])->save();
+        $this->assertFalse(WaitingRequestsOverview::canView());
+
+        $widget->call('$refresh')->assertSuccessful()->assertSee('Menunggu Pemeriksaan');
+        $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke($widget->instance());
+        $this->assertSame([0, 0], array_map(fn ($stat): int => $stat->getValue(), $stats));
+
+        $this->actingAs(User::factory()->create());
+        $widget->call('$refresh')->assertForbidden();
+    }
+
+    public function test_dashboard_puts_the_actionable_requests_widget_right_after_the_reminder_alerts(): void
+    {
+        $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'ViewAny:Document']);
+        $this->request('submitted', 1);
+        $expected = [ReminderHealthAlerts::class, WaitingRequestsOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
+
+        $this->assertSame([0, 1, 2, 3, 4], array_map(fn (string $widget): int => $widget::getSort(), $expected));
+        $visible = Livewire::test(Dashboard::class)->instance()->getVisibleWidgets();
+        $this->assertContains(WaitingRequestsOverview::class, $visible);
+        $this->assertSame(array_slice($expected, 1), array_values(array_intersect($visible, array_slice($expected, 1))));
     }
 }

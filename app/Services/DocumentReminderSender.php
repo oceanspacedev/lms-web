@@ -85,13 +85,21 @@ class DocumentReminderSender
             return null;
         }
         try {
-            $log->refresh()->load('documentVersion.document.company', 'documentVersion.document.documentType', 'documentVersion.document.pic');
+            $log->refresh()->load([
+                'documentVersion.document' => fn ($query) => $query->withTrashed(),
+                'documentVersion.document.company', 'documentVersion.document.documentType', 'documentVersion.document.pic',
+            ]);
             $version = $log->documentVersion;
             $document = $version?->document;
+            if ($document?->trashed()) {
+                $log->update(['status' => 'cancelled', 'error_message' => ReminderLog::DOCUMENT_DELETED_MESSAGE]);
+
+                return 'cancelled';
+            }
             if (! $document || ! $version->is_current || $document->current_version_id !== $version->id
                 || ! $document->documentType->has_expiry || ! $version->expiry_date
                 || ! $this->isScheduled($log->offset_days, $document, $version->expiry_date->toDateString(), $today)) {
-                $log->update(['status' => 'cancelled', 'error_message' => 'Versi atau jadwal pengingat sudah tidak berlaku.']);
+                $log->update(['status' => 'cancelled', 'error_message' => ReminderLog::OUTDATED_SCHEDULE_MESSAGE]);
 
                 return 'cancelled';
             }
@@ -128,8 +136,9 @@ class DocumentReminderSender
     /**
      * Jadwal pengingat terdekat yang sudah tercapai (catch-up), atau null bila belum ada.
      * Jadwal yang terlewat tetap dikirim terlambat satu kali; log unik per versi dan jadwal mencegah kirim ganda.
+     * Dokumen harus punya versi aktif dengan tanggal berakhir.
      */
-    private function dueOffset(Document $document, CarbonImmutable $today): ?int
+    public function dueOffset(Document $document, CarbonImmutable $today): ?int
     {
         $remaining = (int) $today->diffInDays(CarbonImmutable::parse($document->currentVersion->expiry_date->toDateString(), $today->timezone), false);
         if ($remaining < 0) {

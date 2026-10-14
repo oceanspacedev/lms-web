@@ -15,7 +15,7 @@ class WaitingRequestsOverview extends StatsOverviewWidget
     /** @var array<string, string> Status yang menunggu staf, beserta labelnya di kartu. */
     public const STAGES = ['submitted' => 'Menunggu Pemeriksaan', 'review' => 'Menunggu Persetujuan'];
 
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 1;
 
     protected ?string $heading = 'Pengajuan Menunggu Tindakan';
 
@@ -30,15 +30,24 @@ class WaitingRequestsOverview extends StatsOverviewWidget
         abort_unless(static::canView(), 403);
     }
 
+    /**
+     * Pengganti pemeriksaan bawaan Filament pada setiap poll: canView() ikut bergantung pada ada-tidaknya pengajuan menunggu,
+     * jadi setelah pengajuan terakhir diproses poll berikutnya akan gagal 403. Saat poll cukup diperiksa izinnya saja.
+     */
+    public function hydrateCanAuthorizeAccess(): void
+    {
+        abort_unless(Gate::allows('viewAny', DocumentRequest::class), 403);
+    }
+
     /** @return Builder<DocumentRequest> Pengajuan yang boleh dilihat user saat ini. */
     private static function visibleRequests(): Builder
     {
         return DocumentRequestResource::getEloquentQuery();
     }
 
+    /** Izin sudah diperiksa saat mount dan setiap poll; angka boleh nol bila semua pengajuan sudah diproses sejak halaman dibuka. */
     protected function getStats(): array
     {
-        abort_unless(static::canView(), 403);
         $days = ReminderTemplate::requestReminderSettings()['after_days'];
 
         return collect(self::STAGES)->map(function (string $label, string $status) use ($days): Stat {
@@ -48,7 +57,7 @@ class WaitingRequestsOverview extends StatsOverviewWidget
             return Stat::make($label, $total)
                 ->description($waiting > 0 ? "{$waiting} menunggu lebih dari {$days} hari" : "Tidak ada yang menunggu lebih dari {$days} hari")
                 ->color($waiting > 0 ? 'warning' : 'gray')
-                ->url(DocumentRequestResource::getUrl('index', ['tableFilters' => [
+                ->url(DocumentRequestResource::getUrl('index', ['filters' => [
                     'status' => ['value' => $status],
                     ...($waiting > 0 ? ['waiting_long' => ['isActive' => true]] : []),
                 ]]));

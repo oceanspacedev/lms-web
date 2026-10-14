@@ -35,7 +35,7 @@ class ActivitiesRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-        return $table->heading('Riwayat Aktivitas')->description('Jejak unggah, perubahan informasi, dan permintaan akses file.')
+        return $table->heading('Riwayat Aktivitas')->description('Jejak unggah, perubahan informasi, penghapusan, pemulihan, dan permintaan akses file.')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user', 'version']))
             ->columns([
                 TextColumn::make('created_at')->label('Waktu')->dateTime('d/m/Y H:i')->timezone('Asia/Jakarta')->sortable(),
@@ -44,7 +44,7 @@ class ActivitiesRelationManager extends RelationManager
                 TextColumn::make('version.version_number')->label('Versi')->prefix('v')->placeholder('-'),
                 TextColumn::make('version.stored_name')->label('File')->wrap(),
             ])->defaultSort('id', 'desc')->paginationPageOptions([5, 10, 25])->defaultPaginationPageOption(5)
-            ->emptyStateHeading('Belum ada aktivitas')->emptyStateDescription('Aktivitas baru akan dicatat setelah fitur ini diaktifkan.')
+            ->emptyStateHeading('Belum ada aktivitas')->emptyStateDescription('Unggahan, perubahan informasi, pratinjau, dan unduhan dokumen ini akan tercatat di sini.')
             ->headerActions([])->recordActions([])->toolbarActions([]);
     }
 }

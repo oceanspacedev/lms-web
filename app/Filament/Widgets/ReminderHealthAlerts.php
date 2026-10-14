@@ -38,7 +38,7 @@ class ReminderHealthAlerts extends Widget
         $alerts = array_map(function (array $alert) use ($canOpenSettings, $canOpenLogs): array {
             $alert['url'] = match ($alert['key']) {
                 'template', 'recipient' => $canOpenSettings ? ReminderTemplateResource::getUrl('index') : null,
-                'failed' => $canOpenLogs ? ReminderLogResource::getUrl('index', ['tableFilters' => ['status' => ['value' => 'failed']]]) : null,
+                'failed' => $canOpenLogs ? ReminderLogResource::getUrl('index', ['filters' => ['status' => ['value' => 'failed']]]) : null,
                 default => null,
             };
 

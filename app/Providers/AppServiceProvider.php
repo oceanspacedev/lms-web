@@ -2,12 +2,15 @@
 
 namespace App\Providers;
 
+use App\Http\Controllers\PublicDocumentRequestController;
 use App\Models\User;
+use App\Services\WaghubService;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -30,6 +33,22 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('public-request-create', fn (Request $request): Limit => Limit::perMinutes(10, 5)->by($request->ip()));
         RateLimiter::for('public-request-revise', fn (Request $request): Limit => Limit::perMinutes(10, 5)->by($request->ip().'|'.$request->route('token')));
         RateLimiter::for('public-request-status', fn (Request $request): Limit => Limit::perMinute(60)->by($request->ip().'|'.$request->route('token')));
+        RateLimiter::for('public-request-lookup', function (Request $request): array {
+            $phone = $request->input('requester_phone');
+            $phone = app(WaghubService::class)->normalizePhone(is_string($phone) ? $phone : null) ?? 'invalid';
+            $submissionId = $request->input('submission_id');
+            $submissionId = is_string($submissionId) || is_int($submissionId) ? ltrim((string) preg_replace('/\D/', '', (string) $submissionId), '0') : '';
+            $tooManyAttempts = fn (Request $request, array $headers): Response => response()
+                ->view('requests.lookup', ['throttled' => true], 429, [...$headers, ...PublicDocumentRequestController::PRIVATE_HEADERS]);
+
+            // Batas per nomor WhatsApp dan per nomor pengajuan mencegah menebak pengajuan orang lain dari banyak IP.
+            // Batas per IP diletakkan terakhir supaya header X-RateLimit sama untuk setiap percobaan.
+            return [
+                Limit::perHour(10)->by('phone:'.$phone)->response($tooManyAttempts),
+                Limit::perHour(10)->by('submission:'.$submissionId)->response($tooManyAttempts),
+                Limit::perMinute(6)->by($request->ip())->response($tooManyAttempts),
+            ];
+        });
 
         FilamentAsset::register([
             Css::make('documents-browser', resource_path('css/documents-browser.css'))

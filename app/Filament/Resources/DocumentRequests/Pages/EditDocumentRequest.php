@@ -28,6 +28,12 @@ class EditDocumentRequest extends EditRecord
         return $this->record->title;
     }
 
+    /** Halaman hanya-baca (pengajuan tidak dapat diubah user ini) disebut "Detail", bukan "Ubah". */
+    public function getBreadcrumb(): string
+    {
+        return $this->record->editableBy(auth()->user()) ? parent::getBreadcrumb() : 'Detail';
+    }
+
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         return DocumentRequest::saveDraft($data, auth()->user(), $record);
@@ -38,6 +44,11 @@ class EditDocumentRequest extends EditRecord
         return parent::getSaveFormAction()->label('Simpan Draf')->visible(fn (): bool => $this->record->editableBy(auth()->user()));
     }
 
+    protected function getCancelFormAction(): Action
+    {
+        return parent::getCancelFormAction()->visible(fn (): bool => $this->record->editableBy(auth()->user()));
+    }
+
     protected function getHeaderActions(): array
     {
         $policy = new DocumentRequestPolicy;
@@ -45,7 +56,7 @@ class EditDocumentRequest extends EditRecord
         return [
             Action::make('submit')->label('Ajukan')->visible(fn (): bool => $this->record->editableBy(auth()->user()) && auth()->user()->can('update', $this->record))
                 ->action(function (): void {
-                    $this->save();
+                    $this->save(shouldSendSavedNotification: false);
                     $this->record->refresh();
                     try {
                         $this->record->transition('submitted', auth()->user());

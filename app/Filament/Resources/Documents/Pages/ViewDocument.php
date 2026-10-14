@@ -4,11 +4,14 @@ namespace App\Filament\Resources\Documents\Pages;
 
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Schemas\DocumentVersionForm;
+use App\Models\Document;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Support\Enums\Width;
 use Filament\Support\Exceptions\Halt;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -32,9 +35,11 @@ class ViewDocument extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            DocumentResource::restoreAction()->icon('heroicon-o-arrow-uturn-left')->color('primary'),
+            $this->previewAction(),
             Action::make('download')->label('Unduh File')->icon('heroicon-o-arrow-down-tray')
                 ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab()
-                ->visible(fn (): bool => $this->getRecord()->currentVersion !== null),
+                ->visible(fn (): bool => $this->getRecord()->currentVersion !== null && ! $this->getRecord()->trashed()),
             EditAction::make()->label('Ubah Informasi')->icon('heroicon-o-pencil-square')->color('gray'),
             $this->versionAction('renew')->label('Perpanjang')->icon('heroicon-o-arrow-path-rounded-square')
                 ->color(fn (): string => in_array($this->getRecord()->expiry_status, ['expiring', 'expired'], true) ? 'warning' : 'gray')
@@ -47,10 +52,30 @@ class ViewDocument extends ViewRecord
         ];
     }
 
+    /**
+     * Iframe/gambar pratinjau hanya ada di dalam modal, jadi file baru diminta saat tombol ini ditekan.
+     * Bila dimuat langsung di halaman, setiap kunjungan ke halaman detail tercatat sebagai aktivitas "Pratinjau dibuka".
+     */
+    private function previewAction(): Action
+    {
+        return Action::make('preview')->label('Pratinjau')->icon('heroicon-o-eye')->color('gray')
+            ->authorize('view', $this->getRecord())
+            ->visible(fn (): bool => ! $this->getRecord()->trashed()
+                && in_array($this->getRecord()->currentVersion?->mime_type, Document::PREVIEWABLE_MIME_TYPES, true))
+            ->modalHeading('Pratinjau Dokumen')
+            ->modalWidth(Width::SevenExtraLarge)->modalSubmitAction(false)->modalCancelActionLabel('Tutup')
+            ->modalContent(fn (): View => view('requests.attachment-preview', [
+                'url' => route('documents.download', ['document' => $this->getRecord(), 'preview' => 1]),
+                'label' => $this->getRecord()->currentVersion->stored_name,
+                'isImage' => $this->getRecord()->currentVersion->mime_type !== 'application/pdf',
+            ]));
+    }
+
     private function versionAction(string $name): Action
     {
         return Action::make($name)
             ->authorize('update', $this->getRecord())
+            ->hidden(fn (): bool => $this->getRecord()->trashed())
             ->modalSubmitActionLabel('Simpan Versi Baru')
             ->schema(fn (): array => DocumentVersionForm::components($this->getRecord()->documentType->has_expiry))
             ->action(function (array $data): void {

@@ -2,10 +2,11 @@
 
 namespace App\Filament\Resources\Documents\Schemas;
 
+use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Document;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Number;
 
@@ -16,16 +17,10 @@ class DocumentInfolist
         return $schema
             ->columns(['default' => 1, 'xl' => 3])
             ->components([
-                Section::make('Preview dokumen')->compact()->collapsed()->columnSpanFull()
-                    ->visible(fn (Document $record): bool => in_array($record->currentVersion?->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true))
-                    ->schema([
-                        View::make('requests.attachment-preview')->viewData(fn (Document $record): array => [
-                            'url' => route('documents.download', ['document' => $record, 'preview' => 1]),
-                            'label' => $record->currentVersion?->stored_name ?? $record->title,
-                            'isImage' => $record->currentVersion?->mime_type !== 'application/pdf',
-                            'showNewTabLink' => false,
-                        ]),
-                    ]),
+                Callout::make('Dokumen ini sudah dihapus')->warning()->columnSpanFull()
+                    ->description(fn (Document $record): string => $record->deletedAtLabel().'. Dokumen tidak tampil di daftar, file tidak bisa diunduh atau dipratinjau, dan pengingat masa berlaku berhenti. '
+                        .(DocumentResource::canRestore($record) ? 'Pulihkan dokumen untuk memakainya kembali.' : 'Minta pengguna yang berhak memulihkan dokumen untuk mengaktifkannya kembali.'))
+                    ->visible(fn (Document $record): bool => $record->trashed()),
                 Section::make('Informasi Dokumen')
                     ->columnSpan(['default' => 1, 'xl' => 2])
                     ->columns(['default' => 1, 'sm' => 2])

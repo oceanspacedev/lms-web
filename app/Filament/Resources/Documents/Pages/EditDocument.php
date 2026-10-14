@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Documents\Pages;
 
 use App\Filament\Resources\Documents\DocumentResource;
+use App\Models\Document;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
@@ -40,7 +41,12 @@ class EditDocument extends EditRecord
     {
         return [
             ViewAction::make()->label('Lihat'),
-            DeleteAction::make()->label('Hapus Dokumen'),
+            DeleteAction::make()->label('Hapus Dokumen')
+                ->modalHeading('Hapus dokumen ini?')
+                ->modalDescription('Dokumen akan hilang dari daftar dan pengingat masa berlakunya berhenti. File tidak ikut dihapus, dan dokumen dapat dipulihkan oleh pengguna yang memiliki izin memulihkan dokumen.')
+                ->modalSubmitActionLabel('Ya, hapus dokumen')
+                ->using(fn (Document $record): bool => DocumentResource::changeTrashedState($record, 'deleted'))
+                ->successNotificationTitle('Dokumen dihapus'),
         ];
     }
 }

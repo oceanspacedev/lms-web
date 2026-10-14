@@ -24,7 +24,7 @@ class ExpiringByCompany extends TableWidget
         'due_90' => ['61-90 hari', 61, 90],
     ];
 
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 4;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -73,12 +73,12 @@ class ExpiringByCompany extends TableWidget
             ->columns($columns)
             ->paginated([10, 25])
             ->emptyStateHeading('Tidak ada dokumen yang akan berakhir dalam 90 hari')
-            ->emptyStateDescription('Dokumen tanpa masa tenggang tidak dihitung.');
+            ->emptyStateDescription('Dokumen tanpa masa berlaku tidak dihitung.');
     }
 
     /** @param array<string, array<string, string>> $filters */
     private function listUrl(Company $company, array $filters): string
     {
-        return DocumentResource::getUrl('index', ['tableFilters' => ['company' => ['value' => $company->id], ...$filters]]);
+        return DocumentResource::getUrl('index', ['filters' => ['company' => ['value' => $company->id], ...$filters]]);
     }
 }

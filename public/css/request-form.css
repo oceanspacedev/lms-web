@@ -70,3 +70,12 @@ dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; font-varian
 .timeline-item.warning .timeline-title strong { color: #8a5300; }
 .timeline-item.danger .timeline-title strong { color: #b3261e; }
 @media(max-width: 480px) { .progress { grid-template-columns: 1fr 1fr; } }
+.link-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px 22px; margin-bottom: 12px; }
+.link-card > label { display: block; font-size: 15px; margin-bottom: 8px; }
+.link-card small { display: block; margin-top: 8px; }
+.copy-link { display: flex; gap: 8px; align-items: stretch; }
+.copy-link input { flex: 1 1 auto; min-width: 0; width: auto; max-width: none; border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; background: #f8f9fa; font-size: 13px; }
+.copy-link input:focus { border: 1px solid var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.copy-link button { order: 0; flex: none; padding: 8px 16px; white-space: nowrap; }
+.copy-feedback.copied { color: #146337; font-weight: 700; }
+@media(max-width: 480px) { .copy-link { flex-direction: column; } .copy-link input:not([type=file]) { width: 100%; } }

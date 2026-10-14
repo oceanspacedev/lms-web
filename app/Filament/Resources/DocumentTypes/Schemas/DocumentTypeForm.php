@@ -32,8 +32,9 @@ class DocumentTypeForm
                 Toggle::make('has_expiry')
                     ->label('Memiliki Masa Berlaku')
                     ->default(false)
-                    ->live(),
-                Section::make('Form Pengajuan')->collapsed()->columnSpanFull()->schema([
+                    ->live()
+                    ->helperText('Jadwal pengingat diatur di Pengaturan WhatsApp dan berlaku untuk semua jenis dokumen bermasa berlaku. Mematikan pilihan ini untuk jenis yang sudah punya dokumen menghentikan status dan pengingat masa berlaku dokumen tersebut.'),
+                Section::make('Form Pengajuan')->description('"Isian tambahan" dan lampiran dengan pilihan "Selalu" tampil di form publik dan form internal; lampiran dengan pilihan "Ada biaya" atau "Perpanjangan / adendum" hanya berlaku di form Tambah Pengajuan internal (form publik selalu berupa pengajuan baru tanpa biaya).')->collapsed()->columnSpanFull()->schema([
                     Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->pluck('name', 'id')->all())->searchable()->placeholder('Otomatis (tim pemeriksa)'),
                     Actions::make([
                         Action::make('cooperation')->label('Gunakan contoh Kerja Sama')->color('gray')

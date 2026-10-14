@@ -30,11 +30,11 @@ class UserForm
                     }
                 }])
                 ->dehydrateStateUsing(fn (?string $state): ?string => app(WaghubService::class)->normalizePhone($state)),
-            Select::make('roles')->label('Role')
+            Select::make('roles')->label('Peran')
                 ->relationship('roles', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('guard_name', 'web'))
                 ->multiple()->searchable()->preload()
                 ->disabled(fn (): bool => ! Gate::allows('Update:Role'))
-                ->helperText('Hak akses mengikuti role. User tanpa role atau izin tidak dapat masuk panel.'),
+                ->helperText('Hak akses mengikuti peran. User tanpa peran atau izin tidak dapat masuk panel.'),
             TextInput::make('password')->label('Kata Sandi')->password()->revealable()->minLength(8)->maxLength(255)
                 ->afterStateHydrated(fn (TextInput $component) => $component->state(null))
                 ->required(fn (string $operation): bool => $operation === 'create')

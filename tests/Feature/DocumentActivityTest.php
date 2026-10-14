@@ -99,6 +99,19 @@ class DocumentActivityTest extends TestCase
         $this->assertSame([], Storage::disk('s3')->allFiles());
     }
 
+    public function test_empty_history_explains_what_will_be_recorded_in_plain_language(): void
+    {
+        $user = User::factory()->create();
+        $user->givePermissionTo(['ViewAny:Document', 'View:Document']);
+        $this->actingAs($user);
+        $document = Document::factory()->create();
+
+        Livewire::test(ActivitiesRelationManager::class, ['ownerRecord' => $document, 'pageClass' => ViewDocument::class])
+            ->assertSee('Belum ada aktivitas')
+            ->assertSee('Unggahan, perubahan informasi, pratinjau, dan unduhan dokumen ini akan tercatat di sini.')
+            ->assertDontSee('fitur ini diaktifkan');
+    }
+
     public function test_history_is_read_only_and_follows_document_permission(): void
     {
         $user = User::factory()->create();

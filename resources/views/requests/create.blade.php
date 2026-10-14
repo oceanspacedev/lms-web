@@ -2,15 +2,15 @@
 @section('title', $submission ? 'Revisi Pengajuan' : 'Pengajuan Dokumen')
 @section('content')
 @php
-    $defaults = $submission?->attributesToArray() ?? ['purpose' => 'new', 'has_cost' => false];
+    $defaults = $submission ? [...$submission->attributesToArray(), 'partner_name' => $submission->counterpartyName()] : ['purpose' => 'new', 'has_cost' => false];
     $selectedType = old('document_type_id', $submission?->document_type_id ?? ($types->count() === 1 ? $types->first()->id : ''));
 @endphp
-<div class="page-heading"><h1>{{ $submission ? 'Revisi pengajuan #'.$submission->id : 'Pengajuan dokumen' }}</h1><p>Status pengajuan dikirim melalui WhatsApp.</p></div>
+<div class="page-heading"><h1>{{ $submission ? 'Revisi pengajuan #'.$submission->id : 'Pengajuan dokumen' }}</h1><p>Status pengajuan dikirim melalui WhatsApp.</p>@unless($submission)<p><a href="{{ route('requests.public.lookup') }}">Sudah mengajukan? Cek status pengajuan</a></p>@endunless</div>
 @if($submission)
     <div class="notice"><strong>Revisi ke-{{ $submission->revisionNumber() }}</strong><p>{{ collect($submission->history)->last()['note'] ?? '' }}</p></div>
 @endif
 @if($errors->any())
-    <div class="notice error" role="alert"><strong>Periksa kembali isian pengajuan.</strong><ul>@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul>@if($errors->has('attachments.*'))<p>Pilih kembali berkas lampiran.</p>@endif</div>
+    <div class="notice error" role="alert"><strong>Periksa kembali isian pengajuan.</strong><ul>@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul><p>Berkas lampiran yang sudah Anda pilih tidak ikut tersimpan. Pilih kembali berkas lampiran sebelum mengirim.</p></div>
 @endif
 @if($types->isEmpty())
     <div class="notice">Pengajuan belum tersedia. Hubungi PIC untuk informasi lebih lanjut.</div>
@@ -28,9 +28,20 @@
         <div data-other-business hidden>@include('requests.field', ['key' => 'other_business_name', 'label' => 'Nama badan usaha', 'required' => true])</div>
         <div class="field"><label for="document-type">Jenis dokumen <span aria-hidden="true">*</span></label><select id="document-type" name="document_type_id" required @disabled((bool) $submission)><option value="">Pilih jenis dokumen</option>@foreach($types as $documentType)<option value="{{ $documentType->id }}" data-expiry="{{ (int)($schemas[$documentType->id]['has_expiry'] ?? false) }}" @selected((string)$selectedType === (string)$documentType->id)>{{ $documentType->name }}</option>@endforeach</select></div>
         @include('requests.field', ['key' => 'title', 'label' => 'Judul pengajuan', 'required' => true, 'wide' => true])
+        @include('requests.field', ['key' => 'partner_name', 'label' => 'Pihak lawan / mitra', 'wide' => true, 'hint' => 'Opsional. Isi dengan nama pihak yang menandatangani bersama. Kosongkan bila dokumen tidak punya pihak lawan, misalnya akta pendirian.'])
         @include('requests.field', ['key' => 'request_reason', 'label' => 'Keperluan', 'type' => 'textarea', 'required' => true, 'wide' => true])
     </div>
     </section>
+    @foreach($schemas as $typeId => $schema)
+        @php $extraFields = collect($schema['fields'] ?? [])->filter(fn ($item) => is_array($item) && filled($item['key'] ?? null)); @endphp
+        @if($extraFields->isNotEmpty())
+        <section class="form-section" data-document-type="{{ $typeId }}" hidden><h2>Isian tambahan</h2><div class="fields">
+            @foreach($extraFields as $extraField)
+                @include('requests.field', ['key' => 'details.'.$extraField['key'], 'inputId' => 'field-details-'.$typeId.'-'.$extraField['key'], 'label' => $extraField['label'] ?? 'Isian tambahan', 'type' => $extraField['type'] ?? 'text', 'required' => (bool) ($extraField['required'] ?? false), 'wide' => ($extraField['type'] ?? 'text') === 'textarea', 'scoped' => true])
+            @endforeach
+        </div></section>
+        @endif
+    @endforeach
     @if(!$submission || collect($submission->requirements['attachments'] ?? [])->contains('key', 'supporting-document'))
         @php $supportingPath = $submission?->attachments['supporting-document'] ?? null; @endphp
         <div class="field">
@@ -41,19 +52,21 @@
         </div>
     @endif
     @foreach($schemas as $typeId => $schema)
-        @if(count($schema['attachments'] ?? []))
+        {{-- Pengajuan publik selalu baru dan tanpa biaya, jadi hanya lampiran "selalu" yang bisa berlaku. --}}
+        @php $extraAttachments = collect($schema['attachments'] ?? [])->filter(fn ($item) => $item['key'] !== 'supporting-document' && ($item['when'] ?? 'always') === 'always'); @endphp
+        @if($extraAttachments->isNotEmpty())
         <section class="form-section" data-document-type="{{ $typeId }}" hidden><h2>Lampiran tambahan</h2>
             @foreach([true, false] as $requiredGroup)
-                @php $items = collect($schema['attachments'])->filter(fn ($item) => $item['key'] !== 'supporting-document' && (bool)$item['required'] === $requiredGroup); @endphp
+                @php $items = $extraAttachments->filter(fn ($item) => (bool)($item['required'] ?? false) === $requiredGroup); @endphp
                 @if($items->isNotEmpty())
                     @if(!$requiredGroup)<details><summary>Lampiran tambahan</summary>@endif
                     <div class="fields uploads">
                     @foreach($items as $item)
                         @php $existingPath = $submission?->attachments[$item['key']] ?? null; @endphp
-                        <div class="field wide" data-condition="{{ $item['when'] ?? 'always' }}">
-                            <label for="attachment-{{ $typeId }}-{{ $item['key'] }}">{{ $item['label'] }} @if($item['required'])<span aria-hidden="true">*</span>@endif</label>
+                        <div class="field wide">
+                            <label for="attachment-{{ $typeId }}-{{ $item['key'] }}">{{ $item['label'] }} @if($item['required'] ?? false)<span aria-hidden="true">*</span>@endif</label>
                             @if($existingPath)<small>Berkas tersimpan. Pilih berkas untuk mengganti.</small>@endif
-                            <input id="attachment-{{ $typeId }}-{{ $item['key'] }}" type="file" name="attachments[{{ $item['key'] }}]" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" data-required="{{ (int)($item['required'] && !$existingPath) }}">
+                            <input id="attachment-{{ $typeId }}-{{ $item['key'] }}" type="file" name="attachments[{{ $item['key'] }}]" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" data-required="{{ (int)(($item['required'] ?? false) && !$existingPath) }}">
                         </div>
                     @endforeach
                     </div>

@@ -16,14 +16,14 @@ class UsersTable
             TextColumn::make('name')->label('Nama')->searchable()->sortable()->weight('medium')->limit(35)->wrap(),
             TextColumn::make('email')->label('Email')->searchable()->sortable(),
             TextColumn::make('phone')->label('WhatsApp')->searchable()->placeholder('Belum diisi'),
-            TextColumn::make('roles.name')->label('Role')->badge()->placeholder('Belum ada role'),
+            TextColumn::make('roles.name')->label('Peran')->badge()->placeholder('Belum ada peran'),
         ])
             ->filters([
-                SelectFilter::make('roles')->label('Role')->relationship('roles', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('guard_name', 'web'))->searchable()->preload(),
+                SelectFilter::make('roles')->label('Peran')->relationship('roles', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('guard_name', 'web'))->searchable()->preload(),
             ])
             ->recordActions([EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah')])
             ->defaultSort('name')
             ->emptyStateHeading('Belum ada user')
-            ->emptyStateDescription('Tambahkan user dan pilih role sesuai tanggung jawabnya.');
+            ->emptyStateDescription('Tambahkan user dan pilih peran sesuai tanggung jawabnya.');
     }
 }
