@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Documents\Pages;
 
 use App\Filament\Resources\Documents\DocumentResource;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Support\Icons\Heroicon;
 use Livewire\Attributes\Url;
 
 class ListDocuments extends ListRecords
@@ -29,6 +31,9 @@ class ListDocuments extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('import')->label('Impor')->color('gray')->icon(Heroicon::OutlinedArrowUpTray)
+                ->url(DocumentResource::getUrl('import'))
+                ->visible(fn (): bool => ImportDocuments::canAccess()),
             CreateAction::make()->label('Tambah Dokumen'),
         ];
     }

@@ -222,6 +222,7 @@ class Document extends Model
             'counterparty' => ['nullable', 'string', 'max:255'],
             'pic_user_id' => ['required', 'exists:users,id,deactivated_at,NULL'],
             'notes' => ['nullable', 'string', 'max:10000'],
+            'change_note' => ['nullable', 'string', 'max:10000'],
             ...self::versionValidationRules($documentType->has_expiry, $data['issued_date'] ?? null),
         ])->validate();
 
