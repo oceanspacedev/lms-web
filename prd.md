@@ -567,6 +567,38 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ---
 
+### WORK 52: Nonaktifkan User dan Alih Tugas
+
+**Tujuan:** Staf yang keluar bisa dimatikan tanpa menghapus data, dan tugasnya tidak tertinggal di akun yang sudah tidak dipakai.
+
+**Cakupan:**
+- Kolom `users.deactivated_at` dan `deactivated_by`. User nonaktif tidak bisa masuk (password maupun OTP); sesi dan remember token langsung diputus. Peran dan izin tetap disimpan agar bisa diaktifkan kembali.
+- Aksi "Nonaktifkan" di daftar dan form User (butuh `Update:User`; tidak untuk diri sendiri; super admin hanya oleh super admin dan bukan yang aktif terakhir). Modal menampilkan ringkasan tugas dan **wajib** memilih pengganti per kelompok: PIC dokumen (termasuk dokumen terhapus), PIC/pemeriksa pengajuan (izin periksa; nomor WA valid bila menggantikan PIC pengajuan jenis dokumen), dan penyetuju (izin setujui, atau "Tim persetujuan").
+- Pengajuan berjalan dan pengaturan jenis dokumen ikut dipindah tanpa menambah riwayat pengajuan. Alih PIC dokumen dicatat sebagai aktivitas "PIC dialihkan". Payload pengingat yang tertunda disusun ulang dan notifikasi lama ke user nonaktif dibatalkan.
+- Pemilih user dan penerima pengingat hanya memakai user aktif (nilai lama tetap bisa disimpan). Nomor WA user nonaktif boleh dipakai staf baru; "Aktifkan kembali" ditolak bila nomornya sudah dipakai user aktif lain.
+- Daftar User punya kolom status dan filter Aktif; dashboard memberi peringatan bila ada dokumen dengan PIC nonaktif.
+
+**Definition of Done:** Tes mencakup penolakan login dan pemutusan sesi, perpindahan tiap kelompok tugas, aktivitas, payload pengingat dan pembatalan notifikasi, opsi tim persetujuan, larangan untuk diri sendiri dan super admin terakhir, tanpa kandidat pengganti, aktifkan kembali dan konflik nomor, serta pemilih user. Commit: `feat(work-52): nonaktifkan user dan alih tugas ke pengganti`.
+
+---
+
+### WORK 53: Impor Dokumen Lama
+
+**Tujuan:** Arsip legal yang sudah ada (ratusan dokumen) bisa dimasukkan sekaligus, tidak satu per satu.
+
+**Cakupan:**
+- Halaman "Impor Dokumen Lama" (`/admin/documents/import`, izin `Create:Document`) dengan empat langkah: unduh template, unggah Excel + satu atau lebih ZIP, periksa (dry run, tidak menyimpan apa pun), dan impor bertahap 20 baris per langkah dengan progress yang bisa dilanjutkan. Maksimal 200 baris per batch (`LMS_IMPORT_MAX_ROWS`), ukuran ZIP mengikuti `LMS_IMPORT_MAX_ZIP_KB`.
+- Template berisi sheet "Dokumen" dan "Petunjuk" (aturan serta daftar badan usaha, jenis dokumen, dan email PIC yang sah).
+- Pemeriksaan per baris berbahasa Indonesia: badan usaha (nama atau bentuk + nama) dan jenis dokumen harus aktif, PIC lewat email user aktif, tanggal (sel tanggal atau `dd/mm/yyyy`), tanggal berakhir wajib untuk jenis bermasa berlaku, file ada di ZIP dengan format dan ukuran yang diizinkan, nama file tidak ganda. Dokumen yang sudah ada (badan usaha + jenis + nomor, atau judul bila nomor kosong) dilewati, sehingga impor ulang aman.
+- Penyimpanan memakai `Document::archive()` dengan catatan versi "Diimpor dari arsip lama (batch #N)". Riwayat batch di tabel `document_imports`.
+- Opsi "Lewati pengingat yang jadwalnya sudah lewat" (default aktif) mencatat jadwal yang sudah tercapai sebagai dibatalkan, agar arsip lama tidak membanjiri WhatsApp; jadwal berikutnya tetap berjalan.
+- ZIP diekstrak aman (nama file saja, batas jumlah dan ukuran) ke folder sementara yang dibersihkan setelah selesai dan oleh `lms:clean-import-files` harian. Laporan akhir menyediakan unduhan Excel baris gagal untuk diperbaiki dan diimpor ulang.
+- Deploy: batas unggah PHP (`upload_max_filesize`, `post_max_size`) dan web server harus menampung ukuran ZIP.
+
+**Definition of Done:** Tes mencakup template, dry run tanpa penyimpanan, tiap jenis error baris, duplikat dan impor ulang, hasil impor (dokumen, versi, file, aktivitas, catatan), format tanggal, keamanan ZIP dan batas ukuran, proses bertahap yang dapat dilanjutkan, opsi lewati pengingat, izin, dan unduhan baris gagal. Commit: `feat(work-53): impor dokumen lama dari Excel dan ZIP`.
+
+---
+
 ## 7. Persyaratan Non-Fungsional
 
 - **Keamanan:** file private di S3, akses lewat signed URL berumur pendek; semua resource dilindungi Policy/Shield; secret hanya di `.env`.
@@ -616,5 +648,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 49 | Disk penyimpanan mengikuti FILESYSTEM_DISK | `ahtar-dev` |
 | 50 | Nama file yang mudah dilacak | `ahtar-dev` |
 | 51 | Login dengan kode OTP WhatsApp | `ahtar-dev` |
+| 52 | Nonaktifkan user dan alih tugas | `ahtar-dev` |
+| 53 | Impor dokumen lama | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**
