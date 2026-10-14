@@ -540,10 +540,10 @@ class DocumentImporter
             $evaluated[] = $this->evaluateRow($row, $lookups, $files, $seen);
         }
 
-        $sharedFiles = collect($evaluated)->filter(fn (array $row): bool => $row['status'] !== 'skipped' && $row['file_key'] !== null)
+        $sharedFiles = collect($evaluated)->filter(fn (array $row): bool => $row['status'] === 'ready' && $row['file_key'] !== null)
             ->groupBy('file_key')->filter(fn ($group): bool => $group->count() > 1);
         foreach ($evaluated as $index => $row) {
-            $group = $row['status'] !== 'skipped' && $row['file_key'] !== null ? $sharedFiles->get($row['file_key']) : null;
+            $group = $row['status'] === 'ready' && $row['file_key'] !== null ? $sharedFiles->get($row['file_key']) : null;
             if ($group !== null) {
                 $evaluated[$index]['messages'][] = "Nama File \"{$row['values']['file_name']}\" dipakai di lebih dari satu baris (baris ".$group->pluck('line')->implode(', ').'). Setiap dokumen harus punya file sendiri.';
                 $evaluated[$index]['status'] = $evaluated[$index]['check'] = 'error';
@@ -637,7 +637,8 @@ class DocumentImporter
                 $skipMessage = "Sudah ada di arsip: \"{$existing->title}\" (ID {$existing->id})".($existing->trashed() ? ', berada di dokumen terhapus.' : '.');
             } elseif (isset($seen[$duplicateKey])) {
                 $skipMessage = "Sama dengan baris {$seen[$duplicateKey]} di file ini.";
-            } else {
+            } elseif ($errors === []) {
+                // Hanya baris yang akan diimpor yang dicatat, agar baris perbaikan setelah baris bermasalah tetap diimpor.
                 $seen[$duplicateKey] = $row['line'];
             }
         }

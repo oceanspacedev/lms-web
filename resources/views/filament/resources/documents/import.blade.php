@@ -142,7 +142,7 @@
                         @endif
 
                         <div class="doc-import__actions">
-                            <x-filament::button icon="heroicon-o-arrow-up-tray" x-on:click="start()" x-bind:disabled="running || {{ $ready === 0 ? 'true' : 'false' }}">Impor {{ $ready }} dokumen</x-filament::button>
+                            <x-filament::button icon="heroicon-o-arrow-up-tray" x-on:click="start()" x-bind:disabled="running || {{ $ready === 0 ? 'true' : 'false' }}">{{ $ready === 0 ? 'Tidak ada dokumen yang bisa diimpor' : "Impor {$ready} dokumen" }}</x-filament::button>
                             @if ($problemCount > 0)
                                 <x-filament::button color="gray" icon="heroicon-o-arrow-down-tray" wire:click="downloadFailedRows">Unduh baris bermasalah</x-filament::button>
                             @endif

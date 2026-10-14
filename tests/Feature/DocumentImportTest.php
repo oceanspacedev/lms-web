@@ -390,6 +390,21 @@ class DocumentImportTest extends TestCase
         $this->assertDatabaseCount('documents', 3);
     }
 
+    public function test_corrected_copy_of_a_problem_row_is_still_imported(): void
+    {
+        $broken = $this->row(['document_number' => 'PKS-003', 'pic_email' => 'tidak-ada@contoh.test', 'file_name' => 'pks-003.pdf']);
+        $fixed = [...$broken, 'pic_email' => 'pic@contoh.test'];
+
+        $import = $this->check([$broken, $fixed], $this->zipFor([$broken]));
+
+        $this->assertSame(['error', 'ready'], collect($import->rows)->pluck('status')->all());
+        $this->assertSame([], $this->rowAt($import, 3)['messages']);
+
+        $this->importAll($import);
+        $this->assertDatabaseCount('documents', 1);
+        $this->assertDatabaseHas('documents', ['document_number' => 'PKS-003', 'pic_user_id' => $this->pic->id]);
+    }
+
     public function test_row_already_imported_by_another_batch_after_checking_is_skipped_at_import_time(): void
     {
         $rows = [$this->row()];
