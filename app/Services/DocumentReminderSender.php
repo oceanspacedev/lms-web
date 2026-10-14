@@ -167,9 +167,9 @@ class DocumentReminderSender
     /** @return array<string, mixed> */
     private function payload(Document $document, ReminderLog $log, CarbonImmutable $today): array
     {
-        $phone = $this->waghub->normalizePhone($document->pic?->phone);
+        $phone = $document->pic?->isActive() ? $this->waghub->normalizePhone($document->pic->phone) : null;
         if ($phone === null) {
-            foreach (User::permission('receive_reminder')->orderBy('id')->cursor() as $user) {
+            foreach (User::permission('receive_reminder')->active()->orderBy('id')->cursor() as $user) {
                 $phone = $this->waghub->normalizePhone($user->phone);
                 if ($phone !== null) {
                     break;

@@ -18,8 +18,28 @@ class ReminderHealthChecker
         return array_values(array_filter([
             $this->templateAlert(),
             $this->recipientAlert(),
+            $this->inactivePicAlert(),
             $this->failedAlert(),
         ]));
+    }
+
+    /**
+     * Dokumen yang PIC-nya sudah dinonaktifkan. Seharusnya 0, karena saat menonaktifkan user semua dokumennya dialihkan.
+     *
+     * @return array{key: string, level: 'danger'|'warning', message: string}|null
+     */
+    private function inactivePicAlert(): ?array
+    {
+        $count = Document::whereHas('pic', fn (Builder $query): Builder => $query->whereNotNull('deactivated_at'))->count();
+
+        if ($count === 0) {
+            return null;
+        }
+        if ($this->hasFallbackRecipient()) {
+            return ['key' => 'inactive_pic', 'level' => 'warning', 'message' => "{$count} dokumen masih memakai PIC yang sudah dinonaktifkan. Pengingatnya dikirim ke penerima cadangan; ganti PIC dokumen tersebut."];
+        }
+
+        return ['key' => 'inactive_pic', 'level' => 'danger', 'message' => "{$count} dokumen masih memakai PIC yang sudah dinonaktifkan dan belum ada penerima cadangan. Pengingatnya tidak akan terkirim; ganti PIC dokumen tersebut."];
     }
 
     /** @return array{key: string, level: 'danger'|'warning', message: string}|null */
@@ -69,7 +89,7 @@ class ReminderHealthChecker
 
     private function hasFallbackRecipient(): bool
     {
-        foreach (User::permission('receive_reminder')->cursor() as $user) {
+        foreach (User::permission('receive_reminder')->active()->cursor() as $user) {
             if ($this->waghub->normalizePhone($user->phone) !== null) {
                 return true;
             }

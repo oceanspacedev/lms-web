@@ -67,7 +67,7 @@ class DocumentRequestReminderSender
             return collect([$request->approver]);
         }
         try {
-            return User::permission('Approve:DocumentRequest')->orderBy('id')->get();
+            return User::permission('Approve:DocumentRequest')->active()->orderBy('id')->get();
         } catch (PermissionDoesNotExist) {
             return collect();
         }

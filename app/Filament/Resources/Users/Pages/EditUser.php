@@ -12,6 +12,8 @@ class EditUser extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            UserResource::deactivateAction(),
+            UserResource::reactivateAction(),
         ];
     }
 }

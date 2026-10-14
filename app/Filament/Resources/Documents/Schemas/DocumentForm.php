@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Schemas;
 
+use App\Models\Document;
 use App\Models\DocumentType;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
@@ -32,7 +33,9 @@ class DocumentForm
                 TextInput::make('title')->label('Judul')->required()->maxLength(255),
                 TextInput::make('document_number')->label('Nomor Dokumen')->maxLength(255),
                 TextInput::make('counterparty')->label('Pihak Lawan')->maxLength(255),
-                Select::make('pic_user_id')->label('PIC')->relationship('pic', 'name')->searchable()->preload()->required(),
+                Select::make('pic_user_id')->label('PIC')
+                    ->relationship('pic', 'name', modifyQueryUsing: fn (Builder $query, ?Document $record): Builder => $query->activeOrKeep($record?->pic_user_id))
+                    ->searchable()->preload()->required(),
                 DatePicker::make('issued_date')->label('Tanggal Terbit')->native(false)->visibleOn('create'),
                 DatePicker::make('expiry_date')
                     ->label('Tanggal Berakhir')->native(false)->visibleOn('create')

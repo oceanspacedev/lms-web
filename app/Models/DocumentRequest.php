@@ -285,7 +285,7 @@ class DocumentRequest extends Model
                 Validator::make($request->attributesToArray(), [
                     'company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)],
                     'document_type_id' => ['required', 'exists:document_types,id'],
-                    'pic_user_id' => ['required', 'exists:users,id'], 'title' => ['required', 'string', 'max:255'],
+                    'pic_user_id' => ['required', 'exists:users,id,deactivated_at,NULL'], 'title' => ['required', 'string', 'max:255'],
                     'partner_name' => ['nullable', 'string', 'max:255'], 'purpose' => ['required', 'in:new,renewal,amendment'],
                     'partner_pic' => ['nullable', 'string', 'max:255'], 'partner_contact' => ['nullable', 'string', 'max:255'],
                     'start_date' => ['nullable', 'date'], 'expiry_date' => ['nullable', 'date', 'after_or_equal:start_date'],

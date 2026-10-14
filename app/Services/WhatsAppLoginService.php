@@ -151,7 +151,7 @@ class WhatsAppLoginService
 
     private function findUser(string $phone): ?User
     {
-        $users = User::where('phone', $phone)->limit(2)->get();
+        $users = User::active()->where('phone', $phone)->limit(2)->get();
 
         return $users->count() === 1 && $this->canAccessPanel($users->first()) ? $users->first() : null;
     }

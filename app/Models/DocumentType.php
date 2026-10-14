@@ -45,12 +45,12 @@ class DocumentType extends Model
     public function resolveRequestPic(): ?User
     {
         foreach ([$this->request_pic_id, $this->request_reviewer_id, $this->request_approver_id] as $userId) {
-            $user = $userId ? User::find($userId) : null;
+            $user = $userId ? User::active()->find($userId) : null;
             if ($user?->can('Review:DocumentRequest')) {
                 return $user;
             }
         }
-        $reviewers = User::permission('Review:DocumentRequest')->orderBy('id')->get();
+        $reviewers = User::permission('Review:DocumentRequest')->active()->orderBy('id')->get();
 
         return $reviewers->first(fn (User $user): bool => app(WaghubService::class)->normalizePhone($user->phone) !== null) ?? $reviewers->first();
     }
@@ -101,8 +101,8 @@ class DocumentType extends Model
         static::saving(function (DocumentType $documentType): void {
             if ($documentType->request_pic_id !== null) {
                 $pic = User::find($documentType->request_pic_id);
-                Validator::make(['request_pic_id' => $pic && $pic->can('Review:DocumentRequest') && app(WaghubService::class)->normalizePhone($pic->phone) ? $pic->id : null],
-                    ['request_pic_id' => ['required']], ['required' => 'Pilih PIC dengan izin pemeriksaan dan nomor WhatsApp valid.'])->validate();
+                Validator::make(['request_pic_id' => $pic && $pic->isActive() && $pic->can('Review:DocumentRequest') && app(WaghubService::class)->normalizePhone($pic->phone) ? $pic->id : null],
+                    ['request_pic_id' => ['required']], ['required' => 'Pilih PIC aktif dengan izin pemeriksaan dan nomor WhatsApp valid.'])->validate();
             }
             foreach (['request_fields', 'request_attachments'] as $attribute) {
                 $items = $documentType->{$attribute} ?? [];

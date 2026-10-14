@@ -15,7 +15,7 @@ class DocumentActivity extends Model
     /** @use HasFactory<DocumentActivityFactory> */
     use HasFactory;
 
-    public const EVENTS = ['uploaded' => 'Dokumen diunggah', 'version_updated' => 'Versi baru diunggah', 'metadata_updated' => 'Informasi dokumen diubah', 'downloaded' => 'Unduhan diminta', 'previewed' => 'Pratinjau dibuka', 'deleted' => 'Dokumen dihapus', 'restored' => 'Dokumen dipulihkan'];
+    public const EVENTS = ['uploaded' => 'Dokumen diunggah', 'version_updated' => 'Versi baru diunggah', 'metadata_updated' => 'Informasi dokumen diubah', 'downloaded' => 'Unduhan diminta', 'previewed' => 'Pratinjau dibuka', 'deleted' => 'Dokumen dihapus', 'restored' => 'Dokumen dipulihkan', 'pic_reassigned' => 'PIC dialihkan'];
 
     public function document(): BelongsTo
     {

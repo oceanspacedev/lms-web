@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DocumentTypes\Schemas;
 
+use App\Models\DocumentType;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
@@ -35,7 +36,7 @@ class DocumentTypeForm
                     ->live()
                     ->helperText('Jadwal pengingat diatur di Pengaturan WhatsApp dan berlaku untuk semua jenis dokumen bermasa berlaku. Mematikan pilihan ini untuk jenis yang sudah punya dokumen menghentikan status dan pengingat masa berlaku dokumen tersebut.'),
                 Section::make('Form Pengajuan')->description('"Isian tambahan" dan lampiran dengan pilihan "Selalu" tampil di form publik dan form internal; lampiran dengan pilihan "Ada biaya" atau "Perpanjangan / adendum" hanya berlaku di form Tambah Pengajuan internal (form publik selalu berupa pengajuan baru tanpa biaya).')->collapsed()->columnSpanFull()->schema([
-                    Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->pluck('name', 'id')->all())->searchable()->placeholder('Otomatis (tim pemeriksa)'),
+                    Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->activeOrKeep($record?->request_pic_id)->pluck('name', 'id')->all())->searchable()->placeholder('Otomatis (tim pemeriksa)'),
                     Actions::make([
                         Action::make('cooperation')->label('Gunakan contoh Kerja Sama')->color('gray')
                             ->requiresConfirmation()->modalHeading('Ganti form pengajuan?')->modalDescription('Field dan daftar lampiran akan diganti.')
@@ -68,8 +69,8 @@ class DocumentTypeForm
                         Select::make('when')->label('Diperlukan')->options(['always' => 'Selalu', 'cost' => 'Ada biaya', 'renewal' => 'Perpanjangan / adendum'])->default('always')->required(),
                         Toggle::make('required')->label('Wajib')->default(true),
                     ])->collapsed()->columnSpanFull()->itemLabel(fn (array $state): string => $state['label'] ?? 'Lampiran'),
-                    Select::make('request_reviewer_id')->label('Pemeriksa')->options(fn (): array => User::permission('Review:DocumentRequest')->pluck('name', 'id')->all())->searchable()->placeholder('Tim pemeriksa'),
-                    Select::make('request_approver_id')->label('Pemberi persetujuan')->options(fn (): array => User::permission('Approve:DocumentRequest')->pluck('name', 'id')->all())->searchable()->placeholder('Tim persetujuan'),
+                    Select::make('request_reviewer_id')->label('Pemeriksa')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->activeOrKeep($record?->request_reviewer_id)->pluck('name', 'id')->all())->searchable()->placeholder('Tim pemeriksa'),
+                    Select::make('request_approver_id')->label('Pemberi persetujuan')->options(fn (?DocumentType $record): array => User::permission('Approve:DocumentRequest')->activeOrKeep($record?->request_approver_id)->pluck('name', 'id')->all())->searchable()->placeholder('Tim persetujuan'),
                 ])->columns(2),
             ]);
     }

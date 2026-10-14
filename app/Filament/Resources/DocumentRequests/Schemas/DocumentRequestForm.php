@@ -180,7 +180,7 @@ class DocumentRequestForm
                 Select::make('purpose')->label('Tujuan Pengajuan')->options(DocumentRequest::PURPOSES)->default('new')->required()->live(),
                 TextInput::make('partner_name')->label('Pihak lawan / mitra')->maxLength(255)
                     ->helperText('Opsional. Kosongkan bila dokumen tidak punya pihak lawan, misalnya akta pendirian.'),
-                Select::make('pic_user_id')->label('PIC internal')->options(fn (): array => User::pluck('name', 'id')->all())->default(fn (): int => auth()->id())->searchable()->required(),
+                Select::make('pic_user_id')->label('PIC internal')->options(fn (?DocumentRequest $record): array => User::activeOrKeep($record?->pic_user_id)->pluck('name', 'id')->all())->default(fn (): int => auth()->id())->searchable()->required(),
                 TextInput::make('partner_pic')->label('PIC mitra')->maxLength(255),
                 TextInput::make('partner_contact')->label('Kontak mitra')->maxLength(255),
             ])->disabled(fn (?DocumentRequest $record): bool => $record && ! $record->editableBy(auth()->user())),
