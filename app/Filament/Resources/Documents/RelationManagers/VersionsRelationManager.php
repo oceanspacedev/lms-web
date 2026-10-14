@@ -54,7 +54,7 @@ class VersionsRelationManager extends RelationManager
                 TextColumn::make('issued_date')->label('Tanggal Terbit')->date('d/m/Y')->placeholder('Belum diisi')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa masa berlaku')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('uploader.name')->label('Pengunggah')->wrap()
-                    ->description(fn (DocumentVersion $record): string => $record->created_at->format('d/m/Y H:i')),
+                    ->description(fn (DocumentVersion $record): string => $record->created_at->timezone(config('lms.reminder_timezone'))->format('d/m/Y H:i')),
                 TextColumn::make('change_note')->label('Catatan Perubahan')->wrap()->limit(80)
                     ->tooltip(fn (DocumentVersion $record): ?string => $record->change_note)->placeholder('Unggahan awal'),
             ])

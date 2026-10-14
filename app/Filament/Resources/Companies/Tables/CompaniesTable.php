@@ -22,7 +22,7 @@ class CompaniesTable
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Aktif' : 'Nonaktif')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray')
                     ->sortable(),
-                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d/m/Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d/m/Y H:i')->timezone(config('lms.reminder_timezone'))->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 TernaryFilter::make('is_active')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif'),

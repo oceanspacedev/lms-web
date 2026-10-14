@@ -49,7 +49,7 @@ class DocumentInfolist
                         TextEntry::make('currentVersion.issued_date')->label('Tanggal Terbit')->date('d/m/Y')->placeholder('Belum diisi'),
                         TextEntry::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa masa berlaku'),
                         TextEntry::make('currentVersion.uploader.name')->label('Diunggah Oleh')->wrap()->columnSpanFull()->placeholder('—'),
-                        TextEntry::make('currentVersion.created_at')->label('Waktu Unggah')->dateTime('d/m/Y H:i')->columnSpanFull()->placeholder('—'),
+                        TextEntry::make('currentVersion.created_at')->label('Waktu Unggah')->dateTime('d/m/Y H:i')->timezone(config('lms.reminder_timezone'))->columnSpanFull()->placeholder('—'),
                     ]),
             ]);
     }

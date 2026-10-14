@@ -43,7 +43,7 @@ class DocumentRequestsTable
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::STATUSES[$state])->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
-            TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->sortable(),
+            TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->timezone(config('lms.reminder_timezone'))->sortable(),
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
             Filter::make('waiting_long')->toggle()
