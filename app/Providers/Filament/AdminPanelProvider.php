@@ -42,7 +42,7 @@ class AdminPanelProvider extends PanelProvider
             // Pengaturan auth & tema di bawah dipanggil setelah plugin supaya menimpa bawaan Mekaya.
             ->plugin(
                 MekayaPlugin::make()
-                    ->colors(['primary' => self::charcoal()])
+                    ->colors(['primary' => Color::Blue])
                     ->sidebarWidth('16rem'),
             )
             ->viteTheme('resources/css/app.css')
