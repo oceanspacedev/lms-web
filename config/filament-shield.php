@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use App\Filament\Pages\Panduan;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\ReminderLogs\ReminderLogResource;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
@@ -223,6 +224,7 @@ return [
         'prefix' => 'view',
         'exclude' => [
             Dashboard::class,
+            Panduan::class,
         ],
     ],
 
