@@ -4,13 +4,16 @@ namespace App\Filament\Auth;
 
 use App\Models\User;
 use App\Services\WaghubService;
+use Apriansyahrs\MekayaTheme\Auth\MekayaEditProfile;
 use Closure;
-use Filament\Auth\Pages\EditProfile as BaseEditProfile;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Support\RawJs;
 
-class EditProfile extends BaseEditProfile
+/**
+ * Profil gaya Mekaya: data diri di sini, ganti password lewat tombol "Ubah password" (halaman terpisah).
+ */
+class EditProfile extends MekayaEditProfile
 {
     public function form(Schema $schema): Schema
     {
@@ -28,9 +31,6 @@ class EditProfile extends BaseEditProfile
                     }
                 }])
                 ->dehydrateStateUsing(fn (?string $state): ?string => app(WaghubService::class)->normalizePhone($state)),
-            $this->getPasswordFormComponent(),
-            $this->getPasswordConfirmationFormComponent(),
-            $this->getCurrentPasswordFormComponent(),
         ]);
     }
 }

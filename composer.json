@@ -9,6 +9,7 @@
         "php": "^8.3",
         "bezhansalleh/filament-shield": "^4.3",
         "filament/filament": "*",
+        "kungfufafa/mekaya-theme": "dev-main",
         "laravel/framework": "^13.17",
         "laravel/horizon": "^5.50",
         "laravel/tinker": "^3.0",
@@ -90,5 +91,10 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [{
+        "name": "mekaya",
+        "type": "vcs",
+        "url": "https://github.com/kungfufafa/mekaya-theme.git"
+    }]
 }

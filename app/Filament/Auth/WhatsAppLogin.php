@@ -19,6 +19,7 @@ use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\TextSize;
+use Filament\Support\Enums\Width;
 use Filament\Support\RawJs;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Blade;
@@ -54,6 +55,11 @@ class WhatsAppLogin extends SimplePage
         destroy() { clearInterval(this.timer) },
     }
     JS;
+
+    /** Tampil dengan kartu auth Mekaya yang sama dengan halaman login email. */
+    protected string $view = 'mekaya::auth.login';
+
+    protected Width|string|null $maxWidth = 'full';
 
     /** @var array<string, mixed> | null */
     public ?array $data = [];
@@ -220,6 +226,11 @@ class WhatsAppLogin extends SimplePage
                     Actions::make([$this->passwordLoginAction()])->alignCenter(),
                 ]),
         ]);
+    }
+
+    public function hasLogo(): bool
+    {
+        return false;
     }
 
     public function getTitle(): string|Htmlable

@@ -1,9 +1,10 @@
 .document-grid {
-    --document-surface: #fff;
-    --document-preview: #f8fafc;
-    --document-border: #e2e8f0;
-    --document-text: #0f172a;
-    --document-muted: #475569;
+    /* Mengikuti token permukaan Mekaya agar kartu senada dengan section/tabel panel. */
+    --document-surface: var(--mky-surface, #fff);
+    --document-preview: var(--mky-surface-subtle, #f8fafc);
+    --document-border: var(--mky-border, #e2e8f0);
+    --document-text: var(--gray-950, #0f172a);
+    --document-muted: var(--gray-600, #475569);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
@@ -17,7 +18,8 @@
     overflow: hidden;
     background: var(--document-surface);
     border: 1px solid var(--document-border);
-    border-radius: 12px;
+    border-radius: var(--mky-radius-frame, 12px);
+    box-shadow: var(--mky-shadow-surface, none);
     color: var(--document-text);
 }
 
@@ -27,7 +29,7 @@
     place-items: center;
     height: 7.5rem;
     background: var(--document-preview);
-    color: #64748b;
+    color: var(--gray-500, #64748b);
 }
 
 .document-card__file-icon { width: 4.5rem; height: 4.5rem; }
@@ -67,13 +69,10 @@
 .document-card__status-row { margin-top: .75rem; }
 
 .dark .document-grid {
-    --document-surface: #18181b;
-    --document-preview: #202024;
-    --document-border: #3f3f46;
-    --document-text: #fafafa;
-    --document-muted: #a1a1aa;
+    --document-text: var(--gray-50, #fafafa);
+    --document-muted: var(--gray-400, #a1a1aa);
 }
-.dark .document-card__preview { color: #a1a1aa; }
+.dark .document-card__preview { color: var(--gray-400, #a1a1aa); }
 
 @media (min-width: 640px) { .document-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1100px) { .document-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

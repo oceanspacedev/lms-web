@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "78dc24772ddab5751dfeb68b217895ed",
+    "content-hash": "a7a46b6a8b6f386ace1e562dfcb17aff",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -2566,6 +2566,58 @@
             "time": "2026-09-25T11:10:42+00:00"
         },
         {
+            "name": "kungfufafa/mekaya-theme",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/kungfufafa/mekaya-theme.git",
+                "reference": "e78ca8dfb2b8f9d3b3114a11eb9192e2b8b5d4ac"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/kungfufafa/mekaya-theme/zipball/e78ca8dfb2b8f9d3b3114a11eb9192e2b8b5d4ac",
+                "reference": "e78ca8dfb2b8f9d3b3114a11eb9192e2b8b5d4ac",
+                "shasum": ""
+            },
+            "require": {
+                "filament/filament": "^4.0 || ^5.0",
+                "livewire/livewire": "^3.5 || ^4.0",
+                "mckenziearts/blade-untitledui-icons": "^1.5",
+                "php": "^8.2"
+            },
+            "default-branch": true,
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Apriansyahrs\\MekayaTheme\\MekayaServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Apriansyahrs\\MekayaTheme\\": "src/"
+                },
+                "files": [
+                    "src/helpers.php"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "apriansyahrs"
+                }
+            ],
+            "description": "Mekaya — a custom Filament v4/v5 admin panel appshell (sidebar, topbar, theme, Blade components).",
+            "support": {
+                "source": "https://github.com/kungfufafa/mekaya-theme/tree/main",
+                "issues": "https://github.com/kungfufafa/mekaya-theme/issues"
+            },
+            "time": "2026-07-28T04:05:39+00:00"
+        },
+        {
             "name": "laravel/framework",
             "version": "v13.34.0",
             "source": {
@@ -3985,6 +4037,75 @@
                 }
             ],
             "time": "2026-09-28T18:12:51+00:00"
+        },
+        {
+            "name": "mckenziearts/blade-untitledui-icons",
+            "version": "v1.5.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mckenziearts/blade-untitledui-icons.git",
+                "reference": "a3cb8822a7dd95d9ae7d4a75dd4893ea67c32c90"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mckenziearts/blade-untitledui-icons/zipball/a3cb8822a7dd95d9ae7d4a75dd4893ea67c32c90",
+                "reference": "a3cb8822a7dd95d9ae7d4a75dd4893ea67c32c90",
+                "shasum": ""
+            },
+            "require": {
+                "blade-ui-kit/blade-icons": "^1.9",
+                "illuminate/support": "^9.0|^10.0|^11.0|^12.0|^13.0",
+                "php": "^8.1"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0|^11.0",
+                "phpunit/phpunit": "^9.0|^10.5|^11.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Mckenziearts\\BladeUntitledUIIcons\\BladeUntitledUIIconsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Mckenziearts\\BladeUntitledUIIcons\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Arthur Monney",
+                    "homepage": "https://arthurmonney.me"
+                }
+            ],
+            "description": "A package to easily make use of UntitledUI icons in your Laravel Blade views.",
+            "homepage": "https://github.com/mckenziearts/blade-untitledui-icons",
+            "keywords": [
+                "Untitled UI",
+                "blade",
+                "laravel"
+            ],
+            "support": {
+                "issues": "https://github.com/mckenziearts/blade-untitledui-icons/issues",
+                "source": "https://github.com/mckenziearts/blade-untitledui-icons/tree/v1.5.0"
+            },
+            "funding": [
+                {
+                    "url": "https://www.paypal.me/monneyarthur",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/mckenziearts",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-03-03T09:57:46+00:00"
         },
         {
             "name": "monolog/monolog",
@@ -12242,12 +12363,14 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "kungfufafa/mekaya-theme": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }

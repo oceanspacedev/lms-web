@@ -1,8 +1,8 @@
-<div style="display: flex; flex-direction: column; gap: 1rem;">
-    <div style="display: flex; align-items: center; gap: .75rem; color: var(--gray-400); font-size: .875rem;">
-        <span style="flex: 1; height: 1px; background: var(--gray-200);"></span>
+<div class="flex flex-col gap-4">
+    <div class="flex items-center gap-3 text-sm text-gray-400 dark:text-gray-500">
+        <span class="h-px flex-1 bg-gray-200 dark:bg-white/10"></span>
         atau
-        <span style="flex: 1; height: 1px; background: var(--gray-200);"></span>
+        <span class="h-px flex-1 bg-gray-200 dark:bg-white/10"></span>
     </div>
 
     <x-filament::button
@@ -11,8 +11,8 @@
         color="gray"
         class="w-full"
     >
-        <span style="display: inline-flex; align-items: center; gap: .5rem;">
-            <x-whatsapp-icon :size="18" style="color: #25D366;" />
+        <span class="inline-flex items-center gap-2">
+            <x-whatsapp-icon :size="18" class="text-[#25D366]" />
             Masuk dengan kode WhatsApp
         </span>
     </x-filament::button>

@@ -21,7 +21,7 @@ class DocumentRequestResource extends Resource
 {
     protected static ?string $model = DocumentRequest::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 
     protected static ?string $modelLabel = 'Pengajuan Dokumen';
 
