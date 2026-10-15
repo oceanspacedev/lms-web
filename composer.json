@@ -7,11 +7,19 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "bezhansalleh/filament-shield": "^4.3",
+        "filament/filament": "*",
+        "kungfufafa/mekaya-theme": "dev-main",
         "laravel/framework": "^13.17",
-        "laravel/tinker": "^3.0"
+        "laravel/horizon": "^5.50",
+        "laravel/tinker": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.35",
+        "opcodesio/log-viewer": "^3.24"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "fruitcake/laravel-debugbar": "^4.4",
+        "laravel/boost": "^2.10",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
@@ -50,7 +58,8 @@
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:upgrade"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
@@ -73,7 +82,7 @@
         }
     },
     "config": {
-        "optimize-autoloader": true,
+        "optimize-autoloader": false,
         "preferred-install": "dist",
         "sort-packages": true,
         "allow-plugins": {
@@ -82,5 +91,10 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [{
+        "name": "mekaya",
+        "type": "vcs",
+        "url": "https://github.com/kungfufafa/mekaya-theme.git"
+    }]
 }

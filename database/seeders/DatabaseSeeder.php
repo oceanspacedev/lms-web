@@ -15,6 +15,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(CompanySeeder::class);
+        $this->call(MonitoringPermissionSeeder::class);
+        $this->call(UserPermissionSeeder::class);
+        $this->call(DocumentMasterPermissionSeeder::class);
+        $this->call(DocumentRequestPermissionSeeder::class);
+        $this->call(DocumentTypeSeeder::class);
+        $this->call(DocumentSeeder::class);
+        $this->call(ReminderLogSeeder::class);
+
         // User::factory(10)->create();
 
         User::factory()->create([

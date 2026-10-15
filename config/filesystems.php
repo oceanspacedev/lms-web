@@ -56,7 +56,13 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'throw' => false,
+            'visibility' => 'private',
+            'http' => [
+                'verify' => env('APP_ENV', 'production') === 'local' ? env('AWS_VERIFY_SSL', true) : true,
+                // Gagal cepat bila server penyimpanan tidak bisa dihubungi, alih-alih menggantung sampai batas 30 detik PHP.
+                'connect_timeout' => (float) env('AWS_CONNECT_TIMEOUT', 10),
+            ],
+            'throw' => true,
             'report' => false,
         ],
 

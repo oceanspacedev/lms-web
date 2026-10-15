@@ -8,12 +8,13 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * Halaman utama tidak punya isi sendiri: pengunjung diarahkan ke panel admin.
      */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_the_root_page_redirects_to_the_admin_panel(): void
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        $response->assertStatus(302);
+        $response->assertRedirect('/admin');
     }
 }
