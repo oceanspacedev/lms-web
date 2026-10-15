@@ -6,6 +6,7 @@ use App\Models\Document;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use League\Flysystem\FilesystemException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -26,7 +27,15 @@ class DocumentDownloadController extends Controller
             abort_unless($version && $version->document_id === $document->id && $version->is_current, 404);
         }
         $disk = $version->storage();
-        abort_unless($disk->exists($version->file_path), 404);
+        try {
+            $exists = $disk->exists($version->file_path);
+        } catch (FilesystemException $exception) {
+            // Penyimpanan (mis. S3) tidak bisa dihubungi: tampilkan halaman jelas, bukan error 500 mentah.
+            report($exception);
+
+            return response()->view('errors.storage-unavailable', [], 503)->header('Retry-After', '60');
+        }
+        abort_unless($exists, 404);
 
         $inline = $request->boolean('preview') && in_array($version->mime_type, Document::PREVIEWABLE_MIME_TYPES, true);
         $filename = str_replace(["\r", "\n", '/', '\\'], '_', $version->stored_name);

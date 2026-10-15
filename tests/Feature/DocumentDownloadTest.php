@@ -8,9 +8,13 @@ use App\Models\DocumentType;
 use App\Models\User;
 use Database\Seeders\DocumentSeeder;
 use DateTimeInterface;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToCheckFileExistence;
+use Mockery;
 use Tests\TestCase;
 
 class DocumentDownloadTest extends TestCase
@@ -86,6 +90,28 @@ class DocumentDownloadTest extends TestCase
         $this->get(route('documents.download', $document))->assertRedirect(route('filament.admin.auth.login'));
         $this->actingAs(User::factory()->create());
         $this->get(route('documents.download', $document))->assertForbidden();
+    }
+
+    public function test_unreachable_storage_shows_a_clear_page_instead_of_a_server_error(): void
+    {
+        $document = $this->document();
+        $this->signInAsViewer();
+        $disk = Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('exists')->andThrow(UnableToCheckFileExistence::forLocation($document->currentVersion->file_path));
+        Storage::set('s3', $disk);
+        Exceptions::fake();
+
+        $this->get(route('documents.download', $document))
+            ->assertStatus(503)
+            ->assertHeader('Retry-After', '60')
+            ->assertSee('Penyimpanan file sedang tidak dapat dihubungi');
+        $this->assertSame(0, $document->activities()->whereIn('event', ['downloaded', 'previewed'])->count());
+        Exceptions::assertReported(UnableToCheckFileExistence::class);
+    }
+
+    public function test_storage_connection_gives_up_quickly_instead_of_hanging(): void
+    {
+        $this->assertSame(10.0, config('filesystems.disks.s3.http.connect_timeout'));
     }
 
     public function test_missing_file_and_soft_deleted_document_return_not_found(): void
