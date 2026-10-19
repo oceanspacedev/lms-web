@@ -18,6 +18,12 @@ class SendRequestNotifications extends Command
     {
         $this->info($notifier->run().' notifikasi diterima WagHub.');
 
+        if ($notifier->failedInLastRun() > 0) {
+            $this->error($notifier->failedInLastRun().' notifikasi gagal dikirim; akan dicoba kembali.');
+
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 }

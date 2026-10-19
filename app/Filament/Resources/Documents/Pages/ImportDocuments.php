@@ -15,6 +15,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 /**
  * Impor dokumen lama: 1 unduh template, 2 unggah Excel + ZIP, 3 periksa (dry run), 4 impor bertahap dari browser.
@@ -122,6 +123,9 @@ class ImportDocuments extends Page
             );
         } catch (ValidationException $exception) {
             throw ValidationException::withMessages(collect($exception->errors())->mapWithKeys(fn (array $messages, string $field): array => ['data.'.$field => $messages])->all());
+        } catch (Throwable $exception) {
+            report($exception);
+            throw ValidationException::withMessages(['data.excel' => 'File tidak bisa diperiksa karena gangguan sistem. Coba lagi; bila berulang, hubungi admin.']);
         }
 
         foreach ([$excel, ...$zips] as $file) {

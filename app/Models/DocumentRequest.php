@@ -417,7 +417,28 @@ class DocumentRequest extends Model
 
     public function archiveSigned(UploadedFile $file, string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null): Document
     {
-        return DB::transaction(function () use ($file, $number, $issuedDate, $expiryDate, $user, $companyId): Document {
+        $storedFile = null;
+
+        try {
+            return $this->archiveSignedInTransaction($file, $number, $issuedDate, $expiryDate, $user, $companyId, $storedFile);
+        } catch (Throwable $exception) {
+            // Document::archive sudah menyimpan file; bila langkah di luarnya gagal, DB di-rollback tetapi file tertinggal.
+            if ($storedFile !== null) {
+                try {
+                    Storage::disk($storedFile[0])->delete($storedFile[1]);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            throw $exception;
+        }
+    }
+
+    /** @param array{0: string, 1: string}|null $storedFile */
+    private function archiveSignedInTransaction(UploadedFile $file, string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?array &$storedFile): Document
+    {
+        return DB::transaction(function () use ($file, $number, $issuedDate, $expiryDate, $user, $companyId, &$storedFile): Document {
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($user)->authorize('archive', $request);
             if ($request->status !== 'approved') {
@@ -428,6 +449,7 @@ class DocumentRequest extends Model
             Validator::make(['company_id' => $companyId], ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
             $request->company_id = $companyId;
             $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user);
+            $storedFile = [$document->currentVersion->disk, $document->currentVersion->file_path];
             $request->document_id = $document->id;
             $request->status = 'archived';
             $request->recordEvent('archived', $user);

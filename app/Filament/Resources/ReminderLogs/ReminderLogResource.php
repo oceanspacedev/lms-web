@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use RuntimeException;
+use Throwable;
 
 class ReminderLogResource extends Resource
 {
@@ -87,6 +88,11 @@ class ReminderLogResource extends Resource
         } catch (RuntimeException $exception) {
             report($exception);
             Notification::make()->title('Konfigurasi WagHub belum lengkap')->body('Pesan belum dikirim ulang. Hubungi administrator.')->danger()->send();
+
+            return;
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Pesan belum dikirim ulang')->body('Terjadi gangguan sistem. Coba lagi sebentar lagi.')->danger()->send();
 
             return;
         }
