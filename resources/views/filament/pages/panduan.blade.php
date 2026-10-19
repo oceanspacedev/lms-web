@@ -20,6 +20,11 @@
         .doc-guide__summary { margin: .25rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--gray-600); max-width: 70ch; }
         .doc-guide__player { display: grid; gap: 1rem; align-items: start; }
         .doc-guide__video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--mky-border, var(--gray-200)); border-radius: var(--mky-radius-surface, .5rem); background: var(--gray-100); }
+        .doc-guide__stage { position: relative; }
+        .doc-guide__error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .75rem; padding: 1rem; border-radius: var(--mky-radius-surface, .5rem); background: rgba(17, 24, 39, .88); color: white; text-align: center; font-size: .875rem; }
+        .doc-guide__error p { margin: 0; }
+        .doc-guide__error-retry { padding: .375rem .875rem; border: 1px solid rgba(255, 255, 255, .6); border-radius: .375rem; background: none; color: white; font-weight: 600; cursor: pointer; }
+        .doc-guide__error-retry:hover { background: rgba(255, 255, 255, .12); }
         .doc-guide__steps { display: grid; gap: .25rem; margin: 0; padding: 0; list-style: none; counter-reset: step; }
         .doc-guide__step { display: flex; gap: .75rem; width: 100%; padding: .625rem .75rem; border: 0; border-left: 3px solid transparent; border-radius: .375rem; background: none; color: var(--gray-600); font-size: .875rem; line-height: 1.45; text-align: left; cursor: pointer; }
         .doc-guide__step:hover { background: var(--mky-surface-muted, var(--gray-50)); color: var(--gray-950); }
@@ -54,7 +59,9 @@
             .doc-guide__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: .75rem; }
         }
         @media (min-width: 1536px) {
-            .doc-guide__player { grid-template-columns: minmax(0, 1fr) 20rem; }
+            /* Kolom langkah tidak boleh lebih tinggi dari video (16:9 selebar kolomnya), kalau tidak muncul celah kosong di bawah video; kelebihannya digulir. */
+            .doc-guide__player { grid-template-columns: minmax(0, 1fr) 20rem; container-type: inline-size; }
+            .doc-guide__steps { max-height: calc((100cqw - 21rem) * 9 / 16); overflow-y: auto; align-content: start; scrollbar-width: thin; }
         }
         .dark .doc-guide__nav-item { color: var(--gray-100); }
         .dark .doc-guide__nav-item:hover { background: rgba(255, 255, 255, .06); }
@@ -109,7 +116,7 @@
 
         <div>
             @foreach ($guides as $guide)
-                {{-- Video diputar tanpa suara saat fiturnya dipilih (kecuali "kurangi gerakan" aktif); langkah yang sedang tampil di video ikut disorot, dan klik langkah melompat ke detik itu. --}}
+                {{-- Video baru diputar saat user menekan play atau mengklik langkah; langkah yang sedang tampil di video ikut disorot, dan klik langkah melompat ke detik itu. --}}
                 <section
                     id="panduan-{{ $guide['id'] }}"
                     class="doc-guide__panel"
@@ -118,17 +125,22 @@
                     x-show="active === @js($guide['id'])"
                     x-data="{
                         step: 0,
+                        failed: false,
                         times: @js(array_column($guide['steps'], 'at')),
+                        retry() {
+                            this.failed = false;
+                            this.$refs.video.load();
+                        },
                         sync() {
                             const video = this.$refs.video;
                             if (this.active !== @js($guide['id'])) { video.pause(); return; }
                             video.currentTime = 0;
                             this.step = 0;
-                            if (! window.matchMedia('(prefers-reduced-motion: reduce)').matches) { video.play().catch(() => {}); }
                         },
                         seek(index) {
                             const video = this.$refs.video;
                             this.step = index;
+                            this.failed = false;
                             const jump = () => { video.currentTime = this.times[index]; video.play().catch(() => {}); };
                             {{-- Video memakai preload="none": lompat ke detik langkah baru bisa setelah metadata termuat. --}}
                             if (video.readyState >= 1) { jump(); } else { video.addEventListener('loadedmetadata', jump, { once: true }); video.load(); }
@@ -150,6 +162,7 @@
                     </header>
 
                     <div class="doc-guide__player">
+                        <div class="doc-guide__stage">
                         <video
                             x-ref="video"
                             class="doc-guide__video"
@@ -158,13 +171,18 @@
                             width="1920"
                             height="1080"
                             controls
-                            muted
-                            loop
                             playsinline
                             preload="none"
                             aria-label="Video panduan: {{ $guide['title'] }}"
                             x-on:timeupdate="step = Math.max(0, times.findLastIndex((at) => $el.currentTime + 0.05 >= at))"
+                            x-on:error="failed = true"
+                            x-on:loadeddata="failed = false"
                         ></video>
+                        <div class="doc-guide__error" role="alert" x-cloak x-show="failed">
+                            <p>Video tidak bisa dimuat. Periksa koneksi Anda lalu coba lagi.</p>
+                            <button type="button" class="doc-guide__error-retry" x-on:click="retry()">Coba lagi</button>
+                        </div>
+                        </div>
 
                         <ol class="doc-guide__steps" aria-label="Langkah">
                             @foreach ($guide['steps'] as $index => $step)
