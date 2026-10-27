@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -15,7 +16,7 @@ return new class extends Migration
             $table->id();
             $table->string('name')->unique();
             $table->boolean('has_expiry')->default(false);
-            $table->json('reminder_days')->default('[]');
+            $table->json('reminder_days')->default(new Expression('(JSON_ARRAY())'));
             $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
         });
