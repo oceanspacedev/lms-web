@@ -14,7 +14,7 @@ use Spatie\Permission\PermissionRegistrar;
  * Akun dummy untuk pengujian manual, satu akun per role.
  *
  * Jalankan: php artisan db:seed --class=DummyAccountSeeder
- * Masuk dengan email {nama-role}@dummy.test dan kata sandi PASSWORD.
+ * Masuk dengan email {nama-role}@test.com dan kata sandi PASSWORD.
  * Nomor WhatsApp dikosongkan agar pesan tidak sampai ke nomor sungguhan. Isi LMS_DUMMY_PHONE di .env
  * dengan nomor milik sendiri bila ingin menguji pengiriman.
  * Seeder ini menolak berjalan di production dan tidak dipanggil oleh DatabaseSeeder.
@@ -23,7 +23,7 @@ class DummyAccountSeeder extends Seeder
 {
     public const PASSWORD = 'dummy-password';
 
-    public const EMAIL_DOMAIN = 'dummy.test';
+    public const EMAIL_DOMAIN = 'test.com';
 
     /**
      * Role dasar untuk menguji alur dokumen dan pengajuan. Berawalan dummy_ agar tidak menimpa role buatan sendiri.

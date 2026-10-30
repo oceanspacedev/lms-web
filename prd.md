@@ -403,7 +403,7 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 **Cakupan:**
 - Seeder `DummyAccountSeeder`, dijalankan manual: `php artisan db:seed --class=DummyAccountSeeder`. Tidak dipanggil oleh `DatabaseSeeder` dan menolak berjalan di production.
-- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@dummy.test` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
+- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@test.com` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
 - Role dasar berawalan `dummy_` agar tidak menimpa role buatan sendiri, dengan izin untuk menguji alur dokumen dan pengajuan: `dummy_legal` (kelola dokumen, lihat master, log, template, pemeriksa pengajuan, penerima pengingat), `dummy_viewer` (lihat dokumen), `dummy_pemeriksa` (periksa pengajuan), `dummy_penyetuju` (setujui pengajuan dan arsipkan dokumen final), `dummy_pengaju` (buat dan ubah pengajuan). Izin role buatan sendiri tidak diubah.
 - Nomor WhatsApp akun dummy dikosongkan agar pesan tidak sampai ke nomor sungguhan. Variabel `.env` `LMS_DUMMY_PHONE` mengisi nomor milik sendiri untuk menguji pengiriman.
 
