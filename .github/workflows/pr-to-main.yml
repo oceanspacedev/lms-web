@@ -1,0 +1,34 @@
+# Penjaga alur release: main hanya menerima pull request dari staging.
+#
+# Check ini dijadikan "required status check" pada proteksi branch main, sehingga PR dari branch lain
+# (feat/*, fix/*, hotfix langsung) tidak bisa di-merge ke main. Alurnya selalu: branch kerja -> staging
+# (diuji di staging) -> PR staging -> main (production). Sama seperti dnd-web dan helpdesk-web.
+name: PR ke main
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  sumber-staging:
+    name: PR dari staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pastikan branch sumber adalah staging
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::PR ke main harus berasal dari repository ini, bukan fork ($HEAD_REPO)."
+            exit 1
+          fi
+          if [ "$HEAD_REF" != "staging" ]; then
+            echo "::error::PR ke main harus berasal dari branch staging, bukan '$HEAD_REF'. Merge dulu ke staging, lalu buka PR staging -> main."
+            exit 1
+          fi
+          echo "OK: PR berasal dari staging."
