@@ -138,7 +138,21 @@ Tes memakai database terpisah dan HTTP/storage fake. Uji S3 nyata bersifat opt-i
 
 Cadangkan database SQLite dan bucket bersama-sama; file histori versi harus dipertahankan. Untuk produksi gunakan `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, sertifikat storage valid, lalu `php artisan config:cache`. Setelah mengganti `.env` pada development, jalankan `php artisan config:clear`. Jika tampilan asset belum diperbarui, bangun kembali Vite dan asset Filament.
 
-Pengembangan proyek dilakukan pada branch lokal `ahtar-dev`; push ke remote hanya jika diminta.
+## Workflow development
+
+Konvensi branch (sama seperti dnd-web dan helpdesk-web):
+
+- `staging`: branch integrasi. Semua perubahan masuk ke sini dulu dan diuji di staging.
+- `main`: branch release untuk production. `main` diproteksi: tidak menerima push langsung, dan hanya menerima pull request **dari `staging`** (check GitHub Actions `PR dari staging` di [`.github/workflows/pr-to-main.yml`](.github/workflows/pr-to-main.yml) wajib hijau, berlaku juga untuk admin). Tidak ada perubahan yang masuk `main` tanpa lewat staging dulu.
+- Branch pekerjaan (termasuk `ahtar-dev`): buat dari `staging` dengan pola `feat/<scope>`, `fix/<scope>`, atau `docs/<scope>`; PR ke `staging`, bukan ke `main`.
+
+Alurnya: branch pekerjaan → PR ke `staging` → uji di staging → PR `staging` → `main`.
+
+```bash
+git switch staging
+git pull --ff-only origin staging
+git switch -c feat/<nama-fitur>
+```
 
 ## UAT dummy dan pemeriksaan produksi
 
