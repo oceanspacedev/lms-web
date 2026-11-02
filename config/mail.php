@@ -101,6 +101,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Markdown Mail Settings
+    |--------------------------------------------------------------------------
+    |
+    | Tema "lms" (resources/views/vendor/mail/html/themes/lms.css dan komponen
+    | di resources/views/vendor/mail) membuat email tampil seperti kartu halaman
+    | login panel (tema Filament Mekaya).
+    |
+    */
+
+    'markdown' => [
+        'theme' => 'lms',
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Global "From" Address
     |--------------------------------------------------------------------------
     |

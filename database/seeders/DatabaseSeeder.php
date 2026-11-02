@@ -2,33 +2,24 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
-     * Seed the application's database.
+     * Data dasar yang aman di semua environment, ditambah akun dummy per role khusus di local.
+     * Event model tetap aktif karena model (mis. ReminderTemplate, DocumentType) melengkapi datanya lewat event.
      */
     public function run(): void
     {
-        $this->call(CompanySeeder::class);
-        $this->call(MonitoringPermissionSeeder::class);
-        $this->call(UserPermissionSeeder::class);
-        $this->call(DocumentMasterPermissionSeeder::class);
-        $this->call(DocumentRequestPermissionSeeder::class);
-        $this->call(DocumentTypeSeeder::class);
-        $this->call(DocumentSeeder::class);
-        $this->call(ReminderLogSeeder::class);
-
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $this->call([
+            PermissionSeeder::class,
+            DocumentTypeSeeder::class,
+            ReminderTemplateSeeder::class,
         ]);
+
+        if (app()->environment('local')) {
+            $this->call(DummyAccountSeeder::class);
+        }
     }
 }

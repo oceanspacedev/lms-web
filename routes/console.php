@@ -1,6 +1,7 @@
 <?php
 
-use App\Models\LoginCode;
+use App\Models\EmailOtp;
+use App\Models\WhatsappOtp;
 use App\Services\DocumentImporter;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -29,6 +30,6 @@ Schedule::command('lms:send-request-reminders')
     ->timezone(config('lms.reminder_timezone'))
     ->withoutOverlapping(30);
 
-Schedule::command('model:prune', ['--model' => [LoginCode::class]])->daily();
+Schedule::command('model:prune', ['--model' => [WhatsappOtp::class, EmailOtp::class]])->daily();
 
 Schedule::command('lms:clean-import-files')->daily();

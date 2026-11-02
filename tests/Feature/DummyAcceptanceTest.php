@@ -16,8 +16,7 @@ use App\Models\ReminderLog;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Database\Seeders\DocumentSeeder;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,7 +38,7 @@ class DummyAcceptanceTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         Storage::fake('s3');
         Http::preventStrayRequests();
-        $this->seed([DocumentSeeder::class, ReminderLogSeeder::class]);
+        $this->seed(PermissionSeeder::class);
         config(['services.waghub.url' => 'https://waghub.example.test', 'services.waghub.token' => 'dummy-token', 'services.waghub.purpose' => 'dummy-purpose']);
     }
 

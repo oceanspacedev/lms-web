@@ -15,7 +15,7 @@ use App\Models\ReminderLog;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentReminderSender;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,7 +35,7 @@ class ReminderLogResendTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 9)->setTime(8, 0));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         config(['services.waghub.url' => 'https://waghub.test', 'services.waghub.token' => 'test-token', 'services.waghub.purpose' => 'test-purpose']);
-        $this->seed(ReminderLogSeeder::class);
+        $this->seed(PermissionSeeder::class);
         ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30, 7], 'body' => ReminderTemplate::DEFAULT_BODY]);
         Http::preventStrayRequests();
         Http::fake(['waghub.test/*' => fn () => Http::response(['status' => 'x'], config('testing.waghub_status', 202))]);
