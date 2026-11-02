@@ -15,9 +15,13 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class EditDocumentRequest extends EditRecord
 {
@@ -84,7 +88,17 @@ class EditDocumentRequest extends EditRecord
                 if (! ($data['file'] ?? null) instanceof UploadedFile) {
                     throw ValidationException::withMessages(['file' => 'Unggah dokumen final.']);
                 }
-                $this->record->archiveSigned($data['file'], $data['number'], $data['issued_date'] ?? null, $data['expiry_date'] ?? null, auth()->user(), isset($data['company_id']) ? (int) $data['company_id'] : null);
+                try {
+                    $this->record->archiveSigned($data['file'], $data['number'], $data['issued_date'] ?? null, $data['expiry_date'] ?? null, auth()->user(), isset($data['company_id']) ? (int) $data['company_id'] : null);
+                } catch (ValidationException|AuthorizationException|HttpExceptionInterface|ModelNotFoundException $exception) {
+                    throw $exception;
+                } catch (Throwable $exception) {
+                    report($exception);
+                    $this->record->refresh();
+                    Notification::make()->title('Dokumen belum diarsipkan')->body('Penyimpanan file bermasalah. Tidak ada yang berubah; coba unggah lagi sebentar lagi.')->danger()->send();
+
+                    return;
+                }
                 $this->refreshFormData(['status', 'history']);
                 Notification::make()->title('Dokumen diarsipkan')->success()->send();
             }),
@@ -94,7 +108,17 @@ class EditDocumentRequest extends EditRecord
 
     private function decide(string $status, ?string $note = null): void
     {
-        $this->record->transition($status, auth()->user(), $note);
+        try {
+            $this->record->transition($status, auth()->user(), $note);
+        } catch (ValidationException|AuthorizationException|HttpExceptionInterface|ModelNotFoundException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->record->refresh();
+            Notification::make()->title('Status belum diperbarui')->body('Terjadi gangguan sistem. Tidak ada yang berubah; coba lagi.')->danger()->send();
+
+            return;
+        }
         $this->refreshFormData(['status', 'history']);
         Notification::make()->title('Status diperbarui')->success()->send();
     }

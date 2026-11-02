@@ -4,6 +4,7 @@ use App\Models\LoginCode;
 use App\Services\DocumentImporter;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -17,9 +18,11 @@ Artisan::command('lms:clean-import-files', function (DocumentImporter $importer)
 Schedule::command('lms:send-reminders')
     ->dailyAt(config('lms.reminder_time'))
     ->timezone(config('lms.reminder_timezone'))
-    ->withoutOverlapping(30);
+    ->withoutOverlapping(30)
+    ->onFailure(fn () => Log::error('Pengingat dokumen terjadwal gagal sebagian atau seluruhnya; lihat log di atas.'));
 
-Schedule::command('lms:send-request-notifications')->everyMinute()->withoutOverlapping(5);
+Schedule::command('lms:send-request-notifications')->everyMinute()->withoutOverlapping(5)
+    ->onFailure(fn () => Log::warning('Notifikasi pengajuan gagal terkirim; akan dicoba kembali.'));
 
 Schedule::command('lms:send-request-reminders')
     ->dailyAt(config('lms.reminder_time'))

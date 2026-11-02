@@ -123,6 +123,7 @@ class DocumentReminderSender
 
                 return 'accepted';
             } catch (Throwable $exception) {
+                report($exception);
                 $log->update(['status' => 'failed', 'error_message' => $exception instanceof RuntimeException && ! $exception instanceof ConnectionException
                     ? $exception->getMessage() : 'Koneksi WagHub gagal; pengiriman akan dicoba kembali.']);
 

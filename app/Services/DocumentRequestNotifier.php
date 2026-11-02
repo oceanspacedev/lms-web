@@ -14,7 +14,15 @@ use function Illuminate\Support\defer;
 
 class DocumentRequestNotifier
 {
+    private int $failedInRun = 0;
+
     public function __construct(private WaghubService $waghub) {}
+
+    /** Jumlah notifikasi yang gagal terkirim pada pemanggilan run() terakhir. */
+    public function failedInLastRun(): int
+    {
+        return $this->failedInRun;
+    }
 
     public function enqueue(DocumentRequest $request): void
     {
@@ -101,6 +109,7 @@ class DocumentRequestNotifier
     public function run(?int $requestId = null, ?int $notificationId = null): int
     {
         $accepted = 0;
+        $this->failedInRun = 0;
         DocumentRequestNotification::whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)
             ->when($requestId, fn (Builder $query): Builder => $query->where('document_request_id', $requestId))
             ->when($notificationId, fn (Builder $query): Builder => $query->whereKey($notificationId))
@@ -134,6 +143,8 @@ class DocumentRequestNotifier
                     $notification->update(['status' => 'accepted', 'accepted_at' => now(), 'error_message' => null]);
                     $accepted++;
                 } catch (Throwable $exception) {
+                    report($exception);
+                    $this->failedInRun++;
                     $notification->update(['status' => 'failed', 'error_message' => 'Pengiriman WhatsApp gagal. Akan dicoba kembali.']);
                 }
             });

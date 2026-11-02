@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class PublicDocumentRequestController extends Controller
 {
@@ -74,6 +76,15 @@ class PublicDocumentRequestController extends Controller
         } catch (ValidationException $exception) {
             $exception->redirectTo($submission ? route('requests.public.status', ['token' => $submission->public_token]) : route('requests.public.create'));
             throw $exception;
+        } catch (HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // Gangguan sistem (DB, penyimpanan): kembalikan ke form dengan isian terjaga, bukan halaman 500 yang mengosongkan form.
+            return redirect($submission ? route('requests.public.status', ['token' => $submission->public_token]) : route('requests.public.create'))
+                ->withInput($request->except(['attachments', 'website']))
+                ->withErrors(['submit' => 'Pengajuan belum bisa dikirim karena gangguan sistem. Coba kirim lagi sebentar lagi.']);
         }
     }
 

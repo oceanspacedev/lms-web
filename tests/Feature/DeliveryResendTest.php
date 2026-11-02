@@ -267,4 +267,25 @@ class DeliveryResendTest extends TestCase
 
         Livewire::test(WhatsAppDeliveryHistory::class)->call('resend', 'test', 1)->assertForbidden();
     }
+
+    public function test_request_notification_command_fails_and_reports_when_delivery_fails(): void
+    {
+        $notification = $this->failedNotification();
+        $notification->update(['status' => 'pending', 'attempts' => 0, 'last_attempt_at' => null]);
+        config(['testing.waghub_status' => 503]);
+
+        $this->artisan('lms:send-request-notifications')->assertFailed();
+
+        $this->assertSame('failed', $notification->fresh()->status);
+    }
+
+    public function test_request_notification_command_succeeds_when_delivery_is_accepted(): void
+    {
+        $notification = $this->failedNotification();
+        $notification->update(['status' => 'pending', 'attempts' => 0, 'last_attempt_at' => null]);
+
+        $this->artisan('lms:send-request-notifications')->assertSuccessful();
+
+        $this->assertSame('accepted', $notification->fresh()->status);
+    }
 }

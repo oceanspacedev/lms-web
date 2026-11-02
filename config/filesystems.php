@@ -61,6 +61,8 @@ return [
                 'verify' => env('APP_ENV', 'production') === 'local' ? env('AWS_VERIFY_SSL', true) : true,
                 // Gagal cepat bila server penyimpanan tidak bisa dihubungi, alih-alih menggantung sampai batas 30 detik PHP.
                 'connect_timeout' => (float) env('AWS_CONNECT_TIMEOUT', 10),
+                // Batas total satu permintaan, agar unggah/baca yang macet setelah tersambung tidak menggantung.
+                'timeout' => (float) env('AWS_TIMEOUT', 300),
             ],
             'throw' => true,
             'report' => false,
