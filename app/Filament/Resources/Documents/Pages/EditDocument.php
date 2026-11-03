@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Pages;
 
+use App\Filament\Concerns\HasBackToListAction;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Document;
 use Filament\Actions\DeleteAction;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class EditDocument extends EditRecord
 {
+    use HasBackToListAction;
+
     protected static string $resource = DocumentResource::class;
 
     protected function getSavedNotificationTitle(): ?string
@@ -40,6 +43,7 @@ class EditDocument extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            $this->backToListAction(),
             ViewAction::make()->label('Lihat'),
             DeleteAction::make()->label('Hapus Dokumen')
                 ->modalHeading('Hapus dokumen ini?')

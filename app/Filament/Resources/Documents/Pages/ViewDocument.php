@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Pages;
 
+use App\Filament\Concerns\HasBackToListAction;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Schemas\DocumentVersionForm;
 use App\Models\Document;
@@ -19,6 +20,8 @@ use Throwable;
 
 class ViewDocument extends ViewRecord
 {
+    use HasBackToListAction;
+
     protected static string $resource = DocumentResource::class;
 
     public function getTitle(): string
@@ -35,6 +38,7 @@ class ViewDocument extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            $this->backToListAction(),
             DocumentResource::restoreAction()->icon('heroicon-o-arrow-uturn-left')->color('primary'),
             $this->previewAction(),
             Action::make('download')->label('Unduh File')->icon('heroicon-o-arrow-down-tray')

@@ -58,6 +58,9 @@ class AdminPanelProvider extends PanelProvider
                 fn (): View => view('filament.resources.documents.filters'),
                 scopes: ListDocuments::class,
             )
+            // Setelah membuat atau menyimpan data, kembali ke daftar, bukan ke halaman ubah/detail data tersebut.
+            ->resourceCreatePageRedirect('index')
+            ->resourceEditPageRedirect('index')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DocumentRequests\Pages;
 
+use App\Filament\Concerns\HasBackToListAction;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Company;
@@ -25,6 +26,8 @@ use Throwable;
 
 class EditDocumentRequest extends EditRecord
 {
+    use HasBackToListAction;
+
     protected static string $resource = DocumentRequestResource::class;
 
     public function getTitle(): string
@@ -58,9 +61,10 @@ class EditDocumentRequest extends EditRecord
         $policy = new DocumentRequestPolicy;
 
         return [
+            $this->backToListAction(),
             Action::make('submit')->label('Ajukan')->visible(fn (): bool => $this->record->editableBy(auth()->user()) && auth()->user()->can('update', $this->record))
                 ->action(function (): void {
-                    $this->save(shouldSendSavedNotification: false);
+                    $this->save(shouldRedirect: false, shouldSendSavedNotification: false);
                     $this->record->refresh();
                     try {
                         $this->record->transition('submitted', auth()->user());
