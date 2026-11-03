@@ -25,11 +25,19 @@ class WaghubService
         return preg_match('/^628[0-9]{8,11}$/', $phone) ? $phone : null;
     }
 
+    /**
+     * Fitur yang mengirim WhatsApp (mis. login WhatsApp) hanya ditawarkan bila WAG_URL dan WAG_TOKEN terisi.
+     */
+    public function isConfigured(): bool
+    {
+        return filled(config('services.waghub.url')) && filled(config('services.waghub.token'));
+    }
+
     public function assertConfigured(): void
     {
-        foreach (['url', 'token', 'purpose'] as $key) {
+        foreach (['url', 'token'] as $key) {
             if (blank(config("services.waghub.{$key}"))) {
-                throw new RuntimeException('Konfigurasi WAGHUB_'.strtoupper($key).' belum diisi.');
+                throw new RuntimeException('Konfigurasi WAG_'.strtoupper($key).' belum diisi.');
             }
         }
     }

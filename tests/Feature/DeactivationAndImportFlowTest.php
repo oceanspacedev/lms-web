@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Auth\WhatsAppLogin;
+use App\Filament\Auth\Pages\PhoneLogin;
 use App\Filament\Resources\DocumentRequests\Pages\EditDocumentRequest;
 use App\Filament\Resources\Documents\Pages\CreateDocument;
 use App\Filament\Resources\Documents\Pages\ImportDocuments;
@@ -473,8 +473,8 @@ class DeactivationAndImportFlowTest extends TestCase
         ]);
 
         // 1. Sebelum keluar, staf masih bisa meminta kode masuk WhatsApp.
-        $otp = Livewire::test(WhatsAppLogin::class)->fillForm(['phone' => '081200000001'])->call('submit')->assertHasNoFormErrors()->assertSet('step', 'code');
-        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode masuk LMS Legal'));
+        $otp = Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081200000001'])->call('send')->assertHasNoFormErrors()->assertSet('awaitingOtp', true);
+        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode OTP LMS Legal'));
         preg_match('/\b(\d{6})\b/', $this->messagesTo('6281200000001')[0]['text'], $match);
         $oldCode = $match[1];
 
@@ -525,11 +525,10 @@ class DeactivationAndImportFlowTest extends TestCase
         Livewire::test(Login::class)->fillForm(['email' => $leaver->email, 'password' => DummyAccountSeeder::PASSWORD])
             ->call('authenticate')->assertHasFormErrors(['email']);
         $this->assertGuest();
-        $otp->fillForm(['code' => $oldCode])->call('submit')->assertHasFormErrors(['code']);
+        $otp->set('data.otp', $oldCode)->call('verify')->assertHasFormErrors(['whatsapp_number']);
         $this->assertGuest();
-        $this->travel(2)->minutes();
-        Livewire::test(WhatsAppLogin::class)->fillForm(['phone' => '081200000001'])->call('submit')->assertHasNoFormErrors()->assertSet('step', 'code');
-        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode masuk LMS Legal'));
+        Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081200000001'])->call('send')->assertHasFormErrors(['whatsapp_number'])->assertSet('awaitingOtp', false);
+        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode OTP LMS Legal'));
 
         // 6. Pengajuan menggantung 2 hari: pengingat ke pemeriksa pengganti, bukan ke staf yang keluar.
         $this->travelTo(now()->setDate(2026, 10, 11)->setTime(8, 0));
@@ -602,11 +601,11 @@ class DeactivationAndImportFlowTest extends TestCase
             ->call('authenticate')->assertHasNoFormErrors();
         $this->assertAuthenticatedAs($leaver);
         $this->logOut();
-        $login = Livewire::test(WhatsAppLogin::class)->fillForm(['phone' => '081200000001'])->call('submit')->assertHasNoFormErrors();
-        $codes = $this->messagesTo('6281200000001', 'Kode masuk LMS Legal');
+        $login = Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081200000001'])->call('send')->assertHasNoFormErrors();
+        $codes = $this->messagesTo('6281200000001', 'Kode OTP LMS Legal');
         $this->assertCount(2, $codes);
         preg_match('/\b(\d{6})\b/', $codes[1]['text'], $match);
-        $login->fillForm(['code' => $match[1]])->call('submit')->assertHasNoFormErrors()->assertRedirect(Filament::getUrl());
+        $login->set('data.otp', $match[1])->call('verify')->assertHasNoFormErrors()->assertRedirect(Filament::getUrl());
         $this->assertAuthenticatedAs($leaver);
 
         // 12. Dinonaktifkan lagi, nomornya dipakai staf baru, lalu aktivasi ulang ditolak karena nomor bentrok.

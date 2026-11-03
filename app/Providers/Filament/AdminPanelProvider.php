@@ -3,7 +3,6 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\EditProfile;
-use App\Filament\Auth\WhatsAppLogin;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use Apriansyahrs\MekayaTheme\Auth\MekayaLogin;
 use Apriansyahrs\MekayaTheme\MekayaPlugin;
@@ -26,7 +25,6 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -50,11 +48,10 @@ class AdminPanelProvider extends PanelProvider
             ->registration(null)
             ->passwordReset(null)
             ->profile(EditProfile::class, isSimple: false)
-            ->routes(fn () => Route::get('/login/whatsapp', WhatsAppLogin::class)->name('auth.whatsapp-login'))
+            // Tombol "Atau masuk dengan" WhatsApp dan email (route di routes/web.php), sama dengan dnd-web dan gais-web.
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn (): View => view('filament.auth.whatsapp-login-link'),
-                scopes: MekayaLogin::class,
+                fn (): View => view('auth.login-extra'),
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_HEADER_ACTIONS_AFTER,

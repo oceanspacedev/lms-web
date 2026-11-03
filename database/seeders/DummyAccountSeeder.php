@@ -11,13 +11,13 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Akun dummy untuk pengujian manual, satu akun per role.
+ * Akun dummy untuk pengujian manual, satu akun per role (termasuk role buatan sendiri).
  *
- * Jalankan: php artisan db:seed --class=DummyAccountSeeder
+ * Dipanggil DatabaseSeeder di environment local, atau manual: php artisan db:seed --class=DummyAccountSeeder
  * Masuk dengan email {nama-role}@test.com dan kata sandi PASSWORD.
  * Nomor WhatsApp dikosongkan agar pesan tidak sampai ke nomor sungguhan. Isi LMS_DUMMY_PHONE di .env
  * dengan nomor milik sendiri bila ingin menguji pengiriman.
- * Seeder ini menolak berjalan di production dan tidak dipanggil oleh DatabaseSeeder.
+ * Seeder ini menolak berjalan di production.
  */
 class DummyAccountSeeder extends Seeder
 {
@@ -51,19 +51,19 @@ class DummyAccountSeeder extends Seeder
             return;
         }
 
-        Role::findOrCreate(config('filament-shield.super_admin.name'), 'web');
-        $this->call([
-            MonitoringPermissionSeeder::class, UserPermissionSeeder::class, DocumentMasterPermissionSeeder::class,
-            DocumentRequestPermissionSeeder::class, ReminderLogSeeder::class,
-        ]);
+        $this->call(PermissionSeeder::class);
+
         foreach (self::BASELINE_ROLES as $name => $permissions) {
-            Role::findOrCreate($name, 'web')->syncPermissions(array_map(fn (string $permission): Permission => Permission::findOrCreate($permission, 'web'), $permissions));
+            Role::findOrCreate($name, 'web')->syncPermissions(array_map(fn (string $permission): Permission => Permission::findByName($permission, 'web'), $permissions));
         }
+
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         Role::where('guard_name', 'web')->orderBy('name')->get()->each(function (Role $role): void {
             $user = User::updateOrCreate(['email' => Str::slug($role->name).'@'.self::EMAIL_DOMAIN], [
-                'name' => 'Dummy '.Str::headline(Str::replaceStart('dummy_', '', $role->name)), 'password' => Hash::make(self::PASSWORD), 'phone' => env('LMS_DUMMY_PHONE'),
+                'name' => 'Dummy '.Str::headline(Str::replaceStart('dummy_', '', $role->name)),
+                'password' => Hash::make(self::PASSWORD),
+                'phone' => env('LMS_DUMMY_PHONE'),
             ]);
             $user->syncRoles([$role]);
             $this->command?->line($user->email.' → '.$role->name);

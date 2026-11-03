@@ -6,7 +6,7 @@ use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use DateTimeInterface;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,7 +25,7 @@ class DocumentDownloadTest extends TestCase
     {
         parent::setUp();
         Storage::fake('s3');
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     private function document(string $extension = 'pdf', string $mime = 'application/pdf'): Document

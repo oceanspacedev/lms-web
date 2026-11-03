@@ -12,7 +12,7 @@ use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -30,7 +30,7 @@ class DocumentTrashTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 5)->setTime(15, 0));
         Storage::fake('s3');
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     /** @param list<string> $permissions */

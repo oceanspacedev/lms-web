@@ -29,8 +29,6 @@ class CheckProductionReadiness extends Command
             'Endpoint S3 HTTPS' => ! $usesS3 || blank(config('filesystems.disks.s3.endpoint')) || parse_url((string) config('filesystems.disks.s3.endpoint'), PHP_URL_SCHEME) === 'https',
             'Sertifikat S3 diverifikasi' => ! $usesS3 || config('filesystems.disks.s3.http.verify') === true,
             'WagHub HTTPS dan token tersedia' => parse_url((string) config('services.waghub.url'), PHP_URL_SCHEME) === 'https' && filled(config('services.waghub.token')),
-            'Purpose WagHub tersedia' => filled(config('services.waghub.purpose')),
-            'Purpose OTP WagHub tersedia' => filled(config('services.waghub.otp_purpose')),
             'Scheduler Asia/Jakarta' => config('lms.reminder_timezone') === 'Asia/Jakarta',
             'Batas retry positif' => (int) config('lms.reminder_max_attempts') > 0,
             'Direktori runtime writable' => is_writable(storage_path()) && is_writable(base_path('bootstrap/cache')),

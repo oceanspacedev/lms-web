@@ -10,7 +10,7 @@ use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\ReminderTemplate;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +29,7 @@ class DocumentStatusDashboardTest extends TestCase
         parent::setUp();
         $this->travelTo(now()->setDate(2026, 10, 5)->setTime(15, 0));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     /** Jadwal pengingat berlaku global untuk semua dokumen; daftar kosong berarti tidak ada jadwal. */

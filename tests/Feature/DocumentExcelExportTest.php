@@ -11,7 +11,7 @@ use App\Models\DocumentVersion;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentSpreadsheetExporter;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -29,7 +29,7 @@ class DocumentExcelExportTest extends TestCase
         parent::setUp();
         $this->travelTo(now()->setDate(2026, 10, 9)->setTime(9, 0));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
         ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30]]);
         $this->path = tempnam(sys_get_temp_dir(), 'lms-xlsx-');
     }

@@ -9,7 +9,7 @@ use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Database\QueryException;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -34,7 +34,7 @@ class DocumentVersioningTest extends TestCase
         parent::setUp();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         Storage::fake('s3');
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     private function document(): Document

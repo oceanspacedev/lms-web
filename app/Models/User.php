@@ -22,6 +22,22 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
 
+    /**
+     * Kode login yang belum dipakai hangus saat nomor WhatsApp atau email diganti, agar tidak bisa dipakai pemilik lama.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            if ($user->wasChanged('phone')) {
+                WhatsappOtp::where('user_id', $user->getKey())->whereNull('verified_at')->update(['expires_at' => now()]);
+            }
+
+            if ($user->wasChanged('email')) {
+                EmailOtp::where('user_id', $user->getKey())->whereNull('verified_at')->update(['expires_at' => now()]);
+            }
+        });
+    }
+
     /** User nonaktif tidak bisa masuk (password maupun OTP) dan sesi yang masih terbuka ditolak oleh middleware panel. */
     public function canAccessPanel(Panel $panel): bool
     {

@@ -1,12 +1,30 @@
 <?php
 
+use App\Filament\Auth\Pages\EmailLogin;
+use App\Filament\Auth\Pages\PhoneLogin;
 use App\Http\Controllers\DocumentDownloadController;
 use App\Http\Controllers\DocumentRequestAttachmentController;
 use App\Http\Controllers\PanduanVideoController;
 use App\Http\Controllers\PublicDocumentRequestController;
+use Filament\Http\Middleware\DisableBladeIconComponents;
+use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/admin');
+
+// Login tanpa password (WhatsApp dan email), ditawarkan di bawah form login panel.
+Route::middleware([
+    DisableBladeIconComponents::class,
+    DispatchServingFilamentEvent::class,
+])->group(function () {
+    Route::get('/phone-login', PhoneLogin::class)->name('phone-login');
+    Route::get('/email-login', EmailLogin::class)->name('email-login');
+
+    // Magic link dari email. Membuka URL saja tidak menghabiskan token; lihat EmailLogin::$magicToken.
+    Route::get('/email-login/link/{token}', EmailLogin::class)
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->name('email-login.link');
+});
 
 Route::get('/admin/documents/{document}/download', DocumentDownloadController::class)
     ->middleware('auth:web')->name('documents.download');

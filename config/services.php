@@ -2,14 +2,22 @@
 
 return [
 
+    // WagHub cukup diatur dengan WAG_URL dan WAG_TOKEN, sama dengan dnd-web, gais-web, dan helpdesk-web.
+    // Variabel lama WAGHUB_* masih dibaca agar server yang sudah berjalan tidak wajib mengubah .env.
     'waghub' => [
-        'url' => env('WAGHUB_URL'),
-        'token' => env('WAGHUB_TOKEN'),
-        'purpose' => env('WAGHUB_PURPOSE'),
-        'otp_purpose' => env('WAGHUB_OTP_PURPOSE', env('WAGHUB_PURPOSE')),
+        'url' => env('WAG_URL', env('WAGHUB_URL', 'https://waghub.mekayastudio.com')),
+        'token' => env('WAG_TOKEN', env('WAGHUB_TOKEN')),
+        'purpose' => env('WAGHUB_PURPOSE', 'notification'),
+        'otp_purpose' => env('WAGHUB_OTP_PURPOSE', env('WAGHUB_PURPOSE', 'otp')),
         'mode' => env('WAGHUB_MODE', 'sync'),
         'route_key' => env('WAGHUB_ROUTE_KEY', 'default'),
         'timeout' => 20,
+        'otp_expires_in' => 300,
+    ],
+
+    // Login email (kode OTP + magic link) memakai mailer default Laravel (MAIL_*).
+    'email_login' => [
+        'expires_in' => (int) env('EMAIL_LOGIN_EXPIRES_IN', 600),
     ],
 
     /*

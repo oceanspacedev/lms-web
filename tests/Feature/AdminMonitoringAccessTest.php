@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use BezhanSalleh\FilamentShield\Resources\Roles\Pages\EditRole;
-use Database\Seeders\MonitoringPermissionSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -20,7 +20,7 @@ class AdminMonitoringAccessTest extends TestCase
     {
         parent::setUp();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(MonitoringPermissionSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     public function test_super_admin_can_open_monitoring_links_from_the_panel(): void
@@ -116,7 +116,8 @@ class AdminMonitoringAccessTest extends TestCase
     {
         $this->app['env'] = 'local';
         $user = User::factory()->create();
-        $user->assignRole(Role::findOrCreate('super_admin', 'web'));
+        // PermissionSeeder memberi super_admin semua permission; di sini perannya sengaja dikosongkan.
+        $user->assignRole(Role::findOrCreate('super_admin', 'web')->syncPermissions([]));
         $this->actingAs($user);
 
         foreach (Filament::getPanel('admin')->getNavigationItems() as $item) {
@@ -125,22 +126,6 @@ class AdminMonitoringAccessTest extends TestCase
 
         $this->get(route('horizon.index'))->assertForbidden();
         $this->get(route('log-viewer.index'))->assertForbidden();
-    }
-
-    public function test_custom_permission_seeder_is_idempotent(): void
-    {
-        $expected = array_keys(config('filament-shield.custom_permissions'));
-
-        $this->seed(MonitoringPermissionSeeder::class);
-        $this->seed(MonitoringPermissionSeeder::class);
-
-        $this->assertDatabaseCount('permissions', count($expected));
-        foreach ($expected as $permission) {
-            $this->assertDatabaseHas('permissions', ['name' => $permission, 'guard_name' => 'web']);
-        }
-        $this->assertContains('View:Horizon', $expected);
-        $this->assertContains('View:LogViewer', $expected);
-        $this->assertContains('receive_reminder', $expected);
     }
 
     public function test_production_panel_accepts_assigned_roles_and_permissions_but_rejects_unassigned_users(): void

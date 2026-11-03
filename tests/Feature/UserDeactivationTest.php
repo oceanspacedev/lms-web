@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Auth\Pages\PhoneLogin;
 use App\Filament\Resources\Documents\Pages\CreateDocument;
 use App\Filament\Resources\Documents\Pages\EditDocument;
 use App\Filament\Resources\Users\Pages\EditUser;
@@ -19,7 +20,6 @@ use App\Services\DocumentReminderSender;
 use App\Services\DocumentRequestReminderSender;
 use App\Services\ReminderHealthChecker;
 use App\Services\UserDeactivator;
-use App\Services\WhatsAppLoginService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
@@ -93,13 +93,13 @@ class UserDeactivationTest extends TestCase
     public function test_deactivated_user_cannot_log_in_with_password_or_whatsapp_code(): void
     {
         $user = $this->staff('6281234567890');
-        app(WhatsAppLoginService::class)->requestCode('081234567890', '127.0.0.1');
+        $otp = Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081234567890'])->call('send')->assertHasNoFormErrors();
         preg_match('/\b(\d{6})\b/', Http::recorded()->last()[0]['message']['text'], $match);
         $user->forceFill(['deactivated_at' => now()])->save();
 
-        $this->assertThrows(fn () => app(WhatsAppLoginService::class)->verifyCode('081234567890', $match[1]), ValidationException::class);
-        $this->travel(2)->minutes();
-        app(WhatsAppLoginService::class)->requestCode('081234567890', '127.0.0.1');
+        $otp->set('data.otp', $match[1])->call('verify')->assertHasFormErrors(['whatsapp_number']);
+        $this->assertGuest();
+        Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081234567890'])->call('send')->assertHasFormErrors(['whatsapp_number']);
         Http::assertSentCount(1);
 
         Livewire::test(Login::class)->fillForm(['email' => $user->email, 'password' => 'password'])->call('authenticate')->assertHasFormErrors(['email']);

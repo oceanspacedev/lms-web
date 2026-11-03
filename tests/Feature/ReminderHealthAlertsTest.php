@@ -11,7 +11,7 @@ use App\Models\ReminderLog;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\ReminderHealthChecker;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -28,7 +28,7 @@ class ReminderHealthAlertsTest extends TestCase
         parent::setUp();
         $this->travelTo(now()->setDate(2026, 10, 6)->setTime(1, 0));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(ReminderLogSeeder::class);
+        $this->seed(PermissionSeeder::class);
         Permission::findOrCreate('ViewAny:ReminderTemplate', 'web');
     }
 

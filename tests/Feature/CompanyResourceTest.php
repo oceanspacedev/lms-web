@@ -9,7 +9,7 @@ use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Schemas\CompanyForm;
 use App\Models\Company;
 use App\Models\User;
-use Database\Seeders\CompanySeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -26,7 +26,7 @@ class CompanyResourceTest extends TestCase
     {
         parent::setUp();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(CompanySeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     private function signInWithPermissions(array $permissions): void
@@ -228,7 +228,7 @@ class CompanyResourceTest extends TestCase
     public function test_permissions_can_be_seeded_repeatedly(): void
     {
         $permissionCount = Permission::count();
-        $this->seed(CompanySeeder::class);
+        $this->seed(PermissionSeeder::class);
         $this->assertDatabaseCount('permissions', $permissionCount);
         $this->assertSame(12, Permission::where('name', 'like', '%:Company')->count());
         $this->assertDatabaseHas('permissions', ['name' => 'Update:Company', 'guard_name' => 'web']);

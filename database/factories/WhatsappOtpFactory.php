@@ -2,14 +2,15 @@
 
 namespace Database\Factories;
 
-use App\Models\LoginCode;
 use App\Models\User;
+use App\Models\WhatsappOtp;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Hash;
 
 /**
- * @extends Factory<LoginCode>
+ * @extends Factory<WhatsappOtp>
  */
-class LoginCodeFactory extends Factory
+class WhatsappOtpFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -20,11 +21,11 @@ class LoginCodeFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'phone' => '6281234567890',
-            'code_hash' => LoginCode::hashCode('123456'),
+            'whatsapp_number' => '6281234567890',
+            'purpose' => WhatsappOtp::PURPOSE_LOGIN,
+            'otp_hash' => Hash::make('123456'),
             'expires_at' => now()->addMinutes(5),
-            'attempts' => 0,
-            'status' => 'sent',
+            'attempt_count' => 0,
         ];
     }
 }

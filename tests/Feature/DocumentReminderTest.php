@@ -10,7 +10,7 @@ use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentReminderSender;
 use App\Services\WaghubService;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +25,7 @@ class DocumentReminderTest extends TestCase
         parent::setUp();
         $this->travelTo(now()->setDate(2026, 10, 6)->setTime(1, 0));
         config(['services.waghub.url' => 'https://waghub.test', 'services.waghub.token' => 'test-token', 'services.waghub.purpose' => 'test-purpose']);
-        $this->seed(ReminderLogSeeder::class);
+        $this->seed(PermissionSeeder::class);
         ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30, 7], 'body' => ReminderTemplate::DEFAULT_BODY]);
         Http::preventStrayRequests();
         Http::fake(['waghub.test/*' => fn () => Http::response(['status' => 'accepted'], config('testing.waghub_status', 202))]);
@@ -391,7 +391,7 @@ class DocumentReminderTest extends TestCase
     public function test_missing_configuration_fails_before_writing_logs(): void
     {
         $this->document();
-        config(['services.waghub.purpose' => null]);
+        config(['services.waghub.token' => null]);
         $this->artisan('lms:send-reminders')->assertFailed();
         Http::assertNothingSent();
         $this->assertDatabaseCount('reminder_logs', 0);

@@ -11,7 +11,7 @@ use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -29,7 +29,7 @@ class DocumentResourceTest extends TestCase
         parent::setUp();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         Storage::fake('s3');
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     private function signInWithPermissions(array $permissions): User

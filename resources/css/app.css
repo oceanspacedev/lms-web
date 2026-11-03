@@ -5,3 +5,11 @@
 @source '../../storage/framework/views/*.php';
 @source '../views/**/*.blade.php';
 @source '../../app/Filament/**/*.php';
+
+.whatsapp-login-icon {
+    fill: #25d366;
+}
+
+.email-login-icon {
+    color: var(--primary-500);
+}
