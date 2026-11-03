@@ -64,7 +64,7 @@ php artisan make:filament-user --panel=admin
 | `PermissionSeeder` | Semua permission yang dicek policy (`app/Policies`) ditambah custom permission di `config/filament-shield.php`; role `super_admin` mendapat semuanya. Cukup jalankan seeder ini saja untuk instalasi yang sudah berisi data: `php artisan db:seed --class=PermissionSeeder --no-interaction`. |
 | `DocumentTypeSeeder` | Tiga jenis dokumen awal. Jenis yang sudah ada tidak diubah. |
 | `ReminderTemplateSeeder` | Pengaturan pengingat global contoh, hanya di `local`/`testing`. |
-| `DummyAccountSeeder` | Hanya di `APP_ENV=local`: satu akun per role, email `{nama-role}@test.com` dan kata sandi `DummyAccountSeeder::PASSWORD`. Menolak berjalan di production. |
+| `DummyAccountSeeder` | Hanya di `APP_ENV=local`: satu akun per role, email `{nama-role tanpa awalan dummy_}@test.com` (misalnya `legal@test.com`, `super-admin@test.com`) dan kata sandi `DummyAccountSeeder::PASSWORD`. Menolak berjalan di production. |
 
 `make:filament-user` meminta nama, email, dan password secara interaktif. Setelah mengetahui ID pengguna, jalankan `php artisan shield:super-admin --user=ID --panel=admin --no-interaction` untuk menyinkronkan role admin dengan permission yang tersedia. Di instalasi yang sudah berjalan, atur permission baru melalui menu Hak Akses sesuai kebutuhan.
 

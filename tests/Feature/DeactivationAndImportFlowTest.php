@@ -84,11 +84,11 @@ class DeactivationAndImportFlowTest extends TestCase
         Http::fake(['waghub.test/*' => Http::response(['status' => 'accepted'], 202)]);
 
         $this->seed(DummyAccountSeeder::class);
-        $this->reviewer = $this->dummy('dummy-pemeriksa', '6281200000001');
-        $this->approver = $this->dummy('dummy-penyetuju', '6281200000002');
-        $this->legal = $this->dummy('dummy-legal', '6281200000003');
+        $this->reviewer = $this->dummy('pemeriksa', '6281200000001');
+        $this->approver = $this->dummy('penyetuju', '6281200000002');
+        $this->legal = $this->dummy('legal', '6281200000003');
         $this->admin = $this->dummy('super-admin', '6281200000004');
-        $this->viewer = $this->dummy('dummy-viewer', '6281200000005');
+        $this->viewer = $this->dummy('viewer', '6281200000005');
         $this->company = Company::factory()->create(['name' => 'Alur Impor', 'legal_form' => 'PT', 'is_active' => true]);
         DocumentType::factory()->create(['name' => 'Perjanjian Sewa', 'has_expiry' => true]);
         DocumentType::factory()->withoutExpiry()->create(['name' => 'Akta Pendirian']);

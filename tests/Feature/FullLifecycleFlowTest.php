@@ -59,9 +59,9 @@ class FullLifecycleFlowTest extends TestCase
         Http::fake(['waghub.test/*' => fn () => Http::response(['status' => 'accepted'], (int) config('testing.waghub_status', 202))]);
 
         $this->seed(DummyAccountSeeder::class);
-        $this->reviewer = $this->dummy('dummy-pemeriksa', '081200000001');
-        $this->approver = $this->dummy('dummy-penyetuju', '081200000002');
-        $this->legal = $this->dummy('dummy-legal', '081200000003');
+        $this->reviewer = $this->dummy('pemeriksa', '081200000001');
+        $this->approver = $this->dummy('penyetuju', '081200000002');
+        $this->legal = $this->dummy('legal', '081200000003');
         $this->admin = $this->dummy('super-admin', '081200000004');
         $this->company = Company::factory()->create(['name' => 'PT Alur Lengkap', 'is_active' => true]);
         ReminderTemplate::factory()->create([

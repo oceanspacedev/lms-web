@@ -36,8 +36,8 @@ class PublicRequestCounterpartyTest extends TestCase
         Storage::fake('s3');
         Http::preventStrayRequests();
         $this->seed(DummyAccountSeeder::class);
-        $reviewer = $this->dummy('dummy-pemeriksa', '081200000001');
-        $this->approver = $this->dummy('dummy-penyetuju', '081200000002');
+        $reviewer = $this->dummy('pemeriksa', '081200000001');
+        $this->approver = $this->dummy('penyetuju', '081200000002');
         $this->type = DocumentType::factory()->withoutExpiry()->create([
             'name' => 'Perjanjian Kerja Sama', 'request_pic_id' => $reviewer->id, 'request_reviewer_id' => $reviewer->id, 'request_approver_id' => $this->approver->id,
         ]);

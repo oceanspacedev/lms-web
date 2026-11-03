@@ -33,7 +33,7 @@ class PublicRequestPhoneInputTest extends TestCase
         Storage::fake('local');
         Http::preventStrayRequests();
         $this->seed(DummyAccountSeeder::class);
-        $reviewer = User::where('email', 'dummy-pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
+        $reviewer = User::where('email', 'pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
         $reviewer->update(['phone' => '081200000001']);
         $this->type = DocumentType::factory()->withoutExpiry()->create(['request_pic_id' => $reviewer->id, 'request_reviewer_id' => $reviewer->id]);
         $this->company = Company::factory()->create(['is_active' => true]);

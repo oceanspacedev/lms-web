@@ -25,7 +25,7 @@ class DocumentRequestAttachmentNameTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'));
         Storage::fake('local');
         $this->seed(DummyAccountSeeder::class);
-        $reviewer = User::where('email', 'dummy-pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
+        $reviewer = User::where('email', 'pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
         $reviewer->update(['phone' => '081200000001']);
         $this->type = DocumentType::factory()->create(['name' => 'Perjanjian Kerja Sama', 'request_pic_id' => $reviewer->id]);
     }

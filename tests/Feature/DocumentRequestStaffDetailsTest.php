@@ -72,7 +72,7 @@ class DocumentRequestStaffDetailsTest extends TestCase
     public function test_reviewer_reads_the_extra_fields_a_guest_filled_in_on_the_public_form(): void
     {
         $this->seed(DummyAccountSeeder::class);
-        $reviewer = User::where('email', 'dummy-pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
+        $reviewer = User::where('email', 'pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
         $reviewer->update(['phone' => '081200000001']);
         $company = Company::factory()->create(['name' => 'PT Alur Lengkap', 'is_active' => true]);
         $type = DocumentType::factory()->withoutExpiry()->create([

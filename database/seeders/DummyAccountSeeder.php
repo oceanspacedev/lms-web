@@ -14,14 +14,14 @@ use Spatie\Permission\PermissionRegistrar;
  * Akun dummy untuk pengujian manual, satu akun per role (termasuk role buatan sendiri).
  *
  * Dipanggil DatabaseSeeder di environment local, atau manual: php artisan db:seed --class=DummyAccountSeeder
- * Masuk dengan email {nama-role}@test.com dan kata sandi PASSWORD.
+ * Masuk dengan email {nama-role tanpa awalan dummy_}@test.com, misalnya legal@test.com, dan kata sandi PASSWORD.
  * Nomor WhatsApp dikosongkan agar pesan tidak sampai ke nomor sungguhan. Isi LMS_DUMMY_PHONE di .env
  * dengan nomor milik sendiri bila ingin menguji pengiriman.
  * Seeder ini menolak berjalan di production.
  */
 class DummyAccountSeeder extends Seeder
 {
-    public const PASSWORD = 'dummy-password';
+    public const PASSWORD = 'password123';
 
     public const EMAIL_DOMAIN = 'test.com';
 
@@ -60,8 +60,9 @@ class DummyAccountSeeder extends Seeder
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         Role::where('guard_name', 'web')->orderBy('name')->get()->each(function (Role $role): void {
-            $user = User::updateOrCreate(['email' => Str::slug($role->name).'@'.self::EMAIL_DOMAIN], [
-                'name' => 'Dummy '.Str::headline(Str::replaceStart('dummy_', '', $role->name)),
+            $label = Str::replaceStart('dummy_', '', $role->name);
+            $user = User::updateOrCreate(['email' => Str::slug($label).'@'.self::EMAIL_DOMAIN], [
+                'name' => Str::headline($label),
                 'password' => Hash::make(self::PASSWORD),
                 'phone' => env('LMS_DUMMY_PHONE'),
             ]);
