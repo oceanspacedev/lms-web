@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -9,8 +10,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('document_types', function (Blueprint $table): void {
-            $table->json('request_fields')->default('[]');
-            $table->json('request_attachments')->default('[]');
+            $table->json('request_fields')->default(new Expression('(JSON_ARRAY())'));
+            $table->json('request_attachments')->default(new Expression('(JSON_ARRAY())'));
             $table->foreignId('request_reviewer_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->foreignId('request_approver_id')->nullable()->constrained('users')->restrictOnDelete();
         });
@@ -34,10 +35,10 @@ return new class extends Migration
             $table->boolean('has_cost')->default(false);
             $table->decimal('amount', 18, 2)->nullable();
             $table->text('payment_terms')->nullable();
-            $table->json('details')->default('{}');
-            $table->json('attachments')->default('{}');
-            $table->json('requirements')->default('{}');
-            $table->json('history')->default('[]');
+            $table->json('details')->default(new Expression('(JSON_OBJECT())'));
+            $table->json('attachments')->default(new Expression('(JSON_OBJECT())'));
+            $table->json('requirements')->default(new Expression('(JSON_OBJECT())'));
+            $table->json('history')->default(new Expression('(JSON_ARRAY())'));
             $table->string('status')->default('draft')->index();
             $table->timestamps();
         });

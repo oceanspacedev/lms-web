@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -12,7 +13,7 @@ return new class extends Migration
             $table->string('schedule_mode')->default('inherit');
             $table->unsignedInteger('start_before_days')->default(30);
             $table->unsignedInteger('interval_days')->default(7);
-            $table->json('scheduled_days')->default('[]');
+            $table->json('scheduled_days')->default(new Expression('(JSON_ARRAY())'));
         });
     }
 
