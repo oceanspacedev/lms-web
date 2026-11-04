@@ -25,7 +25,6 @@ use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -209,12 +208,12 @@ class UserDeactivationTest extends TestCase
         $this->assertSame('6281200000003', DocumentRequestNotification::where('event_key', "lms-request-{$request->id}-1-stale1-u{$reviewer->id}")->sole()->recipient_phone);
     }
 
-    public function test_approval_team_option_clears_the_approver_so_any_approver_can_act(): void
+    public function test_approval_team_option_clears_the_approver(): void
     {
         $admin = $this->admin();
         $leaver = $this->staff('081200000001', ['Approve:DocumentRequest']);
-        $approverA = $this->staff('081200000002', ['Approve:DocumentRequest']);
-        $approverB = $this->staff('081200000003', ['Approve:DocumentRequest']);
+        $this->staff('081200000002', ['Approve:DocumentRequest']);
+        $this->staff('081200000003', ['Approve:DocumentRequest']);
         $request = $this->request('review', ['approver_id' => $leaver->id]);
         $type = DocumentType::factory()->create(['request_approver_id' => $leaver->id]);
 
@@ -225,8 +224,6 @@ class UserDeactivationTest extends TestCase
 
         $this->assertNull($request->fresh()->approver_id);
         $this->assertNull($type->fresh()->request_approver_id);
-        $this->assertTrue(Gate::forUser($approverA)->allows('approve', $request->fresh()));
-        $this->assertTrue(Gate::forUser($approverB)->allows('approve', $request->fresh()));
     }
 
     public function test_cannot_deactivate_yourself_or_the_last_active_super_admin(): void

@@ -26,7 +26,8 @@ use OpenSpout\Reader\XLSX\Reader;
 use Tests\TestCase;
 
 /**
- * Satu cerita lengkap: pengaju publik mengajukan, staf memeriksa dan menyetujui, dokumen final diarsipkan,
+ * Satu cerita lengkap: pengaju publik mengajukan, staf memeriksa dan mengeluarkan draf, scan bertanda tangan diunggah,
+ * fisik diterima dan dokumen diarsipkan,
  * lalu diingatkan, diperpanjang, diekspor, dan pesan gagal dipulihkan. Memakai akun dummy per role.
  */
 class FullLifecycleFlowTest extends TestCase
@@ -159,20 +160,17 @@ class FullLifecycleFlowTest extends TestCase
         $this->deliver();
         $this->assertCount(2, array_filter($this->messagesTo('6281200000001'), fn (array $m): bool => str_contains($m['text'], 'Pengajuan baru')));
 
-        // 6. Pemeriksa meneruskan, penyetuju menyetujui. Pengaju mengikuti tiap tahap.
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->callAction('review')->assertHasNoActionErrors();
-        $this->assertSame('review', $request->fresh()->status);
-        $this->actingAs($this->approver);
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->callAction('approve')->assertHasNoActionErrors();
-        $this->assertSame('approved', $request->fresh()->status);
+        // 6. Pemeriksa mengeluarkan draf; pengaju diberi tahu, lalu mengunggah scan bertanda tangan.
+        $applicantMessages = count($this->messagesTo('6281355550000'));
+        $request->refresh()->issueDraft(UploadedFile::fake()->createWithContent('draf-pks.pdf', $this->pdfContent()), $this->reviewer);
+        $this->assertSame('signing', $request->status);
         $this->deliver();
-        $this->assertStringContainsString('disetujui', strtolower(collect($this->messagesTo('6281355550000'))->last()['text']));
+        $this->assertCount($applicantMessages + 1, $this->messagesTo('6281355550000'));
+        $request->uploadSigned(UploadedFile::fake()->createWithContent('final-ttd.pdf', $this->pdfContent()), null);
+        $this->assertSame('handover', $request->status);
 
-        // 7. Dokumen final yang sudah ditandatangani diunggah dan diarsipkan.
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->callAction('archive', [
-            'number' => 'PKS/2026/001', 'issued_date' => '2026-10-09', 'expiry_date' => '2026-10-29',
-            'file' => UploadedFile::fake()->createWithContent('final-ttd.pdf', $this->pdfContent()),
-        ])->assertHasNoActionErrors();
+        // 7. Dokumen fisik diterima Staff Legal; scan bertanda tangan diarsipkan.
+        $request->markReceived('PKS/2026/001', '2026-10-09', '2026-10-29', $this->reviewer);
         $request->refresh();
         $this->assertSame('archived', $request->status);
         $document = Document::sole();

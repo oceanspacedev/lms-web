@@ -300,7 +300,8 @@ class DocumentRequestListScreenTest extends TestCase
         $requesters = [null, $other->id, $users['everything']->id, $users['requester']->id, $users['archiver']->id];
         $assignments = [[null, null], [$other->id, $other->id], [$users['reviewer']->id, $users['approver']->id], [$users['everything']->id, $users['everything']->id], [$users['everything']->id, $other->id], [$other->id, $users['everything']->id]];
         $requests = [];
-        foreach (array_keys(DocumentRequest::STATUSES) as $status) {
+        // Status lama review/approved tidak lagi dipakai alur dan tidak punya aksi di kebijakan.
+        foreach (array_diff(array_keys(DocumentRequest::STATUSES), ['review', 'approved']) as $status) {
             foreach ($requesters as $requester) {
                 foreach ($assignments as [$reviewer, $approver]) {
                     $requests[] = $this->request($status, [...$shared, 'requester_id' => $requester, 'requester_name' => $requester ? null : 'Pengaju Publik', 'requester_phone' => $requester ? null : '081234567890', 'reviewer_id' => $reviewer, 'approver_id' => $approver]);
@@ -314,7 +315,7 @@ class DocumentRequestListScreenTest extends TestCase
             $this->actingAs($user);
             $visible = DocumentRequestResource::getEloquentQuery()->pluck('id')->all();
             $expected = collect($requests)->filter(fn (DocumentRequest $request): bool => in_array($request->id, $visible, true)
-                && ($policy->review($user, $request) || $policy->approve($user, $request) || $policy->archive($user, $request) || $policy->update($user, $request)))
+                && ($policy->revise($user, $request) || $policy->update($user, $request)))
                 ->map(fn (DocumentRequest $request): int => $request->id)->sort()->values()->all();
 
             $this->assertSame($expected, $this->actionableIds(), "Peran {$role}: tab 'Perlu tindakan saya' harus sama dengan kebijakan");
@@ -322,7 +323,7 @@ class DocumentRequestListScreenTest extends TestCase
             $sizes[$role] = count($expected);
         }
         $this->assertSame(0, $sizes['none']);
-        foreach (['reviewer', 'approver', 'requester', 'archiver', 'approver-archiver', 'everything', 'viewer-all'] as $role) {
+        foreach (['reviewer', 'requester', 'everything', 'viewer-all'] as $role) {
             $this->assertGreaterThan(0, $sizes[$role], "Peran {$role} seharusnya punya pengajuan yang bisa ditindaklanjuti");
         }
     }

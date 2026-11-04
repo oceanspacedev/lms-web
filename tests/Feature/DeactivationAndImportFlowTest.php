@@ -465,8 +465,6 @@ class DeactivationAndImportFlowTest extends TestCase
     public function test_deactivated_leaver_hands_every_task_to_replacements_end_to_end(): void
     {
         $leaver = $this->reviewer;
-        $secondApprover = User::factory()->create(['name' => 'Penyetuju Cadangan', 'phone' => '6281200000006']);
-        $secondApprover->assignRole('dummy_penyetuju');
         $vendorType = DocumentType::factory()->create([
             'name' => 'Perjanjian Vendor', 'has_expiry' => true,
             'request_pic_id' => $leaver->id, 'request_reviewer_id' => $leaver->id, 'request_approver_id' => $leaver->id,
@@ -541,20 +539,13 @@ class DeactivationAndImportFlowTest extends TestCase
         $this->assertStringContainsString('Tahap: Diperiksa', $stale[0]['text']);
         $this->assertCount($leaverMessagesBefore, $this->messagesTo('6281200000001'));
 
-        // 7. Pemeriksa pengganti benar-benar bisa meneruskan, lalu penyetuju mana pun dari tim bisa menyetujui.
+        // 7. Pemeriksa pengganti benar-benar bisa memeriksa dan mengeluarkan draf.
         $this->actingAs($this->legal);
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertActionVisible('review')
-            ->callAction('review')->assertHasNoActionErrors();
-        $request->refresh();
-        $this->assertSame('review', $request->status);
-        $this->assertTrue(Gate::forUser($this->approver)->allows('approve', $request));
-        $this->assertTrue(Gate::forUser($secondApprover)->allows('approve', $request));
-        $this->actingAs($secondApprover);
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertActionVisible('approve')
-            ->callAction('approve')->assertHasNoActionErrors();
-        $request->refresh();
-        $this->assertSame('approved', $request->status);
-        $this->assertSame($secondApprover->id, collect($request->history)->last()['user_id']);
+        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertActionVisible('revise')->assertActionVisible('reject');
+        $this->assertTrue(Gate::forUser($this->legal)->allows('issueDraft', $request));
+        $request->issueDraft(UploadedFile::fake()->createWithContent('draf-vendor.pdf', $this->pdf('draf-vendor.pdf')), $this->legal);
+        $this->assertSame('signing', $request->status);
+        $this->assertSame($this->legal->id, collect($request->history)->last()['user_id']);
 
         // 8. Pengajuan baru untuk jenis dokumen yang sama langsung diarahkan ke pengganti.
         $this->logOut();

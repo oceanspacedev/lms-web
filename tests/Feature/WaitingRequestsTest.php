@@ -93,14 +93,23 @@ class WaitingRequestsTest extends TestCase
 
     public function test_transition_stamps_status_changed_at_and_restarts_the_waiting_clock(): void
     {
+        $requester = $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Update:DocumentRequest']);
         $reviewer = $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest']);
-        $request = $this->request('submitted', 10, ['requester_id' => null, 'reviewer_id' => $reviewer->id, 'requester_name' => 'Pengaju', 'requester_phone' => '081234567890']);
+        $request = $this->request('submitted', 10, ['requester_id' => $requester->id, 'reviewer_id' => $reviewer->id, 'start_date' => '2026-11-01']);
         $this->assertCount(1, DocumentRequest::query()->waitingLongerThan(2)->get());
 
-        $request->transition('review', $reviewer);
+        $request->transition('revision', $reviewer, 'Lengkapi lampiran.');
 
         $request->refresh();
-        $this->assertSame('review', $request->status);
+        $this->assertSame('revision', $request->status);
+        $this->assertTrue($request->status_changed_at->equalTo(now()));
+        $this->assertSame(0, DocumentRequest::query()->waitingLongerThan(2)->count());
+        $this->travel(3)->days();
+
+        $request->transition('submitted', $requester);
+
+        $request->refresh();
+        $this->assertSame('submitted', $request->status);
         $this->assertTrue($request->status_changed_at->equalTo(now()));
         $this->assertSame(0, DocumentRequest::query()->waitingLongerThan(2)->count());
         $this->travel(3)->days();
