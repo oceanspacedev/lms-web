@@ -29,7 +29,14 @@ class DocumentRequest extends Model
     /** @use HasFactory<DocumentRequestFactory> */
     use HasFactory;
 
-    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'rejected' => 'Ditolak', 'archived' => 'Selesai'];
+    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+
+    /** Batas hari menyerahkan dokumen fisik setelah scan pertama; pengingat lanjutan di hari ke-7, 14, 28. */
+    public const HANDOVER_DAYS = 7;
+
+    public const LATE_REMINDER_DAYS = [7, 14, 28];
+
+    public const SCAN_REMINDER_DAYS = 7;
 
     public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
 
@@ -47,7 +54,7 @@ class DocumentRequest extends Model
 
     protected function casts(): array
     {
-        return ['details' => 'array', 'attachments' => 'array', 'requirements' => 'array', 'history' => 'array', 'status_changed_at' => 'datetime', 'has_cost' => 'boolean', 'start_date' => 'date', 'expiry_date' => 'date', 'target_date' => 'date', 'amount' => 'decimal:2'];
+        return ['details' => 'array', 'attachments' => 'array', 'requirements' => 'array', 'history' => 'array', 'status_changed_at' => 'datetime', 'draft_issued_at' => 'datetime', 'signed_uploaded_at' => 'datetime', 'physical_received_at' => 'datetime', 'has_cost' => 'boolean', 'start_date' => 'date', 'expiry_date' => 'date', 'target_date' => 'date', 'amount' => 'decimal:2'];
     }
 
     public function company(): BelongsTo
@@ -93,6 +100,86 @@ class DocumentRequest extends Model
     {
         return $query->whereIn('status', self::WAITING_STATUSES)
             ->whereRaw('coalesce(document_requests.status_changed_at, document_requests.updated_at) <= ?', [now()->subDays($days)->toDateTimeString()]);
+    }
+
+    public function lateReasons(): HasMany
+    {
+        return $this->hasMany(DocumentRequestLateReason::class)->orderBy('created_at');
+    }
+
+    /** Tenggat penyerahan dokumen fisik: 7 hari kalender (WIB) setelah scan pertama diunggah, atau null bila belum ada scan. */
+    public function handoverDueDate(): ?CarbonImmutable
+    {
+        return $this->jakartaDate($this->signed_uploaded_at)?->addDays(self::HANDOVER_DAYS);
+    }
+
+    /** Selisih hari kalender (WIB) sejak scan pertama diunggah. */
+    public function daysSinceSigned(?CarbonImmutable $today = null): ?int
+    {
+        return $this->daysSince($this->signed_uploaded_at, $today);
+    }
+
+    /** Selisih hari kalender (WIB) sejak draf pertama diterbitkan. */
+    public function daysSinceDraft(?CarbonImmutable $today = null): ?int
+    {
+        return $this->daysSince($this->draft_issued_at, $today);
+    }
+
+    public function isHandoverLate(?CarbonImmutable $today = null): bool
+    {
+        return $this->status === 'handover' && ($this->daysSinceSigned($today) ?? 0) > self::HANDOVER_DAYS;
+    }
+
+    /** Jumlah hari melewati tenggat; 0 bila tidak terlambat. */
+    public function daysLate(): int
+    {
+        return max(0, ($this->daysSinceSigned() ?? 0) - self::HANDOVER_DAYS);
+    }
+
+    /** Pengajuan menunggu dokumen fisik yang belum melewati tenggat. */
+    public function scopeHandoverOnTime(Builder $query): Builder
+    {
+        return $query->where('status', 'handover')->where('signed_uploaded_at', '>=', self::lateBoundary());
+    }
+
+    /** Pengajuan menunggu dokumen fisik yang sudah melewati tenggat. */
+    public function scopeHandoverLate(Builder $query): Builder
+    {
+        return $query->where('status', 'handover')->where('signed_uploaded_at', '<', self::lateBoundary());
+    }
+
+    /** Pengajuan menunggu scan tanda tangan, draf terbit lebih dari 7 hari lalu. */
+    public function scopeScanOverdue(Builder $query): Builder
+    {
+        return $query->where('status', 'signing')->whereNull('signed_uploaded_at')->where('draft_issued_at', '<', self::lateBoundary());
+    }
+
+    /** Pengajuan terlambat yang belum punya alasan keterlambatan. */
+    public function scopeLateWithoutReason(Builder $query): Builder
+    {
+        return $query->handoverLate()->whereDoesntHave('lateReasons');
+    }
+
+    /** Batas awal hari WIB (dalam UTC) tujuh hari lalu; unggahan sebelum batas ini sudah terlambat. */
+    private static function lateBoundary(): string
+    {
+        return CarbonImmutable::now(config('lms.reminder_timezone'))->startOfDay()->subDays(self::HANDOVER_DAYS)->utc()->toDateTimeString();
+    }
+
+    private function jakartaDate(mixed $at): ?CarbonImmutable
+    {
+        return $at === null ? null : CarbonImmutable::parse($at)->timezone(config('lms.reminder_timezone'))->startOfDay();
+    }
+
+    private function daysSince(mixed $at, ?CarbonImmutable $today): ?int
+    {
+        $start = $this->jakartaDate($at);
+        if ($start === null) {
+            return null;
+        }
+        $today = ($today ?? CarbonImmutable::now())->timezone(config('lms.reminder_timezone'))->startOfDay();
+
+        return (int) $start->diffInDays($today);
     }
 
     public function editableBy(User $user): bool
