@@ -42,20 +42,56 @@ class PublicRequestStatusTimelineTest extends TestCase
     public function test_progress_marks_done_current_and_pending_steps(): void
     {
         $this->assertSame(['current', 'pending', 'pending', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'submitted'])->progressSteps()));
-        $this->assertSame(['done', 'current', 'pending', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'review'])->progressSteps()));
-        $this->assertSame(['done', 'done', 'current', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'approved'])->progressSteps()));
+        $this->assertSame(['done', 'current', 'pending', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'signing'])->progressSteps()));
+        $this->assertSame(['done', 'done', 'current', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'handover'])->progressSteps()));
         $this->assertSame(['done', 'done', 'done', 'done'], $this->states(DocumentRequest::factory()->make(['status' => 'archived'])->progressSteps()));
+        $this->assertSame(['Diperiksa', 'Menunggu Tanda Tangan', 'Menunggu Dokumen Fisik', 'Selesai'], array_column(DocumentRequest::factory()->make(['status' => 'submitted'])->progressSteps(), 'label'));
     }
 
-    public function test_revision_returns_to_first_step_and_rejection_stops_at_the_stage_it_happened(): void
+    public function test_legacy_statuses_do_not_break_progress_or_timeline(): void
+    {
+        $this->assertSame(['current', 'pending', 'pending', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'review'])->progressSteps()));
+        $this->assertSame(['done', 'current', 'pending', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'approved'])->progressSteps()));
+        $rejected = DocumentRequest::factory()->make(['status' => 'rejected', 'history' => [$this->event('submitted', '2026-10-01T01:00:00Z'), $this->event('review', '2026-10-02T01:00:00Z'), $this->event('rejected', '2026-10-03T01:00:00Z', 'Ditolak pimpinan')]]);
+        $this->assertSame(['stopped', 'pending', 'pending', 'pending'], $this->states($rejected->progressSteps()));
+        $this->assertCount(3, $rejected->publicTimeline());
+    }
+
+    public function test_revision_returns_to_first_step_and_rejection_stops_at_checking(): void
     {
         $this->assertSame(['current', 'pending', 'pending', 'pending'], $this->states(DocumentRequest::factory()->make(['status' => 'revision'])->progressSteps()));
 
-        $rejectedByReviewer = DocumentRequest::factory()->make(['status' => 'rejected', 'history' => [$this->event('submitted', '2026-10-01T01:00:00Z'), $this->event('rejected', '2026-10-02T01:00:00Z', 'Tidak sesuai')]]);
-        $this->assertSame(['stopped', 'pending', 'pending', 'pending'], $this->states($rejectedByReviewer->progressSteps()));
+        $rejected = DocumentRequest::factory()->make(['status' => 'rejected', 'history' => [$this->event('submitted', '2026-10-01T01:00:00Z'), $this->event('rejected', '2026-10-02T01:00:00Z', 'Tidak sesuai')]]);
+        $this->assertSame(['stopped', 'pending', 'pending', 'pending'], $this->states($rejected->progressSteps()));
+    }
 
-        $rejectedByApprover = DocumentRequest::factory()->make(['status' => 'rejected', 'history' => [$this->event('submitted', '2026-10-01T01:00:00Z'), $this->event('review', '2026-10-02T01:00:00Z'), $this->event('rejected', '2026-10-03T01:00:00Z', 'Ditolak pimpinan')]]);
-        $this->assertSame(['done', 'stopped', 'pending', 'pending'], $this->states($rejectedByApprover->progressSteps()));
+    public function test_cancellation_stops_at_the_last_stage_reached(): void
+    {
+        $fromSigning = DocumentRequest::factory()->make(['status' => 'cancelled', 'history' => [$this->event('submitted', '2026-10-01T01:00:00Z'), $this->event('signing', '2026-10-02T01:00:00Z'), $this->event('cancelled', '2026-10-03T01:00:00Z', 'Batal')]]);
+        $this->assertSame(['done', 'stopped', 'pending', 'pending'], $this->states($fromSigning->progressSteps()));
+
+        $fromHandover = DocumentRequest::factory()->make(['status' => 'cancelled', 'history' => [$this->event('submitted', '2026-10-01T01:00:00Z'), $this->event('signing', '2026-10-02T01:00:00Z'), $this->event('handover', '2026-10-03T01:00:00Z'), ['event' => 'late_reason', 'status' => 'handover', 'at' => '2026-10-12T01:00:00Z', 'note' => 'Sibuk'], $this->event('cancelled', '2026-10-13T01:00:00Z', 'Batal')]]);
+        $this->assertSame(['done', 'done', 'stopped', 'pending'], $this->states($fromHandover->progressSteps()));
+    }
+
+    public function test_timeline_labels_new_statuses_and_events_with_roles(): void
+    {
+        $request = DocumentRequest::factory()->make(['status' => 'cancelled', 'history' => [
+            $this->event('submitted', '2026-10-01T01:00:00Z'),
+            $this->event('signing', '2026-10-02T01:00:00Z'),
+            ['event' => 'draft_replaced', 'status' => 'signing', 'user' => 'Nama Staf Rahasia', 'user_id' => 1, 'at' => '2026-10-03T01:00:00Z', 'note' => null],
+            $this->event('handover', '2026-10-04T01:00:00Z'),
+            ['event' => 'signed_replaced', 'status' => 'handover', 'user' => 'X', 'user_id' => null, 'at' => '2026-10-05T01:00:00Z', 'note' => null],
+            ['event' => 'late_reason', 'status' => 'handover', 'user' => 'X', 'user_id' => null, 'at' => '2026-10-12T01:00:00Z', 'note' => 'Kurir terlambat'],
+            $this->event('cancelled', '2026-10-13T01:00:00Z', 'Dibatalkan pemohon'),
+        ]]);
+
+        $timeline = $request->publicTimeline();
+        $this->assertSame(['Dibatalkan', 'Alasan keterlambatan dari pengaju', 'Scan diganti', 'Scan diunggah, menunggu dokumen fisik', 'Draf dokumen diganti', 'Draf dokumen diterbitkan, menunggu tanda tangan', 'Pengajuan diterima'], array_column($timeline, 'label'));
+        $this->assertSame(['Tim legal', 'Pengaju', 'Pengaju', 'Pengaju', 'Tim legal', 'Tim legal', 'Pengaju'], array_column($timeline, 'actor'));
+        $this->assertSame('danger', $timeline[0]['tone']);
+        $this->assertSame('warning', $timeline[1]['tone']);
+        $this->assertSame('Kurir terlambat', $timeline[1]['note']);
     }
 
     public function test_timeline_is_newest_first_with_roles_notes_and_jakarta_time(): void

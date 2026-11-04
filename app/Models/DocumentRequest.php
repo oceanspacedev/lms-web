@@ -46,12 +46,15 @@ class DocumentRequest extends Model
     /** Status saat pengajuan menunggu tindakan staf. */
     public const WAITING_STATUSES = ['submitted'];
 
-    public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan', 'archived' => 'Selesai'];
+    public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'archived' => 'Selesai'];
 
     public const TIMELINE_LABELS = [
         'submitted' => 'Pengajuan diterima', 'review' => 'Diteruskan untuk persetujuan', 'approved' => 'Disetujui, menunggu tanda tangan',
         'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen final diarsipkan',
+        'signing' => 'Draf dokumen diterbitkan, menunggu tanda tangan', 'handover' => 'Scan diunggah, menunggu dokumen fisik', 'cancelled' => 'Dibatalkan',
     ];
+
+    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draf dokumen diganti', 'signed_replaced' => 'Scan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
 
     protected $attributes = ['details' => '{}', 'attachments' => '{}', 'requirements' => '{}', 'history' => '[]', 'status' => 'draft'];
 
@@ -248,11 +251,11 @@ class DocumentRequest extends Model
      */
     public function progressSteps(): array
     {
-        $statusBeforeLast = collect($this->history)->slice(-2, 1)->first()['status'] ?? null;
         $stage = match ($this->status) {
-            'revision' => 'submitted',
-            'rejected' => $statusBeforeLast === 'review' ? 'review' : 'submitted',
-            default => $this->status,
+            'cancelled' => $this->lastStageBeforeCancellation(),
+            'approved' => 'signing',
+            'handover', 'signing', 'archived' => $this->status,
+            default => 'submitted',
         };
         $position = array_search($stage, array_keys(self::PROGRESS_STEPS), true);
         $position = $position === false ? 0 : $position;
@@ -261,7 +264,7 @@ class DocumentRequest extends Model
             $state = match (true) {
                 $index < $position => 'done',
                 $index === $position => match ($this->status) {
-                    'archived' => 'done', 'rejected' => 'stopped', default => 'current',
+                    'archived' => 'done', 'rejected', 'cancelled' => 'stopped', default => 'current',
                 },
                 default => 'pending',
             };
@@ -269,6 +272,26 @@ class DocumentRequest extends Model
         }
 
         return $steps;
+    }
+
+    /** Tahap terakhir yang dicapai sebelum pembatalan, dibaca dari riwayat status. */
+    private function lastStageBeforeCancellation(): string
+    {
+        $stage = 'submitted';
+        foreach ($this->history as $event) {
+            if (isset($event['event'])) {
+                continue;
+            }
+            $status = $event['status'] ?? null;
+            if ($status === 'approved') {
+                $status = 'signing';
+            }
+            if (in_array($status, ['signing', 'handover'], true)) {
+                $stage = $status;
+            }
+        }
+
+        return $stage;
     }
 
     /**
@@ -281,6 +304,20 @@ class DocumentRequest extends Model
         $entries = [];
         $previous = null;
         foreach ($this->history as $event) {
+            $kind = $event['event'] ?? null;
+            if ($kind !== null) {
+                if (isset(self::TIMELINE_EVENT_LABELS[$kind])) {
+                    $entries[] = [
+                        'label' => self::TIMELINE_EVENT_LABELS[$kind],
+                        'actor' => $kind === 'draft_replaced' ? 'Tim legal' : 'Pengaju',
+                        'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
+                        'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
+                        'tone' => $kind === 'late_reason' ? 'warning' : 'normal',
+                    ];
+                }
+
+                continue;
+            }
             $status = $event['status'] ?? null;
             if ($status !== 'draft' && isset(self::TIMELINE_LABELS[$status])) {
                 $entries[] = [
@@ -290,12 +327,13 @@ class DocumentRequest extends Model
                         'review' => 'Pemeriksa',
                         'approved' => 'Penyetuju',
                         'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Pemeriksa',
+                        'signing', 'handover', 'archived', 'cancelled' => $status === 'handover' ? 'Pengaju' : 'Tim legal',
                         default => 'Tim pemeriksa',
                     },
                     'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
                     'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
                     'tone' => match ($status) {
-                        'revision' => 'warning', 'rejected' => 'danger', default => 'normal',
+                        'revision' => 'warning', 'rejected', 'cancelled' => 'danger', default => 'normal',
                     },
                 ];
             }
