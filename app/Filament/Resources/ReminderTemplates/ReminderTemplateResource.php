@@ -4,7 +4,6 @@ namespace App\Filament\Resources\ReminderTemplates;
 
 use App\Filament\Resources\ReminderTemplates\Pages\ManageReminderTemplates;
 use App\Filament\Resources\ReminderTemplates\Pages\WhatsAppDeliveryHistory;
-use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
 use BackedEnum;
 use Filament\Forms\Components\Select;
@@ -185,10 +184,7 @@ class ReminderTemplateResource extends Resource
     /** @return array<Component> */
     public static function requestTemplateFields(string $event): array
     {
-        return self::messageFields('request_templates.'.$event, ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], [
-            ...ReminderTemplate::REQUEST_EXAMPLE_VALUES,
-            'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa',
-        ], ReminderTemplate::REQUEST_VARIABLE_LABELS);
+        return self::messageFields('request_templates.'.$event, ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], ReminderTemplate::requestExampleValues($event), ReminderTemplate::REQUEST_VARIABLE_LABELS);
     }
 
     /**

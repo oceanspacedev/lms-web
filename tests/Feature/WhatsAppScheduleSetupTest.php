@@ -203,7 +203,7 @@ class WhatsAppScheduleSetupTest extends TestCase
             ->assertSeeInOrder(['3650 hari sebelum', '3643 hari sebelum', '…', '2 hari sebelum', '1 hari sebelum', 'Tanggal berakhir', 'Total 3651 pengingat'])
             ->assertDontSee('3000 hari sebelum')->html();
 
-        $this->assertLessThan(200000, strlen($html));
+        $this->assertLessThan(300000, strlen($html));
     }
 
     public function test_settings_page_lists_every_date_up_to_the_shortening_limit(): void

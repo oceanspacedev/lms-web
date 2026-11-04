@@ -32,7 +32,44 @@ class WhatsAppTemplateSettingsTest extends TestCase
 
     public static function statuses(): array
     {
-        return array_map(fn (string $status): array => [$status], ['submitted', 'review', 'approved', 'revision', 'rejected', 'archived']);
+        return array_map(fn (string $status): array => [$status], ['submitted', 'revision', 'rejected', 'signing', 'archived', 'cancelled']);
+    }
+
+    public function test_template_with_removed_stage_key_is_rejected(): void
+    {
+        foreach (['approved', 'review'] as $removed) {
+            try {
+                ReminderTemplate::factory()->create(['request_templates' => [$removed => 'Halo {judul}']]);
+                $this->fail("Kunci {$removed} seharusnya ditolak.");
+            } catch (ValidationException) {
+            }
+        }
+        $this->assertSame(0, ReminderTemplate::count());
+    }
+
+    public static function newTemplateEvents(): array
+    {
+        return array_map(fn (string $event): array => [$event], ['signing', 'draft_replaced', 'handover_staff', 'scan_reminder', 'late_7', 'late_14', 'late_28', 'cancelled']);
+    }
+
+    #[DataProvider('newTemplateEvents')]
+    public function test_settings_page_previews_edits_and_test_sends_new_templates(string $event): void
+    {
+        $this->authorizeSettings();
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        $component = 'notification_settings.template_navigation.'.$event.'.template_'.$event;
+        Livewire::test(ManageReminderTemplates::class)
+            ->assertSee(ReminderTemplate::REQUEST_TEMPLATE_LABELS[$event])
+            ->mountAction(TestAction::make('edit_'.$event)->schemaComponent($component, 'content'))
+            ->assertActionDataSet(['request_templates' => [$event => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]]])
+            ->setActionData(['request_templates' => [$event => 'Uji {judul} batas {batas_waktu} telat {hari_terlambat} hari.']])
+            ->callMountedAction()->assertHasNoActionErrors();
+        $this->assertSame('Uji {judul} batas {batas_waktu} telat {hari_terlambat} hari.', $setting->fresh()->request_templates[$event]);
+
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('test_'.$event)->schemaComponent($component, 'content'), ['phone' => '081234567890'])
+            ->assertHasNoActionErrors();
+        Http::assertSent(fn ($outgoing): bool => $outgoing['message']['text'] === "[PESAN UJI]\nUji Pengajuan Kontrak Dummy batas 11 Nov 2030 telat 3 hari.");
     }
 
     #[DataProvider('statuses')]

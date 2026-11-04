@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\DocumentRequestNotifier;
 use App\Services\StorageFileName;
+use App\Services\WaghubService;
 use Carbon\CarbonImmutable;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +23,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 use Throwable;
 
 #[Fillable(['company_id', 'document_type_id', 'pic_user_id', 'title', 'purpose', 'partner_name', 'partner_pic', 'partner_contact', 'start_date', 'expiry_date', 'target_date', 'has_cost', 'amount', 'payment_terms', 'details'])]
@@ -85,6 +88,52 @@ class DocumentRequest extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approver_id');
+    }
+
+    /**
+     * Staf legal penerima notifikasi: pemeriksa pengajuan bila masih aktif, punya izin Review, dan nomornya valid;
+     * kalau tidak, semua user aktif pemegang `Review:DocumentRequest` dengan nomor valid.
+     *
+     * @return Collection<int, User>
+     */
+    public function legalStaffRecipients(): Collection
+    {
+        $reviewer = $this->reviewer;
+        if ($reviewer !== null && $reviewer->isActive() && $this->hasValidPhone($reviewer) && $this->canReview($reviewer)) {
+            return collect([$reviewer]);
+        }
+
+        return $this->usersWithPermission('Review:DocumentRequest');
+    }
+
+    /**
+     * Koordinator penerima eskalasi: user aktif pemegang `ReceiveEscalation:DocumentRequest` dengan nomor valid.
+     *
+     * @return Collection<int, User>
+     */
+    public function coordinatorRecipients(): Collection
+    {
+        return $this->usersWithPermission('ReceiveEscalation:DocumentRequest');
+    }
+
+    /** @return Collection<int, User> */
+    private function usersWithPermission(string $permission): Collection
+    {
+        try {
+            return User::permission($permission)->active()->orderBy('id')->get()->filter(fn (User $user): bool => $this->hasValidPhone($user))->values();
+        } catch (PermissionDoesNotExist) {
+            return collect();
+        }
+    }
+
+    private function canReview(User $user): bool
+    {
+        return $this->usersWithPermission('Review:DocumentRequest')->contains('id', $user->id);
+    }
+
+    private function hasValidPhone(User $user): bool
+    {
+        return app(WaghubService::class)->normalizePhone($user->phone) !== null;
     }
 
     /** Waktu masuk ke tahap saat ini: kolom status_changed_at, atau peristiwa terakhir di riwayat bila belum terisi. */

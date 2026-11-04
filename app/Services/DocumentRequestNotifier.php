@@ -26,31 +26,43 @@ class DocumentRequestNotifier
 
     public function enqueue(DocumentRequest $request): void
     {
+        $last = collect($request->history)->last();
+        // Ganti scan dan alasan terlambat hanya dicatat; tidak ada pesan, dan pesan yang masih antre tidak ikut dibatalkan.
+        if (in_array($last['event'] ?? null, ['signed_replaced', 'late_reason'], true)) {
+            return;
+        }
         $event = count($request->history);
         $request->notifications()->whereIn('status', ['pending', 'failed'])->where('event_key', 'not like', "lms-request-{$request->id}-{$event}-%")->update(['status' => 'cancelled']);
-        $recipients = ['applicant' => $request->requester_phone ?? $request->requester?->phone];
+        $adminLink = route('filament.admin.resources.document-requests.edit', ['record' => $request->id]);
+        $applicantLink = $request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : $adminLink;
         $setting = ReminderTemplate::globalSetting();
-        if ($request->status === 'submitted') {
-            $recipients['pic'] = $request->pic?->phone;
+        $applicantEvent = ($last['event'] ?? null) === 'draft_replaced' ? 'draft_replaced' : $request->status;
+        $targets = [];
+        if ($request->status === 'handover') {
+            foreach ($request->legalStaffRecipients() as $user) {
+                $targets[] = ['kind' => 'legal', 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'template' => 'handover_staff', 'link' => $adminLink];
+            }
+        } else {
+            $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->requester_phone ?? $request->requester?->phone, 'template' => $applicantEvent, 'link' => $applicantLink];
         }
-        foreach ($recipients as $kind => $number) {
-            $key = "lms-request-{$request->id}-{$event}-{$kind}";
-            $phone = $this->waghub->normalizePhone($number);
-            $link = $kind === 'pic'
-                ? route('filament.admin.resources.document-requests.edit', ['record' => $request->id])
-                : ($request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : route('filament.admin.resources.document-requests.edit', ['record' => $request->id]));
-            $note = collect($request->history)->last()['note'] ?? null;
-            $templateEvent = $kind === 'pic' ? 'pic' : $request->status;
-            $body = $setting?->requestTemplate($templateEvent) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$templateEvent] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
+        if ($request->status === 'submitted') {
+            $targets[] = ['kind' => 'pic', 'suffix' => 'pic', 'phone' => $request->pic?->phone, 'template' => 'pic', 'link' => $adminLink];
+        }
+        $note = $last['note'] ?? null;
+        foreach ($targets as $target) {
+            $key = "lms-request-{$request->id}-{$event}-{$target['suffix']}";
+            $phone = $this->waghub->normalizePhone($target['phone']);
+            $body = $setting?->requestTemplate($target['template']) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$target['template']] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
             $text = ReminderTemplate::renderBody($body, [
                 'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
                 'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
                 'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
                 'status' => DocumentRequest::STATUSES[$request->status], 'catatan' => (string) $note,
-                'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
+                'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $target['link'],
+                'batas_waktu' => $request->handoverDueDate()?->translatedFormat('d M Y') ?? '-', 'hari_terlambat' => (string) $request->daysLate(),
             ]);
             DocumentRequestNotification::firstOrCreate(['event_key' => $key], [
-                'document_request_id' => $request->id, 'recipient_kind' => $kind, 'recipient_phone' => $phone,
+                'document_request_id' => $request->id, 'recipient_kind' => $target['kind'], 'recipient_phone' => $phone,
                 'payload' => ['recipient' => ['type' => 'phone', 'value' => $phone], 'message' => ['type' => 'text', 'text' => $text],
                     'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'), 'route_key' => config('services.waghub.route_key'),
                     'expires_at' => now()->addDay()->toIso8601String(), 'client_reference' => $key],
@@ -106,6 +118,26 @@ class DocumentRequestNotifier
         return $this->waghub->normalizePhone($number);
     }
 
+    /**
+     * Notifikasi sudah usang bila dibuat sebelum perubahan status terakhir. Kegiatan tanpa perubahan status
+     * (ganti scan, alasan terlambat) menambah riwayat tetapi tidak membuat notifikasi yang antre menjadi usang.
+     */
+    private function isSuperseded(DocumentRequestNotification $notification, DocumentRequest $request): bool
+    {
+        if (preg_match('/^lms-request-'.$request->id.'-(\d+)-/', $notification->event_key, $matches) !== 1) {
+            return true;
+        }
+        $history = array_values($request->history);
+        $stageStart = 0;
+        foreach ($history as $index => $entry) {
+            if (! isset($entry['event'])) {
+                $stageStart = $index + 1;
+            }
+        }
+
+        return (int) $matches[1] < $stageStart || (int) $matches[1] > count($history);
+    }
+
     public function run(?int $requestId = null, ?int $notificationId = null): int
     {
         $accepted = 0;
@@ -116,7 +148,7 @@ class DocumentRequestNotifier
             ->where(fn (Builder $query): Builder => $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', now()->subMinutes(5)))
             ->orderBy('id')->limit(50)->get()->each(function (DocumentRequestNotification $notification) use (&$accepted): void {
                 $request = DocumentRequest::find($notification->document_request_id);
-                if (! $request || ! str_starts_with($notification->event_key, 'lms-request-'.$request->id.'-'.count($request->history).'-')) {
+                if (! $request || $this->isSuperseded($notification, $request)) {
                     $notification->update(['status' => 'cancelled']);
 
                     return;

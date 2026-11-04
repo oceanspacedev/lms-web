@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ReminderTemplates\Pages;
 
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
-use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
 use App\Services\WaghubService;
 use App\Services\WhatsAppTemplateTester;
@@ -120,19 +119,16 @@ class ManageReminderTemplates extends Page
                     ->view('filament.resources.reminder-templates.message-preview'),
             ]);
         $tabs = [];
-        $labels = ['submitted' => 'Pengajuan diterima', 'review' => 'Menunggu persetujuan', 'approved' => 'Disetujui', 'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'pic' => 'Notifikasi PIC'];
 
         foreach (ReminderTemplate::REQUEST_TEMPLATE_LABELS as $event => $label) {
-            $section = Section::make($labels[$event])->key('template_'.$event)->compact()
+            $section = Section::make($label)->key('template_'.$event)->compact()
                 ->extraAttributes(['class' => 'whatsapp-settings-panel'])
-                ->headerActions([$this->editTemplateAction($event, $labels[$event])])
+                ->headerActions([$this->editTemplateAction($event, $label)])
                 ->footerActions($this->templateTools($event))
                 ->schema([TextEntry::make('message_'.$event)->hiddenLabel()
-                    ->state(fn (): string => ReminderTemplate::renderBody(ReminderTemplate::globalSetting()?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], [
-                        ...ReminderTemplate::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa',
-                    ]))
+                    ->state(fn (): string => ReminderTemplate::renderBody(ReminderTemplate::globalSetting()?->requestTemplate($event) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], ReminderTemplate::requestExampleValues($event)))
                     ->view('filament.resources.reminder-templates.message-preview')]);
-            $tabs[] = Tab::make($labels[$event])->key($event)->schema([$section]);
+            $tabs[] = Tab::make($label)->key($event)->schema([$section]);
         }
 
         return $schema->columns(1)->components([
@@ -239,7 +235,7 @@ class ManageReminderTemplates extends Page
                             'reminder' => ReminderTemplate::EXAMPLE_VALUES,
                             'overdue' => ReminderTemplate::OVERDUE_EXAMPLE_VALUES,
                             'request_reminder' => ReminderTemplate::REQUEST_REMINDER_EXAMPLE_VALUES,
-                            default => [...ReminderTemplate::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa'],
+                            default => ReminderTemplate::requestExampleValues($event),
                         }))
                         ->view('filament.resources.reminder-templates.message-preview'),
                 ])->action(function (array $data) use ($event): void {

@@ -126,21 +126,39 @@ class ReminderTemplate extends Model
 
     public const REQUEST_TEMPLATE_LABELS = [
         'submitted' => 'Pengajuan diterima / diperiksa',
-        'review' => 'Menunggu persetujuan',
-        'approved' => 'Disetujui / menunggu tanda tangan',
         'revision' => 'Perlu revisi',
         'rejected' => 'Ditolak',
-        'archived' => 'Selesai / diarsipkan',
+        'signing' => 'Draft dikeluarkan',
+        'draft_replaced' => 'Draft diperbarui',
+        'handover_staff' => 'Scan bertanda tangan masuk (untuk legal)',
+        'scan_reminder' => 'Pengingat unggah scan',
+        'late_7' => 'Dokumen fisik terlambat: minggu ke-1',
+        'late_14' => 'Dokumen fisik terlambat: minggu ke-2',
+        'late_28' => 'Dokumen fisik terlambat: minggu ke-4',
+        'archived' => 'Dokumen fisik diterima / selesai',
+        'cancelled' => 'Dibatalkan',
         'pic' => 'Pengajuan baru untuk PIC',
+    ];
+
+    /** Status pengajuan pada contoh pesan untuk template yang namanya bukan nama status. */
+    public const REQUEST_TEMPLATE_EXAMPLE_STATUSES = [
+        'draft_replaced' => 'signing', 'handover_staff' => 'handover', 'scan_reminder' => 'signing',
+        'late_7' => 'handover', 'late_14' => 'handover', 'late_28' => 'handover', 'pic' => 'submitted',
     ];
 
     public const DEFAULT_REQUEST_TEMPLATES = [
         'submitted' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan diterima dan sedang diperiksa.{baris_catatan}\n{tautan}",
-        'review' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan sedang diproses untuk persetujuan.{baris_catatan}\n{tautan}",
-        'approved' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan disetujui. Menunggu dokumen final.{baris_catatan}\n{tautan}",
         'revision' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan perlu direvisi.{baris_catatan}\n{tautan}",
         'rejected' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan ditolak.{baris_catatan}\n{tautan}",
-        'archived' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan selesai. Dokumen final telah diarsipkan.{baris_catatan}\n{tautan}",
+        'signing' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDraft dokumen sudah dikeluarkan. Silakan tanda tangani, lalu unggah scan-nya.{baris_catatan}\n{tautan}",
+        'draft_replaced' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDraft dokumen diperbarui. Gunakan draft terbaru untuk ditandatangani.{baris_catatan}\n{tautan}",
+        'handover_staff' => "Scan bertanda tangan masuk\nPengajuan #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\nDokumen fisik harus diterima paling lambat {batas_waktu}.\n{tautan}",
+        'scan_reminder' => "Pengajuan #{nomor_pengajuan}\n{judul}\nScan dokumen bertanda tangan belum diunggah. Mohon segera unggah.\n{tautan}",
+        'late_7' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik belum diserahkan. Batas {batas_waktu} sudah lewat {hari_terlambat} hari.\n{tautan}",
+        'late_14' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik masih belum diserahkan. Batas {batas_waktu} sudah lewat {hari_terlambat} hari.\n{tautan}",
+        'late_28' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik belum juga diserahkan. Batas {batas_waktu} sudah lewat {hari_terlambat} hari.\n{tautan}",
+        'archived' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik sudah diterima. Pengajuan selesai dan dokumen telah diarsipkan.{baris_catatan}\n{tautan}",
+        'cancelled' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan dibatalkan.{baris_catatan}\n{tautan}",
         'pic' => "Pengajuan baru #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\n{tautan}",
     ];
 
@@ -149,6 +167,7 @@ class ReminderTemplate extends Model
         'perusahaan' => 'Nama badan usaha', 'jenis_dokumen' => 'Jenis dokumen', 'pic' => 'Nama PIC',
         'status' => 'Status pengajuan', 'catatan' => 'Catatan pemeriksa',
         'baris_catatan' => 'Baris catatan (hanya jika ada)', 'tautan' => 'Tautan pengajuan',
+        'batas_waktu' => 'Batas penyerahan dokumen fisik', 'hari_terlambat' => 'Hari terlambat',
     ];
 
     public const REQUEST_EXAMPLE_VALUES = [
@@ -156,7 +175,20 @@ class ReminderTemplate extends Model
         'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'pic' => 'PIC Dummy',
         'status' => 'Perlu Revisi', 'catatan' => 'Mohon lengkapi lampiran.',
         'baris_catatan' => "\nCatatan: Mohon lengkapi lampiran.", 'tautan' => 'https://contoh.test/pengajuan/123',
+        'batas_waktu' => '11 Nov 2030', 'hari_terlambat' => '3',
     ];
+
+    /**
+     * Nilai contoh untuk pratinjau dan pesan uji template pengajuan; `status` mengikuti tahap template tersebut.
+     *
+     * @return array<string, string>
+     */
+    public static function requestExampleValues(string $event): array
+    {
+        $status = self::REQUEST_TEMPLATE_EXAMPLE_STATUSES[$event] ?? $event;
+
+        return [...self::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$status] ?? 'Diperiksa'];
+    }
 
     public function requestTemplate(string $event): ?string
     {
