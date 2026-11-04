@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
 class WaitingRequestsOverview extends StatsOverviewWidget
 {
     /** @var array<string, string> Status yang menunggu staf, beserta labelnya di kartu. */
-    public const STAGES = ['submitted' => 'Menunggu Pemeriksaan', 'review' => 'Menunggu Persetujuan'];
+    public const STAGES = ['submitted' => 'Menunggu Pemeriksaan'];
 
     protected static ?int $sort = 1;
 

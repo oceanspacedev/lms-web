@@ -372,8 +372,7 @@ class DocumentRequestListScreenTest extends TestCase
         $this->assertStringNotContainsString('tableFilters', $stats[0]->getUrl());
         $this->get($stats[0]->getUrl())->assertOk()
             ->assertSee('Menunggu Periksa Lama')->assertDontSee('Menunggu Periksa Baru')->assertDontSee('Menunggu Setuju Lama');
-        $this->get($stats[1]->getUrl())->assertOk()
-            ->assertSee('Menunggu Setuju Lama')->assertDontSee('Menunggu Periksa Lama')->assertDontSee('Menunggu Periksa Baru');
+        $this->assertCount(1, $stats);
 
         Livewire::withQueryParams(['tableFilters' => ['status' => ['value' => 'review']]])->test(ListDocumentRequests::class)
             ->assertSet('activeTab', 'all')

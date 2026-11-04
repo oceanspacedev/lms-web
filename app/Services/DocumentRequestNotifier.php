@@ -52,15 +52,7 @@ class DocumentRequestNotifier
         foreach ($targets as $target) {
             $key = "lms-request-{$request->id}-{$event}-{$target['suffix']}";
             $phone = $this->waghub->normalizePhone($target['phone']);
-            $body = $setting?->requestTemplate($target['template']) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$target['template']] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
-            $text = ReminderTemplate::renderBody($body, [
-                'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
-                'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
-                'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
-                'status' => DocumentRequest::STATUSES[$request->status], 'catatan' => (string) $note,
-                'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $target['link'],
-                'batas_waktu' => $request->handoverDueDate()?->translatedFormat('d M Y') ?? '-', 'hari_terlambat' => (string) $request->daysLate(),
-            ]);
+            $text = self::renderTemplate($request, $target['template'], $target['link'], $note, $setting);
             DocumentRequestNotification::firstOrCreate(['event_key' => $key], [
                 'document_request_id' => $request->id, 'recipient_kind' => $target['kind'], 'recipient_phone' => $phone,
                 'payload' => ['recipient' => ['type' => 'phone', 'value' => $phone], 'message' => ['type' => 'text', 'text' => $text],
@@ -77,6 +69,22 @@ class DocumentRequestNotifier
                 }
             });
         });
+    }
+
+    /** Isi pesan dari templat pengajuan (pengaturan global atau bawaan) dengan variabel pengajuan. */
+    public static function renderTemplate(DocumentRequest $request, string $templateKey, string $link, ?string $note = null, ?ReminderTemplate $setting = null): string
+    {
+        $setting ??= ReminderTemplate::globalSetting();
+        $body = $setting?->requestTemplate($templateKey) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$templateKey] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
+
+        return ReminderTemplate::renderBody($body, [
+            'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
+            'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
+            'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
+            'status' => DocumentRequest::STATUSES[$request->status], 'catatan' => (string) $note,
+            'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
+            'batas_waktu' => $request->handoverDueDate()?->translatedFormat('d M Y') ?? '-', 'hari_terlambat' => (string) $request->daysLate(),
+        ]);
     }
 
     /**

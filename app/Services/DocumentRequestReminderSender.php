@@ -7,7 +7,6 @@ use App\Models\DocumentRequestNotification;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use Illuminate\Support\Collection;
-use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 
 class DocumentRequestReminderSender
 {
@@ -35,7 +34,7 @@ class DocumentRequestReminderSender
                     return;
                 }
                 $sequence = min($settings['max'], intdiv($waitingDays - $settings['after_days'], $settings['interval_days']) + 1);
-                $kind = $request->status === 'submitted' ? 'reviewer' : 'approver';
+                $kind = 'reviewer';
                 foreach ($this->recipients($request) as $user) {
                     $key = 'lms-request-'.$request->id.'-'.count($request->history)."-stale{$sequence}-u{$user->id}";
                     $phone = $this->waghub->normalizePhone($user->phone);
@@ -60,17 +59,7 @@ class DocumentRequestReminderSender
     /** @return Collection<int, User> */
     private function recipients(DocumentRequest $request): Collection
     {
-        if ($request->status === 'submitted') {
-            return collect([$request->reviewer ?? $request->pic])->filter();
-        }
-        if ($request->approver !== null) {
-            return collect([$request->approver]);
-        }
-        try {
-            return User::permission('Approve:DocumentRequest')->active()->orderBy('id')->get();
-        } catch (PermissionDoesNotExist) {
-            return collect();
-        }
+        return collect([$request->reviewer ?? $request->pic])->filter();
     }
 
     private function message(DocumentRequest $request, string $body, int $waitingDays): string

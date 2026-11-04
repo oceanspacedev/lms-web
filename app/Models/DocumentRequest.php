@@ -44,7 +44,7 @@ class DocumentRequest extends Model
     public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
 
     /** Status saat pengajuan menunggu tindakan staf. */
-    public const WAITING_STATUSES = ['submitted', 'review'];
+    public const WAITING_STATUSES = ['submitted'];
 
     public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan', 'archived' => 'Selesai'];
 
