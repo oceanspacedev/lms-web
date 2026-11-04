@@ -84,23 +84,28 @@ class EditDocumentRequest extends EditRecord
                 ->schema([$this->flowFileUpload('Draft dokumen')])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->issueDraft($data['file'], auth()->user()),
-                    ['file'], 'Draft disimpan', 'Draft belum disimpan',
+                    ['file'], 'Draft dikirim ke pengaju', 'Draft belum disimpan',
+                    fn (): string => 'Pengaju dikabari lewat WhatsApp untuk menandatangani dan mengunggah scan.',
                 )),
             Action::make('uploadSigned')->label(fn (): string => $this->record->signed_path ? 'Ganti Scan' : 'Unggah Scan Bertanda Tangan')->modalWidth('lg')
+                ->color(fn (): string => $this->record->signed_path ? 'gray' : 'primary')
                 ->visible(fn (): bool => in_array($this->record->status, ['signing', 'handover'], true) && auth()->user()->can('uploadSigned', $this->record))
                 ->schema([$this->flowFileUpload('Scan dokumen bertanda tangan')])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->uploadSigned($data['file'], auth()->user()),
                     ['file'], 'Scan disimpan', 'Scan belum disimpan',
+                    fn (): ?string => ($due = $this->record->handoverDueDate()) ? 'Dokumen asli harus diterima tim legal paling lambat '.$due->translatedFormat('d M Y').'.' : null,
                 )),
-            Action::make('addLateReason')->label('Tulis Alasan Keterlambatan')->color('warning')->modalWidth('lg')
+            Action::make('addLateReason')->label(fn (): string => $this->record->requester_id === auth()->id() ? 'Tulis Alasan Keterlambatan' : 'Catat Alasan Keterlambatan')->color('warning')->modalWidth('lg')
+                ->modalDescription(fn (): ?string => $this->record->requester_id === auth()->id() ? null : 'Catat alasan yang disampaikan pengaju, misalnya lewat telepon atau chat. Alasan tercatat sebagai dicatat oleh tim legal.')
                 ->visible(fn (): bool => $this->record->isHandoverLate() && auth()->user()->can('addLateReason', $this->record))
                 ->schema([Textarea::make('reason')->label('Alasan keterlambatan')->required()->maxLength(2000)->rows(3)])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->addLateReason($data['reason'], auth()->user()),
                     ['reason'], 'Alasan dicatat', 'Alasan belum dicatat',
                 )),
-            Action::make('markReceived')->label('Fisik Diterima')->modalWidth('lg')
+            Action::make('markReceived')->label('Fisik Diterima')->modalWidth('lg')->modalSubmitActionLabel('Simpan & Arsipkan')
+                ->modalDescription('Dokumen diarsipkan ke menu Dokumen dan pengajuan ditandai Selesai.')
                 ->visible(fn (): bool => in_array($this->record->status, ['signing', 'handover'], true) && auth()->user()->can('markReceived', $this->record))
                 ->schema([
                     TextInput::make('number')->label('Nomor Dokumen')->required()->maxLength(255),
@@ -116,7 +121,7 @@ class EditDocumentRequest extends EditRecord
                 )),
             Action::make('cancel')->label('Batalkan')->color('danger')->modalWidth('lg')
                 ->modalHeading('Batalkan pengajuan?')->modalSubmitActionLabel('Ya, batalkan')->modalCancelActionLabel('Kembali')
-                ->visible(fn (): bool => in_array($this->record->status, ['signing', 'handover'], true) && auth()->user()->can('cancel', $this->record))
+                ->visible(fn (): bool => in_array($this->record->status, DocumentRequest::CANCELLABLE_STATUSES, true) && auth()->user()->can('cancel', $this->record))
                 ->schema([Textarea::make('note')->label('Alasan pembatalan')->required()->maxLength(4000)->rows(3)])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->transition('cancelled', auth()->user(), $data['note']),
@@ -137,8 +142,9 @@ class EditDocumentRequest extends EditRecord
      * dan kegagalan penyimpanan dilaporkan tanpa 500.
      *
      * @param  list<string>  $fields  Kolom form aksi yang boleh menerima pesan galat.
+     * @param  (Closure(): ?string)|null  $successBody  Isi notifikasi sukses, dihitung setelah aksi berhasil.
      */
-    private function runFlowAction(Closure $callback, array $fields, string $successTitle, string $failureTitle): void
+    private function runFlowAction(Closure $callback, array $fields, string $successTitle, string $failureTitle, ?Closure $successBody = null): void
     {
         try {
             $callback();
@@ -163,7 +169,7 @@ class EditDocumentRequest extends EditRecord
             return;
         }
         $this->refreshFormData(['status', 'history']);
-        Notification::make()->title($successTitle)->success()->send();
+        Notification::make()->title($successTitle)->body($successBody ? $successBody() : null)->success()->send();
     }
 
     private function decide(string $status, ?string $note = null): void

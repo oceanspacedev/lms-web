@@ -88,6 +88,22 @@ class HandoverReminderTest extends TestCase
         $this->assertSame(['applicant', 'legal'], $request->notifications()->orderBy('id')->pluck('recipient_kind')->all());
     }
 
+    public function test_applicant_is_asked_for_a_reason_and_staff_see_who_is_late_with_the_latest_reason(): void
+    {
+        $this->staff('Review:DocumentRequest', '082222222222');
+        $request = $this->handover(15, ['requester_name' => 'Wulan Sari']);
+        $request->lateReasons()->create(['reason' => 'Direktur dinas luar kota']);
+
+        $this->send();
+
+        $texts = $request->notifications()->orderBy('id')->get()->mapWithKeys(fn ($notification): array => [$notification->recipient_kind => $notification->payload['message']['text']]);
+        $this->assertStringContainsString('tulis alasan keterlambatan lewat tautan ini', $texts['applicant']);
+        $this->assertStringNotContainsString('tulis alasan', $texts['legal']);
+        $this->assertStringContainsString('Pengaju: Wulan Sari', $texts['legal']);
+        $this->assertStringContainsString('lewat 8 hari', $texts['legal']);
+        $this->assertStringContainsString('Alasan terakhir: Direktur dinas luar kota', $texts['legal']);
+    }
+
     public function test_day_twenty_nine_reminds_applicant_staff_and_coordinator(): void
     {
         $legal = $this->staff('Review:DocumentRequest', '082222222222');

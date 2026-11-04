@@ -70,10 +70,10 @@ class Panduan extends Page
                 steps: [
                     ['Pengaju mengisi form pengajuan', 0, 'Lewat form publik tanpa login, atau dari menu Pengajuan Dokumen bagi yang punya akun.'],
                     ['Legal memeriksa, lalu Keluarkan Draft', 8.9, 'Draft keluar berarti pengajuan disetujui. Pengaju dikabari lewat WhatsApp.'],
-                    ['Pengaju unduh draf dan tanda tangan', 16.9, 'Draft dicetak, ditandatangani, dan dicap di luar aplikasi.'],
+                    ['Pengaju unduh draft dan tanda tangan', 16.9, 'Draft dicetak, ditandatangani, dan dicap di luar aplikasi.'],
                     ['Pengaju unggah scan bertanda tangan', 21.3, 'Dari tautan status di WhatsApp. Tim legal juga bisa mengunggahkan scan atas nama pengaju.'],
                     ['Batas penyerahan fisik 7 hari', 26.5, 'Dihitung sejak scan pertama diunggah. Mengganti scan tidak mengulang hitungan.'],
-                    ['Terlambat? Pengaju tulis alasan', 31.3, 'Pengingat WhatsApp dikirim di hari ke-7, 14, dan 28. Alasan hanya dicatat, tidak memperpanjang batas.'],
+                    ['Terlambat? Pengaju tulis alasan', 31.3, 'Pengingat WhatsApp dikirim sehari setelah batas lewat, lalu 14 dan 28 hari setelah scan masuk. Alasan hanya dicatat, tidak memperpanjang batas.'],
                     ['Legal pantau lewat filter Tahap', 39.1, 'Yang terlambat tampil merah lengkap dengan alasan terakhirnya.'],
                     ['Dokumen asli sampai, klik Fisik Diterima', 46.8, 'Isi nomor dokumen. Scan bertanda tangan menjadi file arsip.'],
                     ['Selesai, dokumen masuk arsip', 53.6, 'Keterlambatan, bila ada, ikut tercatat dan pengaju dikabari.'],
@@ -180,7 +180,7 @@ class Panduan extends Page
                     ['Selesai, dokumen masuk arsip', 30.3, 'Keterlambatan, bila ada, ikut tercatat. Pengajuan batal setelah draft keluar? Klik Batalkan beserta alasannya.'],
                 ],
                 impacts: [
-                    ['area' => 'Pengaju', 'text' => 'Dikabari WhatsApp saat draft keluar, saat terlambat (hari ke-7, 14, dan 28), dan saat selesai atau dibatalkan.', 'url' => null],
+                    ['area' => 'Pengaju', 'text' => 'Dikabari WhatsApp saat draft keluar, saat scan diterima (berisi batas penyerahan), saat terlambat, dan saat selesai atau dibatalkan.', 'url' => null],
                     ['area' => 'Daftar Dokumen', 'text' => 'Scan bertanda tangan otomatis masuk arsip sebagai versi 1.', 'url' => $documents],
                     ['area' => 'Dashboard', 'text' => 'Kartu Menunggu Fisik dan Terlambat menghitung dokumen yang belum diserahkan.', 'url' => $dashboard],
                 ],
@@ -230,16 +230,16 @@ class Panduan extends Page
             audience: 'Pengaju (lewat tautan status dari WhatsApp)',
             steps: [
                 ['Buka tautan status dari WhatsApp', 0, 'Pesan "dokumen sudah jadi" berisi tautan ke halaman status pengajuan. Tanpa login.'],
-                ['Unduh draf, tanda tangani, lalu scan', 4.2, 'Cetak draft, tanda tangani dan beri cap di luar aplikasi.'],
+                ['Unduh draft, tanda tangani, lalu scan', 4.2, 'Cetak draft, tanda tangani dan beri cap di luar aplikasi.'],
                 ['Unggah scan, klik Unggah scan', 8.4, 'PDF, Word, atau gambar, maksimal 20 MB. Salah unggah? Scan bisa diganti selama dokumen belum diterima legal.'],
                 ['Serahkan dokumen asli ke tim legal', 13.4, 'Batas penyerahan 7 hari sejak scan pertama diunggah, ditampilkan beserta sisa harinya.'],
                 ['Terlambat? Tulis alasannya', 18, 'Lewat batas, halaman meminta alasan keterlambatan. Alasan boleh ditulis lebih dari sekali dan tidak memperpanjang batas.'],
                 ['Selesai saat legal menerima dokumen', 25.4, 'Status menjadi Selesai dan pengaju dikabari lewat WhatsApp.'],
             ],
             impacts: [
-                ['area' => 'WhatsApp pengaju', 'text' => 'Pengingat dikirim bila dokumen fisik belum diserahkan pada hari ke-7, 14, dan 28.', 'url' => null],
-                ['area' => 'Tim legal', 'text' => 'Dikabari saat scan masuk, dan melihat alasan keterlambatan di daftar pengajuan.', 'url' => $requests],
-                ['area' => 'Koordinator legal', 'text' => 'Ikut dikabari bila dokumen fisik belum diserahkan sampai hari ke-28.', 'url' => null],
+                ['area' => 'WhatsApp pengaju', 'text' => 'Pengingat dikirim sehari setelah batas lewat, lalu 14 dan 28 hari setelah scan masuk, selama dokumen asli belum diterima.', 'url' => null],
+                ['area' => 'Tim legal', 'text' => 'Dikabari saat scan masuk dan bila dokumen asli belum diterima 14 hari setelah scan. Alasan keterlambatan tampil di daftar pengajuan.', 'url' => $requests],
+                ['area' => 'Koordinator legal', 'text' => 'Ikut dikabari bila dokumen fisik belum diterima 28 hari setelah scan masuk.', 'url' => null],
             ],
             action: ['label' => 'Cek status pengajuan', 'url' => route('requests.public.lookup'), 'newTab' => true],
         );

@@ -319,7 +319,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
             ->assertSee('Pengaturan bawaan sudah siap dipakai')
             ->assertSee('Dikirim pukul 08:00 WIB, mulai 30 hari sebelum dokumen berakhir, lalu diulang setiap 7 hari. Setelah kedaluwarsa, dikirim lagi pada hari ke-1, 7.')
             ->assertSee(ReminderTemplate::REQUEST_TEMPLATE_HINTS['late_28'])
-            ->assertSee('Terlambat 4 minggu')
+            ->assertSee('Terlambat 3 minggu')->assertSee('Lewat batas')->assertDontSee('Terlambat 4 minggu')
             ->assertDontSee('Dummy');
     }
 

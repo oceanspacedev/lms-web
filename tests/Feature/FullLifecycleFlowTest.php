@@ -183,7 +183,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->assertSame(1, $document->currentVersion->version_number);
         Storage::disk('s3')->assertExists($document->currentVersion->file_path);
         $this->deliver();
-        $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()->assertSee('Selesai, dokumen final diarsipkan')->assertDontSee('aria-current="step"', false);
+        $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()->assertSee('Selesai, dokumen fisik diterima dan diarsipkan')->assertDontSee('aria-current="step"', false);
 
         // 8. Dokumen sampai ke tim legal dan masuk daftar.
         $this->actingAs($this->legal);

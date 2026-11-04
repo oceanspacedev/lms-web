@@ -51,7 +51,7 @@ class PublicRequestSigningTest extends TestCase
 
         $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
             ->assertSee(route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'draft']), false)
-            ->assertSee('Unduh draf dokumen')
+            ->assertSee('Unduh draft dokumen')->assertSee('Langkah selanjutnya')
             ->assertSee(route('requests.public.scan', ['token' => self::TOKEN]), false)
             ->assertSee('enctype="multipart/form-data"', false)
             ->assertDontSee('Terlambat');
@@ -153,7 +153,43 @@ class PublicRequestSigningTest extends TestCase
             ->assertDontSee('<form', false)
             ->assertDontSee(route('requests.public.scan', ['token' => self::TOKEN]), false)
             ->assertDontSee(route('requests.public.reason', ['token' => self::TOKEN]), false)
-            ->assertDontSee(self::TOKEN);
+            ->assertDontSee(self::TOKEN)
+            ->assertSee('Buka tautan status yang dikirim ke WhatsApp pengaju');
+    }
+
+    public function test_scan_upload_and_reason_confirm_what_happens_next(): void
+    {
+        $submission = $this->request('signing');
+        $status = route('requests.public.status', ['token' => self::TOKEN]);
+
+        $this->followingRedirects()->post(route('requests.public.scan', ['token' => self::TOKEN]), ['scan' => $this->pdf()])
+            ->assertSee('Scan diterima. Serahkan dokumen asli ke tim legal paling lambat 27 Okt 2026.')
+            ->assertDontSee('Berhasil disimpan.');
+
+        $submission->forceFill(['signed_uploaded_at' => now()->subDays(10)])->save();
+        $this->followingRedirects()->post(route('requests.public.reason', ['token' => self::TOKEN]), ['reason' => 'Direktur dinas luar kota'])
+            ->assertSee('Alasan keterlambatan terkirim ke tim legal.');
+        $this->get($status)->assertDontSee('Alasan keterlambatan terkirim ke tim legal.');
+    }
+
+    public function test_late_page_puts_the_reason_form_before_the_scan_replacement(): void
+    {
+        $this->request('handover', ['signed_uploaded_at' => now()->subDays(10), 'signed_path' => 'lms/requests/perjanjian/scan.pdf', 'signed_name' => 'scan.pdf']);
+
+        $html = $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
+            ->assertDontSee('sebelum batas ini')
+            ->assertSee('Ganti scan (bila salah unggah)')
+            ->getContent();
+
+        $this->assertLessThan(strpos($html, 'id="signed-scan"'), strpos($html, 'id="late-reason"'));
+    }
+
+    public function test_handover_on_the_deadline_day_says_today(): void
+    {
+        $this->request('handover', ['signed_uploaded_at' => now()->subDays(7), 'signed_path' => 'lms/requests/perjanjian/scan.pdf']);
+
+        $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
+            ->assertSee('(hari ini)')->assertDontSee('sisa 0 hari')->assertDontSee('id="late-reason"', false);
     }
 
     public function test_cancelled_shows_reason_and_stopped_progress(): void

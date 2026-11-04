@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
 class WaitingRequestsOverview extends StatsOverviewWidget
 {
     /** @var array<string, string> Tahap yang dipantau staf legal (nilai filter `stage`), beserta labelnya di kartu. */
-    public const STAGES = ['to_review' => 'Menunggu Pemeriksaan', 'handover_on_time' => 'Menunggu Fisik', 'late' => 'Terlambat'];
+    public const STAGES = ['to_review' => 'Menunggu Pemeriksaan', 'signing' => 'Menunggu Tanda Tangan', 'handover_on_time' => 'Menunggu Fisik', 'late' => 'Terlambat'];
 
     protected static ?int $sort = 1;
 
@@ -23,6 +23,7 @@ class WaitingRequestsOverview extends StatsOverviewWidget
     {
         return Gate::allows('viewAny', DocumentRequest::class)
             && (static::visibleRequests()->whereIn('status', DocumentRequest::WAITING_STATUSES)->exists()
+                || static::visibleRequests()->where('status', 'signing')->exists()
                 || static::visibleRequests()->handoverOnTime()->exists()
                 || static::visibleRequests()->handoverLate()->exists());
     }
@@ -54,6 +55,8 @@ class WaitingRequestsOverview extends StatsOverviewWidget
 
         $waiting = static::visibleRequests()->whereIn('status', DocumentRequest::WAITING_STATUSES)->count();
         $waitingLong = static::visibleRequests()->waitingLongerThan($days)->count();
+        $signing = static::visibleRequests()->where('status', 'signing')->count();
+        $scanOverdue = static::visibleRequests()->scanOverdue()->count();
         $late = static::visibleRequests()->handoverLate()->count();
         $lateWithoutReason = static::visibleRequests()->lateWithoutReason()->count();
         $stageUrl = fn (string $stage, array $extra = []): string => DocumentRequestResource::getUrl('index', ['filters' => ['stage' => ['value' => $stage], ...$extra]]);
@@ -63,14 +66,27 @@ class WaitingRequestsOverview extends StatsOverviewWidget
                 ->description($waitingLong > 0 ? "{$waitingLong} menunggu lebih dari {$days} hari" : "Tidak ada yang menunggu lebih dari {$days} hari")
                 ->color($waitingLong > 0 ? 'warning' : 'gray')
                 ->url($stageUrl('to_review', $waitingLong > 0 ? ['waiting_long' => ['isActive' => true]] : [])),
+            Stat::make(self::STAGES['signing'], $signing)
+                ->description($scanOverdue > 0 ? "{$scanOverdue} belum unggah scan lebih dari 7 hari" : 'Tidak ada scan yang tertunda lebih dari 7 hari')
+                ->color($scanOverdue > 0 ? 'warning' : 'gray')
+                ->url($stageUrl($scanOverdue > 0 ? 'scan_overdue' : 'signing')),
             Stat::make(self::STAGES['handover_on_time'], static::visibleRequests()->handoverOnTime()->count())
-                ->description('Dokumen fisik belum diterima, belum lewat 7 hari')
+                ->description('Dokumen fisik belum diterima, belum lewat batas 7 hari')
                 ->color('gray')
                 ->url($stageUrl('handover_on_time')),
             Stat::make(self::STAGES['late'], $late)
-                ->description("{$lateWithoutReason} belum ada alasan")
-                ->color($late > 0 ? 'danger' : 'gray')
-                ->url($stageUrl('late')),
+                ->description(match (true) {
+                    $late === 0 => 'Tidak ada yang terlambat',
+                    $lateWithoutReason > 0 => "{$lateWithoutReason} belum ada alasan",
+                    default => 'Semua sudah memberi alasan',
+                })
+                ->color($lateWithoutReason > 0 ? 'danger' : ($late > 0 ? 'warning' : 'gray'))
+                ->url($stageUrl($lateWithoutReason > 0 ? 'late_no_reason' : 'late')),
         ];
+    }
+
+    protected function getColumns(): int
+    {
+        return 4;
     }
 }

@@ -143,7 +143,7 @@ class WaitingRequestsTest extends TestCase
 
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke(Livewire::test(WaitingRequestsOverview::class)->instance());
 
-        $this->assertCount(3, $stats);
+        $this->assertCount(4, $stats);
         $this->assertSame('Menunggu Pemeriksaan', $stats[0]->getLabel());
         $this->assertSame(2, $stats[0]->getValue());
         $this->assertSame('1 menunggu lebih dari 2 hari', (string) $stats[0]->getDescription());
@@ -200,7 +200,7 @@ class WaitingRequestsTest extends TestCase
 
         $widget->call('$refresh')->assertSuccessful()->assertSee('Menunggu Pemeriksaan');
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke($widget->instance());
-        $this->assertSame([0, 0, 0], array_map(fn ($stat): int => $stat->getValue(), $stats));
+        $this->assertSame([0, 0, 0, 0], array_map(fn ($stat): int => $stat->getValue(), $stats));
 
         $this->actingAs(User::factory()->create());
         $widget->call('$refresh')->assertForbidden();

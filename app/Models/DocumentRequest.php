@@ -49,6 +49,9 @@ class DocumentRequest extends Model
 
     public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
 
+    /** Status yang boleh dibatalkan tim legal: revisi yang ditinggal pengaju, atau setelah draft keluar. */
+    public const CANCELLABLE_STATUSES = ['revision', 'signing', 'handover'];
+
     /** Status saat pengajuan menunggu tindakan staf. */
     public const WAITING_STATUSES = ['submitted'];
 
@@ -56,11 +59,11 @@ class DocumentRequest extends Model
 
     public const TIMELINE_LABELS = [
         'submitted' => 'Pengajuan diterima', 'review' => 'Diteruskan untuk persetujuan', 'approved' => 'Disetujui, menunggu tanda tangan',
-        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen final diarsipkan',
-        'signing' => 'Draf dokumen diterbitkan, menunggu tanda tangan', 'handover' => 'Scan diunggah, menunggu dokumen fisik', 'cancelled' => 'Dibatalkan',
+        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen fisik diterima dan diarsipkan',
+        'signing' => 'Draft dokumen diterbitkan, menunggu tanda tangan', 'handover' => 'Scan diunggah, menunggu dokumen fisik', 'cancelled' => 'Dibatalkan',
     ];
 
-    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draf dokumen diganti', 'signed_replaced' => 'Scan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
+    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draft dokumen diganti', 'signed_replaced' => 'Scan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
 
     protected $attributes = ['details' => '{}', 'attachments' => '{}', 'requirements' => '{}', 'history' => '[]', 'status' => 'draft'];
 
@@ -186,6 +189,17 @@ class DocumentRequest extends Model
     public function isHandoverLate(?CarbonImmutable $today = null): bool
     {
         return $this->status === 'handover' && ($this->daysSinceSigned($today) ?? 0) > self::HANDOVER_DAYS;
+    }
+
+    /** Sisa waktu penyerahan fisik untuk tampilan: "Sisa 3 hari", "Batas hari ini", atau "Terlambat 2 hari". */
+    public function handoverRemainingLabel(): string
+    {
+        if ($this->isHandoverLate()) {
+            return 'Terlambat '.$this->daysLate().' hari';
+        }
+        $daysLeft = max(0, self::HANDOVER_DAYS - ($this->daysSinceSigned() ?? 0));
+
+        return $daysLeft === 0 ? 'Batas hari ini' : "Sisa {$daysLeft} hari";
     }
 
     /** Jumlah hari melewati tenggat; 0 bila tidak terlambat. */
@@ -332,12 +346,12 @@ class DocumentRequest extends Model
             $kind = $event['event'] ?? null;
             if ($kind !== null) {
                 if (isset(self::TIMELINE_EVENT_LABELS[$kind])) {
+                    $byApplicant = $this->isApplicantUpload($event);
                     $entries[] = [
-                        'label' => self::TIMELINE_EVENT_LABELS[$kind],
+                        'label' => $this->timelineEventLabel($event),
                         'actor' => match ($kind) {
-                            'draft_replaced' => 'Tim legal',
-                            'signed_replaced' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim legal',
-                            default => 'Pengaju',
+                            'signed_replaced', 'late_reason' => $byApplicant ? 'Pengaju' : 'Tim legal',
+                            default => 'Tim legal',
                         },
                         'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
                         'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
@@ -383,6 +397,22 @@ class DocumentRequest extends Model
         $userId = $event['user_id'] ?? null;
 
         return $userId === null || $userId === $this->requester_id;
+    }
+
+    /**
+     * Label kegiatan tanpa perubahan status (ganti draft/scan, alasan terlambat), atau null bila bukan kegiatan yang ditampilkan.
+     * Alasan terlambat yang dicatat tim legal atas nama pengaju diberi label tersendiri.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    public function timelineEventLabel(array $event): ?string
+    {
+        $kind = $event['event'] ?? null;
+        if (! is_string($kind) || ! isset(self::TIMELINE_EVENT_LABELS[$kind])) {
+            return null;
+        }
+
+        return $kind === 'late_reason' && ! $this->isApplicantUpload($event) ? 'Alasan keterlambatan dicatat tim legal' : self::TIMELINE_EVENT_LABELS[$kind];
     }
 
     public function notifications(): HasMany
@@ -598,7 +628,7 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Pindahkan status: kirim pengajuan (`submitted`), revisi atau tolak saat diperiksa, atau batalkan setelah draf keluar (`cancelled`).
+     * Pindahkan status: kirim pengajuan (`submitted`), revisi atau tolak saat diperiksa, atau batalkan saat revisi atau setelah draft keluar (`cancelled`).
      * Pembatalan tidak menghapus draf maupun scan; keduanya tetap ada sebagai catatan.
      */
     public function transition(string $next, User $user, ?string $note = null): void
@@ -608,7 +638,7 @@ class DocumentRequest extends Model
             $allowed = match ($next) {
                 'submitted' => $request->editableBy($user),
                 'revision', 'rejected' => $request->status === 'submitted' && $request->requester_id !== $user->id,
-                'cancelled' => in_array($request->status, ['signing', 'handover'], true),
+                'cancelled' => in_array($request->status, self::CANCELLABLE_STATUSES, true),
                 default => false,
             };
             if (! $allowed) {

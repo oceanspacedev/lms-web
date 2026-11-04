@@ -101,10 +101,10 @@ class FinalReviewFixesTest extends TestCase
         $this->actingAs($legal);
         $html = Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->html();
 
-        $this->assertStringContainsString('Draf dokumen diganti', $html);
+        $this->assertStringContainsString('Draft dokumen diganti', $html);
         $this->assertStringContainsString('Scan diganti', $html);
         $this->assertStringContainsString('Alasan keterlambatan dari pengaju', $html);
-        $this->assertSame(1, substr_count($html, 'Draf dokumen diterbitkan, menunggu tanda tangan'));
+        $this->assertSame(1, substr_count($html, 'Draft dokumen diterbitkan, menunggu tanda tangan'));
         $this->assertSame(1, substr_count($html, 'Scan diunggah, menunggu dokumen fisik'));
     }
 
@@ -167,7 +167,7 @@ class FinalReviewFixesTest extends TestCase
         $this->assertSame([$leaver->id, $leaver->id], [$cancelled->fresh()->reviewer_id, $cancelled->fresh()->pic_user_id]);
     }
 
-    public function test_applicant_actionable_tab_includes_own_signing_and_late_handover(): void
+    public function test_applicant_actionable_tab_includes_own_signing_and_handover(): void
     {
         $legal = $this->legal();
         $me = $this->requester();
@@ -178,7 +178,7 @@ class FinalReviewFixesTest extends TestCase
         $others = DocumentRequest::factory()->signing(1)->create(['requester_id' => $legal->id, 'reviewer_id' => $legal->id]);
 
         Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')
-            ->assertCanSeeTableRecords([$signing, $late])->assertCanNotSeeTableRecords([$onTime, $others]);
+            ->assertCanSeeTableRecords([$signing, $late, $onTime])->assertCanNotSeeTableRecords([$others]);
     }
 
     public function test_first_draft_on_a_migrated_signing_request_is_a_first_issue(): void
@@ -250,5 +250,70 @@ class FinalReviewFixesTest extends TestCase
         $this->assertSame($column->getColor('rejected'), $column->getColor('cancelled'));
         $this->assertSame('info', $column->getColor('signing'));
         $this->assertSame('info', $column->getColor('handover'));
+    }
+
+    public function test_legal_records_a_late_reason_on_behalf_of_the_applicant(): void
+    {
+        $legal = $this->legal();
+        $late = $this->handover($this->requester(), $legal, 10, ['history' => [$this->entry('handover', now()->subDays(10)->toIso8601String())]]);
+
+        $this->actingAs($legal);
+        Livewire::test(EditDocumentRequest::class, ['record' => $late->getRouteKey()])
+            ->assertActionVisible('addLateReason')->assertSee('Catat Alasan Keterlambatan')->assertDontSee('Tulis Alasan Keterlambatan')
+            ->callAction('addLateReason', ['reason' => 'Dikabari lewat telepon: kurir tertahan'])->assertHasNoActionErrors();
+
+        $late->refresh();
+        $this->assertSame($legal->id, $late->lateReasons()->sole()->user_id);
+        $this->assertSame(0, DocumentRequest::query()->lateWithoutReason()->count());
+        $this->assertSame('Alasan keterlambatan dicatat tim legal', $late->publicTimeline()[0]['label']);
+        $this->assertSame('Tim legal', $late->publicTimeline()[0]['actor']);
+
+        $onTime = $this->handover($this->requester(), $legal, 2);
+        Livewire::test(EditDocumentRequest::class, ['record' => $onTime->getRouteKey()])->assertActionHidden('addLateReason');
+    }
+
+    public function test_legal_can_cancel_a_revision_the_applicant_abandoned(): void
+    {
+        $legal = $this->legal();
+        $revision = DocumentRequest::factory()->create([
+            'status' => 'revision', 'requester_id' => $this->requester()->id, 'reviewer_id' => $legal->id,
+            'history' => [$this->entry('submitted', '2026-11-01T01:00:00Z'), $this->entry('revision', '2026-11-02T01:00:00Z', note: 'Lengkapi lampiran')],
+        ]);
+        $submitted = DocumentRequest::factory()->create(['status' => 'submitted', 'reviewer_id' => $legal->id]);
+
+        $this->actingAs($legal);
+        Livewire::test(EditDocumentRequest::class, ['record' => $submitted->getRouteKey()])->assertActionHidden('cancel');
+        Livewire::test(EditDocumentRequest::class, ['record' => $revision->getRouteKey()])
+            ->assertActionVisible('cancel')->callAction('cancel', ['note' => 'Pengaju tidak melanjutkan'])->assertHasNoActionErrors();
+
+        $this->assertSame('cancelled', $revision->fresh()->status);
+        Livewire::test(EditDocumentRequest::class, ['record' => $revision->getRouteKey()])
+            ->assertSee('Alasan pembatalan')->assertSee('Pengaju tidak melanjutkan');
+    }
+
+    public function test_summary_shows_the_next_step_and_deadline(): void
+    {
+        $legal = $this->legal();
+        $late = $this->handover($this->requester(), $legal, 10);
+        $signing = DocumentRequest::factory()->signing(1)->create(['reviewer_id' => $legal->id]);
+
+        $this->actingAs($legal);
+        Livewire::test(EditDocumentRequest::class, ['record' => $late->getRouteKey()])
+            ->assertSee('Langkah berikutnya')->assertSee('(terlambat 3 hari)');
+        Livewire::test(EditDocumentRequest::class, ['record' => $signing->getRouteKey()])
+            ->assertSee('Menunggu pengaju menandatangani draft dan mengunggah scan.');
+    }
+
+    public function test_legal_actionable_tab_lists_physical_documents_still_awaited(): void
+    {
+        $legal = $this->legal();
+        $requester = $this->requester();
+        $late = $this->handover($requester, $legal, 10);
+        $onTime = $this->handover($requester, $legal, 2);
+        $signing = DocumentRequest::factory()->signing(1)->create(['requester_id' => $requester->id, 'reviewer_id' => $legal->id]);
+
+        $this->actingAs($legal);
+        Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')
+            ->assertCanSeeTableRecords([$late, $onTime])->assertCanNotSeeTableRecords([$signing]);
     }
 }

@@ -36,7 +36,11 @@ button:disabled { opacity: .65; cursor: wait; }
 .notice { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 20px 24px; margin-bottom: 12px; overflow-wrap: anywhere; }
 .notice p { margin: 8px 0 0; white-space: pre-line; }
 .notice.error { color: #b3261e; }
-.notice ul { padding-left: 20px; margin: 8px 0 0; }
+.notice ul, .notice ol { padding-left: 20px; margin: 8px 0 0; }
+.notice li + li { margin-top: 4px; }
+.notice.success { color: #146337; background: #e7f6ec; border-color: #b7dfc4; }
+button.secondary { background: #fff; color: var(--accent); border: 1px solid var(--line); }
+button.secondary:hover { background: #f8f5fc; }
 .honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 [hidden] { display: none !important; }
 .receipt { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 24px; margin-bottom: 20px; }

@@ -58,9 +58,10 @@ class DocumentRequestPolicy
         return in_array($request->status, ['signing', 'handover'], true) && ($request->requester_id === $user->id || $user->can('Review:DocumentRequest'));
     }
 
+    /** Pengaju menulis alasannya sendiri; Staff Legal boleh mencatat alasan yang disampaikan pengaju lewat jalur lain. */
     public function addLateReason(User $user, DocumentRequest $request): bool
     {
-        return $request->requester_id === $user->id && $request->isHandoverLate();
+        return ($request->requester_id === $user->id || $user->can('Review:DocumentRequest')) && $request->isHandoverLate();
     }
 
     public function markReceived(User $user, DocumentRequest $request): bool
@@ -70,7 +71,7 @@ class DocumentRequestPolicy
 
     public function cancel(User $user, DocumentRequest $request): bool
     {
-        return $user->can('Review:DocumentRequest') && in_array($request->status, ['signing', 'handover'], true);
+        return $user->can('Review:DocumentRequest') && in_array($request->status, DocumentRequest::CANCELLABLE_STATUSES, true);
     }
 
     public function delete(User $user, DocumentRequest $request): bool

@@ -87,7 +87,7 @@ class PublicRequestStatusTimelineTest extends TestCase
         ]]);
 
         $timeline = $request->publicTimeline();
-        $this->assertSame(['Dibatalkan', 'Alasan keterlambatan dari pengaju', 'Scan diganti', 'Scan diunggah, menunggu dokumen fisik', 'Draf dokumen diganti', 'Draf dokumen diterbitkan, menunggu tanda tangan', 'Pengajuan diterima'], array_column($timeline, 'label'));
+        $this->assertSame(['Dibatalkan', 'Alasan keterlambatan dari pengaju', 'Scan diganti', 'Scan diunggah, menunggu dokumen fisik', 'Draft dokumen diganti', 'Draft dokumen diterbitkan, menunggu tanda tangan', 'Pengajuan diterima'], array_column($timeline, 'label'));
         $this->assertSame(['Tim legal', 'Pengaju', 'Pengaju', 'Pengaju', 'Tim legal', 'Tim legal', 'Pengaju'], array_column($timeline, 'actor'));
         $this->assertSame('danger', $timeline[0]['tone']);
         $this->assertSame('warning', $timeline[1]['tone']);

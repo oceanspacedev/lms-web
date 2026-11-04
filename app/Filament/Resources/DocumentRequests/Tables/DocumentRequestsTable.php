@@ -54,13 +54,16 @@ class DocumentRequestsTable
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
             SelectFilter::make('stage')->label('Tahap')->options([
-                'to_review' => 'Perlu diperiksa', 'signing' => 'Menunggu tanda tangan', 'handover_on_time' => 'Menunggu fisik',
-                'late' => 'Terlambat', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
+                'to_review' => 'Perlu diperiksa', 'signing' => 'Menunggu tanda tangan', 'scan_overdue' => 'Belum unggah scan > 7 hari',
+                'handover_on_time' => 'Menunggu fisik (belum lewat batas)', 'late' => 'Terlambat', 'late_no_reason' => 'Terlambat, belum ada alasan',
+                'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
             ])->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                 'to_review' => $query->where('status', 'submitted'),
                 'signing' => $query->where('status', 'signing'),
+                'scan_overdue' => $query->scanOverdue(),
                 'handover_on_time' => $query->handoverOnTime(),
                 'late' => $query->handoverLate(),
+                'late_no_reason' => $query->lateWithoutReason(),
                 'archived' => $query->where('status', 'archived'),
                 'cancelled' => $query->where('status', 'cancelled'),
                 default => $query,
@@ -88,7 +91,7 @@ class DocumentRequestsTable
     {
         if ($record->status === 'handover') {
             if (! $record->isHandoverLate()) {
-                return 'Sisa '.(DocumentRequest::HANDOVER_DAYS - ($record->daysSinceSigned() ?? 0)).' hari';
+                return $record->handoverRemainingLabel();
             }
 
             return 'Terlambat '.$record->daysLate().' hari · '.($record->lateReasons->last()?->reason ?? 'belum ada alasan');

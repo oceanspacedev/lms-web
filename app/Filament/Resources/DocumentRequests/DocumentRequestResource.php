@@ -57,8 +57,8 @@ class DocumentRequestResource extends Resource
 
     /**
      * Batasi $query ke pengajuan yang bisa ditindaklanjuti user saat ini juga. Mengikuti DocumentRequestPolicy:
-     * diperiksa (review), dikirim ulang oleh pengaju (draf/revisi), scan diunggah pengaju (signing),
-     * atau alasan keterlambatan penyerahan fisik oleh pengaju (handover terlambat).
+     * diperiksa (review), dokumen fisik ditunggu tim legal (handover), dikirim ulang oleh pengaju (draf/revisi),
+     * serta scan dan dokumen fisik yang harus diserahkan pengaju (signing, handover).
      * Pengajuan publik tidak punya requester_id, jadi "bukan pengajuan sendiri" harus menerima NULL.
      *
      * @param  Builder<DocumentRequest>  $query
@@ -75,8 +75,11 @@ class DocumentRequestResource extends Resource
             if ($user->can('Review:DocumentRequest')) {
                 $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'submitted')->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
             }
-            $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->where('document_requests.status', 'signing'));
-            $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->handoverLate());
+            if ($user->can('Review:DocumentRequest') && $user->can('Create:Document')) {
+                // Dokumen fisik ditunggu tim legal: semua Staff Legal yang boleh mengarsipkan dapat menandainya diterima.
+                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'handover')->where($notOwnRequest));
+            }
+            $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->whereIn('document_requests.status', ['signing', 'handover']));
             if ($user->can('Update:DocumentRequest')) {
                 $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->whereIn('document_requests.status', ['draft', 'revision']));
             }

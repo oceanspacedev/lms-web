@@ -50,7 +50,7 @@ class PublicRequestLookupTest extends TestCase
             ->assertSee('Tautan status pengajuan')
             ->assertSee('Salin tautan')
             ->assertSee('Tautan ini juga dikirim ke WhatsApp pengaju.')
-            ->assertSee('bila pengajuan perlu direvisi, dapat mengubah lalu mengirim ulang pengajuan')
+            ->assertSee('mengunggah scan, menulis alasan keterlambatan, dan mengubah pengajuan bila perlu direvisi')
             ->getContent();
 
         $this->assertMatchesRegularExpression('/<input id="status-link" type="text" readonly value="'.preg_quote($link, '/').'"/', $html);

@@ -33,10 +33,10 @@ class HandoverReminderSender
             $targets = [['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $this->applicantPhone($request), 'link' => $this->applicantLink($request)]];
             $adminLink = route('filament.admin.resources.document-requests.edit', ['record' => $request->id]);
             if ($stage >= 14) {
-                $targets = [...$targets, ...$this->userTargets($request->legalStaffRecipients(), 'legal', $adminLink)];
+                $targets = [...$targets, ...$this->userTargets($request->legalStaffRecipients(), 'legal', $adminLink, 'late_staff')];
             }
             if ($stage >= 28) {
-                $targets = [...$targets, ...$this->userTargets($request->coordinatorRecipients(), 'coordinator', $adminLink)];
+                $targets = [...$targets, ...$this->userTargets($request->coordinatorRecipients(), 'coordinator', $adminLink, 'late_staff')];
             }
             $created += $this->queue($request, "late{$stage}", "late_{$stage}", $targets, $setting);
         });
@@ -55,7 +55,7 @@ class HandoverReminderSender
     }
 
     /**
-     * @param  array<int, array{kind: string, suffix: string, phone: ?string, link: string}>  $targets
+     * @param  array<int, array{kind: string, suffix: string, phone: ?string, link: string, template?: string}>  $targets  `template` menggantikan `$template` untuk penerima itu.
      */
     private function queue(DocumentRequest $request, string $keyPart, string $template, array $targets, ?ReminderTemplate $setting): int
     {
@@ -68,7 +68,7 @@ class HandoverReminderSender
                 'document_request_id' => $request->id, 'recipient_kind' => $target['kind'], 'recipient_phone' => $phone,
                 'payload' => [
                     'recipient' => ['type' => 'phone', 'value' => $phone],
-                    'message' => ['type' => 'text', 'text' => DocumentRequestNotifier::renderTemplate($request, $template, $target['link'], null, $setting)],
+                    'message' => ['type' => 'text', 'text' => DocumentRequestNotifier::renderTemplate($request, $target['template'] ?? $template, $target['link'], null, $setting)],
                     'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'), 'route_key' => config('services.waghub.route_key'),
                     'expires_at' => now()->addDay()->toIso8601String(), 'client_reference' => $key,
                 ],
@@ -111,10 +111,10 @@ class HandoverReminderSender
 
     /**
      * @param  Collection<int, User>  $users
-     * @return list<array{kind: string, suffix: string, phone: ?string, link: string}>
+     * @return list<array{kind: string, suffix: string, phone: ?string, link: string, template: string}>
      */
-    private function userTargets(Collection $users, string $kind, string $link): array
+    private function userTargets(Collection $users, string $kind, string $link, string $template): array
     {
-        return $users->map(fn ($user): array => ['kind' => $kind, 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'link' => $link])->all();
+        return $users->map(fn ($user): array => ['kind' => $kind, 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'link' => $link, 'template' => $template])->all();
     }
 }

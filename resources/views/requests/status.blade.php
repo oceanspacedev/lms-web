@@ -14,7 +14,7 @@
         <button type="button" data-copy-button>Salin tautan</button>
     </div>
     <small class="copy-feedback" role="status" aria-live="polite" data-copy-feedback></small>
-    <small id="status-link-note">Tautan ini juga dikirim ke WhatsApp pengaju. Siapa pun yang memegang tautan ini dapat melihat status pengajuan, dan bila pengajuan perlu direvisi, dapat mengubah lalu mengirim ulang pengajuan. Jadi jangan dibagikan ke orang lain.</small>
+    <small id="status-link-note">Tautan ini juga dikirim ke WhatsApp pengaju. Siapa pun yang memegang tautan ini dapat melihat status, mengunggah scan, menulis alasan keterlambatan, dan mengubah pengajuan bila perlu direvisi. Jadi jangan dibagikan ke orang lain.</small>
 </section>
 @endif
 @if($lookup && $submission->status === 'revision')
@@ -24,7 +24,10 @@
     <div class="notice error" role="alert"><strong>Permintaan belum berhasil.</strong><ul>@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul></div>
 @endif
 @if(! $lookup && session('status_done'))
-    <div class="notice" role="status"><strong>Berhasil disimpan.</strong></div>
+    <div class="notice success" role="status"><strong>{{ is_string(session('status_done')) ? session('status_done') : 'Berhasil disimpan.' }}</strong></div>
+@endif
+@if($lookup && in_array($submission->status, ['signing', 'handover'], true))
+    <div class="notice" role="status"><strong>{{ $submission->status === 'signing' ? 'Menunggu scan bertanda tangan' : 'Menunggu dokumen asli' }}</strong><p>Buka tautan status yang dikirim ke WhatsApp pengaju untuk mengunduh draft, mengunggah scan{{ $submission->status === 'handover' ? ', atau menulis alasan keterlambatan' : '' }}. Hal itu tidak bisa dilakukan dari halaman ini.</p></div>
 @endif
 <section class="form-section receipt">
     <div class="receipt-heading"><span>Pengajuan #{{ $submission->id }}</span><span class="status {{ $submission->status }}">{{ \App\Models\DocumentRequest::statusLabel($submission->status) }}</span></div>
@@ -43,49 +46,61 @@
         $canSign = ! $lookup && in_array($submission->status, ['signing', 'handover'], true);
     @endphp
     @if($canSign)
-        @if($submission->draft_path)
-            <p><a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'draft']) }}">Unduh draf dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif</p>
-        @endif
-        @if($submission->status === 'handover')
+        @php($draftLink = $submission->draft_path ? route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'draft']) : null)
+        @if($submission->status === 'signing')
+            <div class="notice"><strong>Langkah selanjutnya</strong>
+                <ol>
+                    <li>@if($draftLink)<a class="text-link" href="{{ $draftLink }}">Unduh draft dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif, lalu cetak.@else Siapkan draft dokumen dari tim legal, lalu cetak. Hubungi tim legal bila belum menerimanya.@endif</li>
+                    <li>Tanda tangani, dan beri cap bila perlu.</li>
+                    <li>Scan atau foto dokumen yang sudah ditandatangani, lalu unggah di bawah ini.</li>
+                    <li>Serahkan dokumen asli ke tim legal paling lambat {{ \App\Models\DocumentRequest::HANDOVER_DAYS }} hari setelah scan diunggah.</li>
+                </ol>
+            </div>
+        @else
             @php($lateReasons = $submission->lateReasons)
-            <p><strong>Batas penyerahan dokumen fisik:</strong> {{ $submission->handoverDueDate()?->translatedFormat('d M Y') }}
+            @php($daysLeft = max(0, \App\Models\DocumentRequest::HANDOVER_DAYS - ($submission->daysSinceSigned() ?? 0)))
+            <p><strong>Batas penyerahan dokumen asli:</strong> {{ $submission->handoverDueDate()?->translatedFormat('d M Y') }}
                 @if($submission->isHandoverLate())
                     (terlambat {{ $submission->daysLate() }} hari)
+                @elseif($daysLeft === 0)
+                    (hari ini)
                 @else
-                    (sisa {{ max(0, \App\Models\DocumentRequest::HANDOVER_DAYS - ($submission->daysSinceSigned() ?? 0)) }} hari)
+                    (sisa {{ $daysLeft }} hari)
                 @endif
             </p>
-            <p class="file-hint">Serahkan dokumen fisik bertanda tangan ke tim legal sebelum batas ini.</p>
-            @if($submission->signed_path)
-                <p><a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh scan yang sudah diunggah</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif</p>
+            @if($submission->isHandoverLate())
+                <div class="notice error"><strong>Terlambat</strong>
+                    <p>Dokumen asli belum diterima tim legal dan batas penyerahan sudah lewat. Segera serahkan, lalu tuliskan alasan keterlambatan di bawah ini. Alasan tidak perlu disetujui dan tidak memperpanjang batas.</p>
+                </div>
+                <form method="post" action="{{ route('requests.public.reason', ['token' => $submission->public_token]) }}">
+                    @csrf
+                    <div class="field">
+                        <label for="late-reason">Alasan keterlambatan</label>
+                        <textarea id="late-reason" name="reason" maxlength="2000" required>{{ old('reason') }}</textarea>
+                    </div>
+                    <button type="submit">Kirim alasan</button>
+                </form>
+                @if($lateReasons->isNotEmpty())
+                    <h3 class="timeline-heading">Alasan keterlambatan yang sudah dikirim</h3>
+                    <ul>@foreach($lateReasons as $lateReason)<li>{{ $lateReason->created_at->timezone(config('lms.reminder_timezone'))->translatedFormat('d M Y H:i') }} WIB: {{ $lateReason->reason }}</li>@endforeach</ul>
+                @endif
+            @else
+                <p class="file-hint">Serahkan dokumen asli bertanda tangan ke tim legal sebelum batas ini. Tim legal akan menandainya diterima.</p>
             @endif
+            <p>
+                @if($draftLink)<a class="text-link" href="{{ $draftLink }}">Unduh draft dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif<br>@endif
+                @if($submission->signed_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh scan yang sudah diunggah</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif @endif
+            </p>
         @endif
         <form method="post" enctype="multipart/form-data" action="{{ route('requests.public.scan', ['token' => $submission->public_token]) }}">
             @csrf
             <div class="field">
-                <label for="signed-scan">{{ $submission->status === 'handover' ? 'Ganti scan dokumen bertanda tangan' : 'Unggah scan dokumen bertanda tangan' }}</label>
+                <label for="signed-scan">{{ $submission->status === 'handover' ? 'Ganti scan (bila salah unggah)' : 'Unggah scan dokumen bertanda tangan' }}</label>
                 <input id="signed-scan" type="file" name="scan" accept="{{ $acceptAttribute }}" required>
                 <small>Jenis berkas: {{ implode(', ', config('lms.allowed_extensions')) }}. Ukuran maksimal {{ number_format(config('lms.max_upload_size_kb') / 1024, 0) }} MB.</small>
             </div>
-            <button type="submit">Unggah scan</button>
+            <button type="submit" @class(['secondary' => $submission->status === 'handover'])>{{ $submission->status === 'handover' ? 'Ganti scan' : 'Unggah scan' }}</button>
         </form>
-        @if($submission->status === 'handover' && $submission->isHandoverLate())
-            <div class="notice error"><strong>Terlambat</strong>
-                <p>Dokumen fisik belum diterima dan batas penyerahan sudah lewat. Tuliskan alasan keterlambatan di bawah ini. Alasan tidak perlu disetujui dan tidak memperpanjang batas.</p>
-            </div>
-            <form method="post" action="{{ route('requests.public.reason', ['token' => $submission->public_token]) }}">
-                @csrf
-                <div class="field">
-                    <label for="late-reason">Alasan keterlambatan</label>
-                    <textarea id="late-reason" name="reason" maxlength="2000" required>{{ old('reason') }}</textarea>
-                </div>
-                <button type="submit">Kirim alasan</button>
-            </form>
-            @if($lateReasons->isNotEmpty())
-                <h3 class="timeline-heading">Alasan keterlambatan yang sudah dikirim</h3>
-                <ul>@foreach($lateReasons as $lateReason)<li>{{ $lateReason->created_at->timezone(config('lms.reminder_timezone'))->translatedFormat('d M Y H:i') }} WIB: {{ $lateReason->reason }}</li>@endforeach</ul>
-            @endif
-        @endif
     @endif
     <ol class="progress" aria-label="Tahap pengajuan">
         @foreach($submission->progressSteps() as $step)

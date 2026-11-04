@@ -148,16 +148,38 @@ class RequestMonitoringTest extends TestCase
         DocumentRequest::factory()->cancelled()->create();
         DocumentRequest::factory()->signing(1)->create();
 
+        $scanOverdue = DocumentRequest::factory()->signing(9)->create(['title' => 'Scan Belum Masuk']);
+
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke(Livewire::test(WaitingRequestsOverview::class)->instance());
 
-        $this->assertSame(['Menunggu Pemeriksaan', 'Menunggu Fisik', 'Terlambat'], array_map(fn ($stat): string => (string) $stat->getLabel(), $stats));
-        $this->assertSame([2, 3, 2], array_map(fn ($stat): int => $stat->getValue(), $stats));
-        $this->assertSame('1 belum ada alasan', (string) $stats[2]->getDescription());
+        $this->assertSame(['Menunggu Pemeriksaan', 'Menunggu Tanda Tangan', 'Menunggu Fisik', 'Terlambat'], array_map(fn ($stat): string => (string) $stat->getLabel(), $stats));
+        $this->assertSame([2, 2, 3, 2], array_map(fn ($stat): int => $stat->getValue(), $stats));
+        $this->assertSame('1 belum unggah scan lebih dari 7 hari', (string) $stats[1]->getDescription());
+        $this->assertSame('1 belum ada alasan', (string) $stats[3]->getDescription());
+        $this->assertSame('danger', $stats[3]->getColor());
         $this->assertStringContainsString('to_review', rawurldecode($stats[0]->getUrl()));
-        $this->assertStringContainsString('handover_on_time', rawurldecode($stats[1]->getUrl()));
-        $this->assertStringContainsString('late', rawurldecode($stats[2]->getUrl()));
-        $this->assertStringContainsString('stage', rawurldecode($stats[2]->getUrl()));
-        $this->get($stats[2]->getUrl())->assertOk();
+        $this->assertStringContainsString('scan_overdue', rawurldecode($stats[1]->getUrl()));
+        $this->assertStringContainsString('handover_on_time', rawurldecode($stats[2]->getUrl()));
+        $this->assertStringContainsString('late_no_reason', rawurldecode($stats[3]->getUrl()));
+        $this->get($stats[3]->getUrl())->assertOk();
+
+        Livewire::test(ListDocumentRequests::class)->filterTable('stage', 'late_no_reason')
+            ->assertCanSeeTableRecords([$withoutReason])->assertCanNotSeeTableRecords([$withReason]);
+        Livewire::test(ListDocumentRequests::class)->filterTable('stage', 'scan_overdue')
+            ->assertCanSeeTableRecords([$scanOverdue])->assertCountTableRecords(1);
+    }
+
+    public function test_late_card_is_not_red_when_every_late_request_has_a_reason(): void
+    {
+        $this->signInLegal();
+        $late = DocumentRequest::factory()->handover(12)->create();
+        DocumentRequestLateReason::factory()->create(['document_request_id' => $late->id]);
+
+        $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke(Livewire::test(WaitingRequestsOverview::class)->instance());
+
+        $this->assertSame('Semua sudah memberi alasan', (string) $stats[3]->getDescription());
+        $this->assertSame('warning', $stats[3]->getColor());
+        $this->assertStringNotContainsString('late_no_reason', rawurldecode($stats[3]->getUrl()));
     }
 
     public function test_widget_is_visible_when_only_handover_requests_exist(): void

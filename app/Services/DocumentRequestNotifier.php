@@ -39,6 +39,7 @@ class DocumentRequestNotifier
         $applicantEvent = ($last['event'] ?? null) === 'draft_replaced' ? 'draft_replaced' : $request->status;
         $targets = [];
         if ($request->status === 'handover') {
+            $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->requester_phone ?? $request->requester?->phone, 'template' => 'handover', 'link' => $applicantLink];
             foreach ($request->legalStaffRecipients() as $user) {
                 $targets[] = ['kind' => 'legal', 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'template' => 'handover_staff', 'link' => $adminLink];
             }
@@ -84,6 +85,8 @@ class DocumentRequestNotifier
             'status' => DocumentRequest::statusLabel($request->status), 'catatan' => (string) $note,
             'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
             'batas_waktu' => $request->handoverDueDate()?->translatedFormat('d M Y') ?? '-', 'hari_terlambat' => (string) $request->daysLate(),
+            'alasan_terlambat' => str_contains($body, '{alasan_terlambat}')
+                ? ($request->lateReasons()->reorder()->latest('id')->value('reason') ?? 'belum ada') : '',
         ]);
     }
 
