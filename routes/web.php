@@ -4,6 +4,7 @@ use App\Filament\Auth\Pages\EmailLogin;
 use App\Filament\Auth\Pages\PhoneLogin;
 use App\Http\Controllers\DocumentDownloadController;
 use App\Http\Controllers\DocumentRequestAttachmentController;
+use App\Http\Controllers\DocumentRequestFileController;
 use App\Http\Controllers\PanduanVideoController;
 use App\Http\Controllers\PublicDocumentRequestController;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -41,3 +42,5 @@ Route::post('/pengajuan/{token}', [PublicDocumentRequestController::class, 'revi
 
 Route::get('/admin/document-requests/{documentRequest}/attachments/{key}', DocumentRequestAttachmentController::class)
     ->middleware('auth:web')->name('requests.attachment');
+Route::get('/admin/document-requests/{documentRequest}/files/{kind}', DocumentRequestFileController::class)
+    ->whereIn('kind', ['draft', 'signed'])->middleware('auth:web')->name('requests.file');
