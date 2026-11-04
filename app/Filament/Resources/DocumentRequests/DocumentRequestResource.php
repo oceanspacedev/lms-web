@@ -29,6 +29,9 @@ class DocumentRequestResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
+    /** Status setelah draf keluar yang boleh dilihat semua Staff Legal; harus sama dengan DocumentRequestPolicy. */
+    public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
+
     protected static ?int $navigationSort = 2;
 
     protected static bool $isGloballySearchable = false;
@@ -49,17 +52,15 @@ class DocumentRequestResource extends Resource
         return $query->where(function (Builder $query) use ($user): void {
             $query->where('requester_id', $user->id);
             $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where('pic_user_id', $user->id));
-            foreach (['Review' => 'reviewer_id', 'Approve' => 'approver_id'] as $permission => $column) {
-                if ($user->can($permission.':DocumentRequest')) {
-                    $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull($column)->orWhere($column, $user->id)));
-                }
+            if ($user->can('Review:DocumentRequest')) {
+                $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull('reviewer_id')->orWhere('reviewer_id', $user->id)->orWhereIn('status', self::LEGAL_VISIBLE_STATUSES)));
             }
         });
     }
 
     /**
      * Batasi $query ke pengajuan yang bisa ditindaklanjuti user saat ini juga. Mengikuti DocumentRequestPolicy:
-     * diperiksa (review), disetujui (approve), diarsipkan (archive), atau dikirim ulang oleh pengaju (draf/revisi).
+     * diperiksa (review) atau dikirim ulang oleh pengaju (draf/revisi).
      * Pengajuan publik tidak punya requester_id, jadi "bukan pengajuan sendiri" harus menerima NULL.
      *
      * @param  Builder<DocumentRequest>  $query
@@ -75,13 +76,6 @@ class DocumentRequestResource extends Resource
             $query->whereRaw('1 = 0');
             if ($user->can('Review:DocumentRequest')) {
                 $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'submitted')->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
-            }
-            if ($user->can('Approve:DocumentRequest')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'review')->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.approver_id')));
-            }
-            if ($user->can('Create:Document')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'approved')
-                    ->when(! $user->can('Approve:DocumentRequest'), fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)));
             }
             if ($user->can('Update:DocumentRequest')) {
                 $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->whereIn('document_requests.status', ['draft', 'revision']));

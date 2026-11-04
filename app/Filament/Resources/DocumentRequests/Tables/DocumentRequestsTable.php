@@ -24,7 +24,7 @@ class DocumentRequestsTable
 
     public static function configure(Table $table): Table
     {
-        return $table->striped()->paginated([10, 25, 50])->searchPlaceholder('Cari nomor, pengajuan, pihak lawan / mitra, atau pengaju')->columns([
+        return $table->striped()->modifyQueryUsing(fn (Builder $query): Builder => $query->with('lateReasons'))->paginated([10, 25, 50])->searchPlaceholder('Cari nomor, pengajuan, pihak lawan / mitra, atau pengaju')->columns([
             TextColumn::make('id')->label('No.')->formatStateUsing(fn (int|string $state): string => '#'.$state)->sortable()
                 ->searchable(query: function (Builder $query, string $search): Builder {
                     $number = ltrim(trim($search), '#');
@@ -43,9 +43,23 @@ class DocumentRequestsTable
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::STATUSES[$state])->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
+            TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->wrap()
+                ->color(fn (DocumentRequest $record): ?string => $record->status === 'handover' && $record->isHandoverLate() ? 'danger' : ($record->status === 'signing' ? 'warning' : null)),
             TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->timezone(config('lms.reminder_timezone'))->sortable(),
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
+            SelectFilter::make('stage')->label('Tahap')->options([
+                'to_review' => 'Perlu diperiksa', 'signing' => 'Menunggu tanda tangan', 'handover_on_time' => 'Menunggu fisik',
+                'late' => 'Terlambat', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
+            ])->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                'to_review' => $query->where('status', 'submitted'),
+                'signing' => $query->where('status', 'signing'),
+                'handover_on_time' => $query->handoverOnTime(),
+                'late' => $query->handoverLate(),
+                'archived' => $query->where('status', 'archived'),
+                'cancelled' => $query->where('status', 'cancelled'),
+                default => $query,
+            }),
             Filter::make('waiting_long')->toggle()
                 ->label(fn (): string => 'Menunggu lebih dari '.ReminderTemplate::requestReminderSettings()['after_days'].' hari')
                 ->query(fn (Builder $query): Builder => $query->waitingLongerThan(ReminderTemplate::requestReminderSettings()['after_days']))
@@ -62,6 +76,22 @@ class DocumentRequestsTable
                 'actionable' => 'Buka tab Semua untuk melihat seluruh pengajuan.',
                 default => null,
             });
+    }
+
+    /** Keterangan pemantauan dokumen fisik; kosong untuk status lain. lateReasons dimuat bersama daftar agar tidak N+1. */
+    private static function handoverNote(DocumentRequest $record): ?string
+    {
+        if ($record->status === 'handover') {
+            if (! $record->isHandoverLate()) {
+                return 'Sisa '.(DocumentRequest::HANDOVER_DAYS - ($record->daysSinceSigned() ?? 0)).' hari';
+            }
+
+            return 'Terlambat '.$record->daysLate().' hari · '.($record->lateReasons->last()?->reason ?? 'belum ada alasan');
+        }
+
+        return $record->status === 'signing' && $record->signed_uploaded_at === null && ($record->daysSinceDraft() ?? 0) > DocumentRequest::HANDOVER_DAYS
+            ? 'Belum unggah scan > 7 hari'
+            : null;
     }
 
     /** Penyebab tabel kosong: pencarian/filter aktif, tab "Perlu tindakan saya", atau memang belum ada pengajuan. */
