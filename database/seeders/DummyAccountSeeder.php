@@ -38,8 +38,9 @@ class DummyAccountSeeder extends Seeder
             'ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'Review:DocumentRequest', 'receive_reminder',
         ],
         'dummy_viewer' => ['ViewAny:Document', 'View:Document'],
-        'dummy_pemeriksa' => ['ViewAny:Document', 'View:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest'],
+        'dummy_pemeriksa' => ['ViewAny:Document', 'View:Document', 'Create:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest'],
         'dummy_penyetuju' => ['ViewAny:Document', 'View:Document', 'Create:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'Approve:DocumentRequest'],
+        'dummy_koordinator' => ['ViewAny:Document', 'View:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'ReceiveEscalation:DocumentRequest'],
         'dummy_pengaju' => ['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Create:DocumentRequest', 'Update:DocumentRequest'],
     ];
 

@@ -46,6 +46,8 @@ class DummyAccountSeederTest extends TestCase
 
         $this->assertSame('Pemeriksa', $this->dummyUser('dummy_pemeriksa')->name);
         $this->assertSame('pemeriksa@test.com', $this->dummyUser('dummy_pemeriksa')->email);
+        $this->assertSame('Koordinator', $this->dummyUser('dummy_koordinator')->name);
+        $this->assertSame('koordinator@test.com', $this->dummyUser('dummy_koordinator')->email);
         $this->assertSame('Super Admin', $this->dummyUser('super_admin')->name);
     }
 
@@ -73,11 +75,19 @@ class DummyAccountSeederTest extends TestCase
         $reviewer = $this->dummyUser('dummy_pemeriksa');
         $this->assertTrue($reviewer->can('Review:DocumentRequest'));
         $this->assertFalse($reviewer->can('Approve:DocumentRequest'));
+        $this->assertTrue($reviewer->can('Create:Document'));
 
         $approver = $this->dummyUser('dummy_penyetuju');
         $this->assertTrue($approver->can('Approve:DocumentRequest'));
         $this->assertTrue($approver->can('Create:Document'));
         $this->assertFalse($approver->can('Review:DocumentRequest'));
+
+        $coordinator = $this->dummyUser('dummy_koordinator');
+        $this->assertTrue($coordinator->can('ReceiveEscalation:DocumentRequest'));
+        $this->assertTrue($coordinator->can('ViewAll:DocumentRequest'));
+        $this->assertTrue($coordinator->can('ViewAny:Document'));
+        $this->assertFalse($coordinator->can('Create:Document'));
+        $this->assertFalse($coordinator->can('Review:DocumentRequest'));
 
         $requester = $this->dummyUser('dummy_pengaju');
         $this->assertTrue($requester->can('Create:DocumentRequest'));

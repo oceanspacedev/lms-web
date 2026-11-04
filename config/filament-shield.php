@@ -266,6 +266,7 @@ return [
         'ViewAll:DocumentRequest' => 'Lihat semua pengajuan',
         'Review:DocumentRequest' => 'Periksa pengajuan',
         'Approve:DocumentRequest' => 'Setujui pengajuan',
+        'ReceiveEscalation:DocumentRequest' => 'Terima eskalasi pengajuan',
         'View:Horizon' => 'Horizon',
         'View:LogViewer' => 'Log Laravel',
         'receive_reminder' => 'Penerima cadangan pengingat WhatsApp',
