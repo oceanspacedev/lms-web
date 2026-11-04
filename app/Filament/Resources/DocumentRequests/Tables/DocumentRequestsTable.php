@@ -41,7 +41,7 @@ class DocumentRequestsTable
                     ->orWhere(fn (Builder $query): Builder => $query->whereNull('document_requests.requester_name')
                         ->whereHas('requester', fn (Builder $requester): Builder => $requester->whereRaw("lower(users.name) like ? escape '!'", [self::likePattern($search)])))),
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::statusLabel($state))->color(fn (string $state): string => match ($state) {
-                'archived' => 'success', 'rejected' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
+                'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
             TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->wrap()
                 ->color(fn (DocumentRequest $record): ?string => $record->status === 'handover' && $record->isHandoverLate() ? 'danger' : ($record->status === 'signing' ? 'warning' : null)),
@@ -89,7 +89,7 @@ class DocumentRequestsTable
             return 'Terlambat '.$record->daysLate().' hari · '.($record->lateReasons->last()?->reason ?? 'belum ada alasan');
         }
 
-        return $record->status === 'signing' && $record->signed_uploaded_at === null && ($record->daysSinceDraft() ?? 0) > DocumentRequest::HANDOVER_DAYS
+        return $record->status === 'signing' && $record->signed_uploaded_at === null && ($record->daysSinceDraft() ?? 0) > DocumentRequest::SCAN_REMINDER_DAYS
             ? 'Belum unggah scan > 7 hari'
             : null;
     }

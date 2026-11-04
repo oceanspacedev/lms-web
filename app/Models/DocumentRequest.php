@@ -194,6 +194,16 @@ class DocumentRequest extends Model
         return max(0, ($this->daysSinceSigned() ?? 0) - self::HANDOVER_DAYS);
     }
 
+    /** Jumlah hari terlambat saat dokumen fisik diterima (kalender WIB, dihitung dari scan pertama); 0 bila tepat waktu atau tanpa scan. */
+    public function daysLateAtReceipt(): int
+    {
+        if ($this->signed_uploaded_at === null || $this->physical_received_at === null) {
+            return 0;
+        }
+
+        return max(0, ($this->daysSince($this->signed_uploaded_at, CarbonImmutable::parse($this->physical_received_at)) ?? 0) - self::HANDOVER_DAYS);
+    }
+
     /** Pengajuan menunggu dokumen fisik yang belum melewati tenggat. */
     public function scopeHandoverOnTime(Builder $query): Builder
     {
@@ -218,7 +228,10 @@ class DocumentRequest extends Model
         return $query->handoverLate()->whereDoesntHave('lateReasons');
     }
 
-    /** Batas awal hari WIB (dalam UTC) tujuh hari lalu; unggahan sebelum batas ini sudah terlambat. */
+    /**
+     * Batas awal hari WIB (dalam UTC) tujuh hari lalu; unggahan sebelum batas ini sudah terlambat.
+     * Perbandingan SQL mengasumsikan timestamp tersimpan dalam UTC (`config('app.timezone') === 'UTC'`).
+     */
     private static function lateBoundary(): string
     {
         return CarbonImmutable::now(config('lms.reminder_timezone'))->startOfDay()->subDays(self::HANDOVER_DAYS)->utc()->toDateTimeString();
@@ -321,7 +334,11 @@ class DocumentRequest extends Model
                 if (isset(self::TIMELINE_EVENT_LABELS[$kind])) {
                     $entries[] = [
                         'label' => self::TIMELINE_EVENT_LABELS[$kind],
-                        'actor' => $kind === 'draft_replaced' ? 'Tim legal' : 'Pengaju',
+                        'actor' => match ($kind) {
+                            'draft_replaced' => 'Tim legal',
+                            'signed_replaced' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim legal',
+                            default => 'Pengaju',
+                        },
                         'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
                         'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
                         'tone' => $kind === 'late_reason' ? 'warning' : 'normal',
@@ -339,7 +356,8 @@ class DocumentRequest extends Model
                         'review' => 'Pemeriksa',
                         'approved' => 'Penyetuju',
                         'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Pemeriksa',
-                        'signing', 'handover', 'archived', 'cancelled' => $status === 'handover' ? 'Pengaju' : 'Tim legal',
+                        'handover' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim legal',
+                        'signing', 'archived', 'cancelled' => 'Tim legal',
                         default => 'Tim pemeriksa',
                     },
                     'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
@@ -353,6 +371,18 @@ class DocumentRequest extends Model
         }
 
         return array_reverse($entries);
+    }
+
+    /**
+     * Unggahan scan dianggap dari pengaju bila tanpa user (tautan publik) atau user-nya pengaju sendiri; selain itu dari tim legal.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function isApplicantUpload(array $event): bool
+    {
+        $userId = $event['user_id'] ?? null;
+
+        return $userId === null || $userId === $this->requester_id;
     }
 
     public function notifications(): HasMany
@@ -620,6 +650,9 @@ class DocumentRequest extends Model
             if ($request->status === 'submitted') {
                 $request->status = 'signing';
                 $request->recordEvent('signing', $user);
+            } elseif ($request->getOriginal('draft_path') === null) {
+                // Pengajuan hasil migrasi berstatus signing tanpa draf: draf pertama diperlakukan sebagai penerbitan pertama.
+                $request->recordEvent('signing', $user);
             } else {
                 $request->recordActivity('draft_replaced', $user);
             }
@@ -729,7 +762,8 @@ class DocumentRequest extends Model
             $request->document_id = $document->id;
             $request->physical_received_at = now();
             $request->status = 'archived';
-            $request->recordEvent('archived', $user);
+            $daysLate = $request->daysLateAtReceipt();
+            $request->recordEvent('archived', $user, $daysLate > 0 ? "Diterima terlambat {$daysLate} hari" : null);
             $request->save();
             app(DocumentRequestNotifier::class)->enqueue($request);
             $this->refresh();

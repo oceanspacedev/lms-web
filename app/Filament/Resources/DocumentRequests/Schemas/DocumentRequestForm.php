@@ -124,8 +124,10 @@ class DocumentRequestForm
         $previous = null;
         foreach ($record?->history ?? [] as $event) {
             $status = (string) ($event['status'] ?? '');
+            $kind = $event['event'] ?? null;
             $entries[] = [
                 'label' => match (true) {
+                    $kind !== null && isset(DocumentRequest::TIMELINE_EVENT_LABELS[$kind]) => DocumentRequest::TIMELINE_EVENT_LABELS[$kind],
                     $status === 'draft' => 'Draf dibuat',
                     $status === 'submitted' && $previous === 'revision' => 'Revisi dikirim',
                     default => DocumentRequest::TIMELINE_LABELS[$status] ?? DocumentRequest::statusLabel($status),
@@ -294,6 +296,9 @@ class DocumentRequestForm
             }),
             Section::make('Tanda tangan & dokumen fisik')->key('signing_handover')->compact()->columnSpanFull()->columns(['default' => 1, 'sm' => 2])
                 ->visible(fn (?DocumentRequest $record): bool => $record !== null && in_array($record->status, ['signing', 'handover', 'archived', 'cancelled'], true))->schema([
+                    TextEntry::make('late_reason_notice')->hiddenLabel()->columnSpanFull()->color('danger')->icon('heroicon-o-exclamation-triangle')->weight('semibold')->wrap()
+                        ->state('Batas penyerahan dokumen fisik sudah lewat. Anda wajib menulis alasan keterlambatan lewat tombol "Tulis Alasan Keterlambatan".')
+                        ->visible(fn (DocumentRequest $record): bool => $record->isHandoverLate() && $record->requester_id !== null && $record->requester_id === auth()->id()),
                     TextEntry::make('draft_link')->label('Draft')->state(fn (DocumentRequest $record): ?string => $record->draft_name ?? 'Unduh draft')->icon('heroicon-o-arrow-down-tray')
                         ->url(fn (DocumentRequest $record): string => route('requests.file', ['documentRequest' => $record, 'kind' => 'draft']), shouldOpenInNewTab: true)->visible(fn (DocumentRequest $record): bool => filled($record->draft_path)),
                     TextEntry::make('signed_link')->label('Scan bertanda tangan')->state(fn (DocumentRequest $record): ?string => $record->signed_name ?? 'Unduh scan')->icon('heroicon-o-arrow-down-tray')
@@ -304,7 +309,8 @@ class DocumentRequestForm
                     TextEntry::make('handover_badge')->label('Sisa waktu')->badge()
                         ->state(fn (DocumentRequest $record): string => $record->isHandoverLate() ? 'Terlambat '.$record->daysLate().' hari' : 'Sisa '.max(0, DocumentRequest::HANDOVER_DAYS - ($record->daysSinceSigned() ?? 0)).' hari')
                         ->color(fn (DocumentRequest $record): string => $record->isHandoverLate() ? 'danger' : 'gray')->visible(fn (DocumentRequest $record): bool => $record->status === 'handover'),
-                    TextEntry::make('physical_received_label')->label('Fisik diterima')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->physical_received_at?->timezone(config('lms.reminder_timezone'))))->visible(fn (DocumentRequest $record): bool => $record->physical_received_at !== null),
+                    TextEntry::make('physical_received_label')->label('Fisik diterima')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->physical_received_at?->timezone(config('lms.reminder_timezone')))
+                        .($record->daysLateAtReceipt() > 0 ? ' · terlambat '.$record->daysLateAtReceipt().' hari' : ''))->visible(fn (DocumentRequest $record): bool => $record->physical_received_at !== null),
                     TextEntry::make('late_reasons_list')->label('Alasan keterlambatan')->columnSpanFull()->bulleted()->listWithLineBreaks()->wrap()
                         ->state(fn (DocumentRequest $record): array => $record->lateReasons->map(fn ($lateReason): string => $lateReason->created_at->timezone(config('lms.reminder_timezone'))->translatedFormat('d M Y H:i').' — '.$lateReason->reason)->all())
                         ->visible(fn (DocumentRequest $record): bool => $record->lateReasons->isNotEmpty()),

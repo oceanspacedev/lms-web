@@ -29,8 +29,8 @@ class UserDeactivator
     /** Pengganti PIC dan pemeriksa pengajuan, serta PIC dan pemeriksa pengajuan pada jenis dokumen. */
     public const GROUP_REVIEWER = 'reviewer';
 
-    /** Pengajuan yang sudah selesai atau ditolak tidak dialihkan. */
-    public const CLOSED_REQUEST_STATUSES = ['archived', 'rejected'];
+    /** Pengajuan yang sudah selesai, ditolak, atau dibatalkan tidak dialihkan. */
+    public const CLOSED_REQUEST_STATUSES = ['archived', 'rejected', 'cancelled'];
 
     public function __construct(private WaghubService $waghub) {}
 

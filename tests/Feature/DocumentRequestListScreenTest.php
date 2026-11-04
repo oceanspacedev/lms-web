@@ -260,7 +260,11 @@ class DocumentRequestListScreenTest extends TestCase
         foreach (array_diff(array_keys(DocumentRequest::STATUSES), ['review', 'approved']) as $status) {
             foreach ($requesters as $requester) {
                 foreach ($assignments as [$reviewer, $approver]) {
-                    $requests[] = $this->request($status, [...$shared, 'requester_id' => $requester, 'requester_name' => $requester ? null : 'Pengaju Publik', 'requester_phone' => $requester ? null : '081234567890', 'reviewer_id' => $reviewer, 'approver_id' => $approver]);
+                    $attributes = [...$shared, 'requester_id' => $requester, 'requester_name' => $requester ? null : 'Pengaju Publik', 'requester_phone' => $requester ? null : '081234567890', 'reviewer_id' => $reviewer, 'approver_id' => $approver];
+                    $requests[] = $this->request($status, $attributes);
+                    if ($status === 'handover') {
+                        $requests[] = $this->request($status, [...$attributes, 'signed_uploaded_at' => now()->subDays(10)]);
+                    }
                 }
             }
         }
@@ -271,7 +275,9 @@ class DocumentRequestListScreenTest extends TestCase
             $this->actingAs($user);
             $visible = DocumentRequestResource::getEloquentQuery()->pluck('id')->all();
             $expected = collect($requests)->filter(fn (DocumentRequest $request): bool => in_array($request->id, $visible, true)
-                && ($policy->revise($user, $request) || $policy->update($user, $request)))
+                && ($policy->revise($user, $request) || $policy->update($user, $request)
+                    || ($policy->uploadSigned($user, $request) && $request->status === 'signing' && $request->requester_id === $user->id)
+                    || $policy->addLateReason($user, $request)))
                 ->map(fn (DocumentRequest $request): int => $request->id)->sort()->values()->all();
 
             $this->assertSame($expected, $this->actionableIds(), "Peran {$role}: tab 'Perlu tindakan saya' harus sama dengan kebijakan");

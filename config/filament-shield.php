@@ -265,7 +265,7 @@ return [
     'custom_permissions' => [
         'ViewAll:DocumentRequest' => 'Lihat semua pengajuan',
         'Review:DocumentRequest' => 'Periksa pengajuan',
-        'Approve:DocumentRequest' => 'Setujui pengajuan',
+        'Approve:DocumentRequest' => 'Setujui pengajuan (tidak dipakai)',
         'ReceiveEscalation:DocumentRequest' => 'Terima eskalasi pengajuan',
         'View:Horizon' => 'Horizon',
         'View:LogViewer' => 'Log Laravel',
