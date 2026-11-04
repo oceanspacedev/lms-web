@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -51,9 +52,13 @@ class ManageReminderTemplates extends Page
     {
         $scheduleSection = Section::make('Jadwal pengiriman')->key('reminder_schedule')->compact()
             ->extraAttributes(['class' => 'whatsapp-settings-panel'])
+            ->description('Kapan pengingat dikirim. Tombol di bawah mengganti jarak pengingat dengan sekali klik.')
             ->headerActions([$this->editTemplateAction('schedule', 'Jadwal pengingat masa berlaku')])
             ->footerActions($this->quickIntervalActions())
             ->schema([
+                TextEntry::make('reminder_summary')->hiddenLabel()->weight(FontWeight::Medium)
+                    ->state(fn (): ?string => $this->scheduleSummary())
+                    ->visible(fn (): bool => $this->scheduleSummary() !== null),
                 Grid::make(['default' => 2])->extraAttributes(['class' => 'whatsapp-settings-schedule'])->schema([
                     TextEntry::make('reminder_status')->label('Status')->badge()
                         ->state(fn (): string => ReminderTemplate::globalSetting()?->is_active ? 'Aktif' : 'Nonaktif')
@@ -82,8 +87,9 @@ class ManageReminderTemplates extends Page
                         ->visible(fn (): bool => ! ReminderTemplate::globalSetting() || ReminderTemplate::globalSetting()?->schedule_mode === 'inherit'),
                 ]),
             ]);
-        $reminderSection = Section::make('Pesan pengingat')->key('template_reminder')->compact()
+        $reminderSection = Section::make('Isi pesan pengingat')->key('template_reminder')->compact()
             ->extraAttributes(['class' => 'whatsapp-settings-panel'])
+            ->description('Dikirim ke PIC dokumen sebelum masa berlakunya habis. Contoh di bawah memakai data contoh.')
             ->headerActions([$this->editTemplateAction('reminder', 'Pengingat masa berlaku')])
             ->footerActions($this->templateTools('reminder'))
             ->schema([TextEntry::make('reminder_message')->hiddenLabel()
@@ -91,15 +97,15 @@ class ManageReminderTemplates extends Page
                 ->view('filament.resources.reminder-templates.message-preview')]);
         $overdueSection = Section::make('Pesan setelah kedaluwarsa')->key('template_overdue')->compact()->columnSpanFull()
             ->extraAttributes(['class' => 'whatsapp-settings-panel'])
-            ->description('Dikirim sesuai jadwal "Setelah kedaluwarsa" pada pengaturan jadwal.')
+            ->description('Dikirim ke PIC bila dokumen sudah lewat masa berlakunya, sesuai pilihan "Setelah kedaluwarsa" di jadwal.')
             ->headerActions([$this->editTemplateAction('overdue', 'Pengingat setelah kedaluwarsa')])
             ->footerActions($this->templateTools('overdue'))
             ->schema([TextEntry::make('overdue_message')->hiddenLabel()
                 ->state(fn (): string => ReminderTemplate::renderBody(ReminderTemplate::globalSetting()?->overdueBody() ?? ReminderTemplate::DEFAULT_OVERDUE_BODY, ReminderTemplate::OVERDUE_EXAMPLE_VALUES))
                 ->view('filament.resources.reminder-templates.message-preview')]);
-        $requestReminderSection = Section::make('Pengingat pengajuan menggantung')->key('request_reminder')->compact()
+        $requestReminderSection = Section::make('Pengingat pengajuan yang belum diperiksa')->key('request_reminder')->compact()
             ->extraAttributes(['class' => 'whatsapp-settings-panel'])
-            ->description('Mengingatkan pemeriksa atau penyetuju lewat WhatsApp bila pengajuan menunggu terlalu lama.')
+            ->description('Mengingatkan tim legal lewat WhatsApp bila pengajuan belum diperiksa terlalu lama.')
             ->headerActions([$this->editRequestReminderSettingsAction(), $this->editTemplateAction('request_reminder', 'Pesan pengingat pengajuan')])
             ->footerActions($this->templateTools('request_reminder'))
             ->schema([
@@ -123,6 +129,7 @@ class ManageReminderTemplates extends Page
         foreach (ReminderTemplate::REQUEST_TEMPLATE_LABELS as $event => $label) {
             $section = Section::make($label)->key('template_'.$event)->compact()
                 ->extraAttributes(['class' => 'whatsapp-settings-panel'])
+                ->description(ReminderTemplate::REQUEST_TEMPLATE_HINTS[$event] ?? null)
                 ->headerActions([$this->editTemplateAction($event, $label)])
                 ->footerActions($this->templateTools($event))
                 ->schema([TextEntry::make('message_'.$event)->hiddenLabel()
@@ -132,13 +139,19 @@ class ManageReminderTemplates extends Page
         }
 
         return $schema->columns(1)->components([
+            Callout::make('Pengaturan bawaan sudah siap dipakai')->info()
+                ->description(fn (): string => $this->canEditSettings()
+                    ? 'WhatsApp dikirim otomatis, jadi Anda tidak wajib mengatur apa pun di sini. Sesuaikan jadwal atau isi pesan hanya bila perlu, lalu coba hasilnya lewat "Kirim pesan uji".'
+                    : 'WhatsApp dikirim otomatis. Halaman ini menampilkan jadwal dan isi pesan yang sedang dipakai.'),
             Section::make('Pengingat masa berlaku')->key('expiry_settings')->contained(false)
                 ->extraAttributes(['class' => 'whatsapp-settings-group'])
+                ->description('Mengingatkan PIC dokumen sebelum dan sesudah masa berlaku dokumen habis.')
                 ->schema([
                     Grid::make(['default' => 1, 'xl' => 2])->extraAttributes(['class' => 'whatsapp-settings-reminder'])->schema([$scheduleSection, $reminderSection, $overdueSection]),
                 ]),
             Section::make('Notifikasi status pengajuan')->key('notification_settings')->contained(false)
                 ->extraAttributes(['class' => 'whatsapp-settings-group whatsapp-settings-status'])
+                ->description('Mengabari pengaju dan tim legal di setiap tahap pengajuan. Pilih jenis pesan di kiri untuk melihat siapa penerimanya, contoh pesannya, atau mengubah isinya.')
                 ->schema([
                     $requestReminderSection,
                     Tabs::make('Jenis pesan')->key('template_navigation')->vertical()->contained(false)
@@ -171,6 +184,25 @@ class ManageReminderTemplates extends Page
                 });
                 $this->notifyScheduleSaved($setting);
             }), [1, 3, 7], ['Setiap hari', '3 hari sekali', '7 hari sekali']);
+    }
+
+    /** Ringkasan jadwal dalam satu kalimat agar mudah dibaca; null bila jadwal belum diatur. */
+    private function scheduleSummary(): ?string
+    {
+        $setting = ReminderTemplate::globalSetting();
+        if (! $setting || $setting->schedule_mode === 'inherit') {
+            return null;
+        }
+        if (! $setting->is_active) {
+            return 'Pengingat otomatis sedang nonaktif. Aktifkan lewat "Atur jadwal".';
+        }
+        $time = ReminderTemplateResource::reminderTimeLabel();
+        $summary = $setting->schedule_mode === 'interval'
+            ? "Dikirim pukul {$time}, mulai {$setting->start_before_days} hari sebelum dokumen berakhir, lalu diulang setiap {$setting->interval_days} hari."
+            : "Dikirim pukul {$time} pada hari yang dipilih sebelum dokumen berakhir.";
+        $overdue = $setting->overdueOffsets();
+
+        return $overdue === [] ? $summary : $summary.' Setelah kedaluwarsa, dikirim lagi pada hari ke-'.implode(', ', $overdue).'.';
     }
 
     private function newGlobalSetting(bool $isActive): ReminderTemplate
@@ -225,7 +257,7 @@ class ManageReminderTemplates extends Page
         return [
             Action::make('test_'.$event)->label('Kirim pesan uji')->link()->color('gray')->icon(Heroicon::OutlinedPaperAirplane)
                 ->visible(fn (): bool => $this->canEditSettings())->modalHeading('Kirim pesan uji')
-                ->modalDescription('Mengirim template tersimpan dengan data contoh. Pesan ditandai [PESAN UJI].')
+                ->modalDescription('Mengirim isi pesan yang tersimpan dengan data contoh ke nomor Anda, supaya Anda bisa melihat hasilnya di WhatsApp. Pesan ditandai [PESAN UJI].')
                 ->modalSubmitActionLabel('Kirim pesan uji')->modalWidth('lg')
                 ->schema([
                     TextInput::make('phone')->label('Nomor WhatsApp tujuan')->tel()->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])->required()->maxLength(30)
@@ -249,8 +281,8 @@ class ManageReminderTemplates extends Page
                 }),
             Action::make('reset_'.$event)->label('Kembalikan bawaan')->link()->color('gray')->icon(Heroicon::OutlinedArrowUturnLeft)
                 ->visible(fn (): bool => $this->canEditSettings() && $this->templateBody($event) !== $this->defaultBody($event))
-                ->requiresConfirmation()->modalHeading('Kembalikan template bawaan?')
-                ->modalDescription('Isi pesan ini akan diganti dengan template bawaan. Jadwal dan template lainnya tetap.')
+                ->requiresConfirmation()->modalHeading('Kembalikan pesan bawaan?')
+                ->modalDescription('Isi pesan ini akan diganti dengan pesan bawaan. Jadwal dan pesan lainnya tetap.')
                 ->modalSubmitActionLabel('Kembalikan bawaan')
                 ->action(function () use ($event): void {
                     abort_unless($this->canEditSettings(), 403);
@@ -270,7 +302,7 @@ class ManageReminderTemplates extends Page
                         }
                         $setting->save();
                     });
-                    Notification::make()->title('Template bawaan dipulihkan')->success()->send();
+                    Notification::make()->title('Pesan bawaan dipulihkan')->success()->send();
                 }),
         ];
     }
@@ -301,7 +333,7 @@ class ManageReminderTemplates extends Page
 
     private function editTemplateAction(string $event, string $label): Action
     {
-        return Action::make('edit_'.$event)->label($event === 'schedule' ? 'Atur jadwal' : 'Ubah template')->outlined()->color('gray')->modalHeading($label)->modalSubmitActionLabel('Simpan')->modalCancelActionLabel('Batal')->modalWidth('xl')
+        return Action::make('edit_'.$event)->label($event === 'schedule' ? 'Atur jadwal' : 'Ubah isi pesan')->outlined()->color('gray')->modalHeading($label)->modalSubmitActionLabel('Simpan')->modalCancelActionLabel('Batal')->modalWidth('xl')
             ->visible(fn (): bool => $this->canEditSettings())
             ->fillForm(function () use ($event): array {
                 $setting = ReminderTemplate::globalSetting();
@@ -353,7 +385,7 @@ class ManageReminderTemplates extends Page
 
                     return;
                 }
-                $notification = Notification::make()->title('Template WhatsApp disimpan')->success();
+                $notification = Notification::make()->title('Isi pesan WhatsApp disimpan')->success();
                 if (in_array($event, ['reminder', 'overdue'], true) && ! $setting->is_active) {
                     $notification->body("Pengingat masa berlaku otomatis masih nonaktif. Aktifkan lewat 'Atur jadwal'.");
                 }

@@ -190,7 +190,7 @@ class RequestSigningNotificationTest extends TestCase
     public function test_template_labels_and_variables_cover_new_stages(): void
     {
         $this->assertSame(
-            ['submitted', 'revision', 'rejected', 'signing', 'draft_replaced', 'handover_staff', 'scan_reminder', 'late_7', 'late_14', 'late_28', 'archived', 'cancelled', 'pic'],
+            ['pic', 'submitted', 'revision', 'rejected', 'signing', 'draft_replaced', 'scan_reminder', 'handover_staff', 'late_7', 'late_14', 'late_28', 'archived', 'cancelled'],
             array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS),
         );
         $this->assertSame(array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS), array_keys(ReminderTemplate::DEFAULT_REQUEST_TEMPLATES));

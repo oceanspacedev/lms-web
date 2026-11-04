@@ -148,7 +148,7 @@ class WhatsAppScheduleSetupTest extends TestCase
 
         $this->assertFalse(ReminderTemplate::globalSetting()->is_active);
         $this->assertSame([[
-            'title' => 'Template WhatsApp disimpan',
+            'title' => 'Isi pesan WhatsApp disimpan',
             'body' => "Pengingat masa berlaku otomatis masih nonaktif. Aktifkan lewat 'Atur jadwal'.",
             'status' => 'success',
         ]], $this->sentNotifications());
@@ -162,7 +162,7 @@ class WhatsAppScheduleSetupTest extends TestCase
         Livewire::test(ManageReminderTemplates::class)
             ->callAction(TestAction::make('edit_reminder')->schemaComponent('expiry_settings.template_reminder', 'content'), ['body' => 'Pengingat {dokumen}.']);
 
-        $this->assertSame([['title' => 'Template WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
+        $this->assertSame([['title' => 'Isi pesan WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
     }
 
     public function test_status_message_template_and_request_reminder_edits_never_claim_the_schedule_is_saved(): void
@@ -172,7 +172,7 @@ class WhatsAppScheduleSetupTest extends TestCase
             ->callAction(TestAction::make('edit_revision')->schemaComponent('notification_settings.template_navigation.revision.template_revision', 'content'), [
                 'request_templates' => ['revision' => 'Mohon revisi {judul}.'],
             ])->assertHasNoActionErrors();
-        $this->assertSame([['title' => 'Template WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
+        $this->assertSame([['title' => 'Isi pesan WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
         $this->assertFalse(ReminderTemplate::globalSetting()->is_active);
 
         ReminderTemplate::query()->delete();

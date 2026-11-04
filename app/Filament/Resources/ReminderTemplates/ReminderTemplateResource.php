@@ -93,7 +93,7 @@ class ReminderTemplateResource extends Resource
                 TextInput::make('request_reminder_max')->label('Maksimal')->suffix('kali')->numeric()->integer()->minValue(1)->maxValue(10)->default(3)->required(),
             ]),
             TextEntry::make('request_reminder_help')->hiddenLabel()
-                ->state('Pemeriksa diingatkan saat pengajuan menunggu di tahap Diperiksa, penyetuju saat menunggu persetujuan. Pengingat dikirim sekitar pukul '.config('lms.reminder_time').' dan berhenti begitu pengajuan berpindah tahap.'),
+                ->state('Tim legal diingatkan bila pengajuan menunggu di tahap Diperiksa terlalu lama. Pengingat dikirim sekitar pukul '.config('lms.reminder_time').' dan berhenti begitu pengajuan berpindah tahap.'),
         ];
     }
 
