@@ -10,6 +10,7 @@ use App\Models\DocumentRequestLateReason;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use ReflectionMethod;
 use Spatie\Permission\Models\Permission;
@@ -90,6 +91,24 @@ class RequestMonitoringTest extends TestCase
         $this->assertSame('danger', $colorOf($withoutReason));
         $this->assertSame('danger', $colorOf($withReasons));
         $this->assertSame('warning', $colorOf($scanOverdue));
+    }
+
+    public function test_long_late_reason_is_shortened_with_the_full_text_on_hover(): void
+    {
+        $this->signInLegal();
+        $long = DocumentRequest::factory()->handover(10)->create();
+        $reason = 'Direktur vendor forklift sedang cuti, tanda tangan baru bisa hari Senin. Dokumen asli akan diantar langsung Selasa.';
+        DocumentRequestLateReason::factory()->create(['document_request_id' => $long->id, 'reason' => $reason]);
+        $short = DocumentRequest::factory()->handover(3)->create();
+
+        $table = Livewire::test(ListDocumentRequests::class)->instance()->getTable();
+        $column = fn (DocumentRequest $request) => $table->getColumn('handover_note')->record($request);
+        $full = 'Terlambat 3 hari · '.$reason;
+
+        $this->assertSame(Str::limit($full, 60), $column($long)->formatState($column($long)->getState()));
+        $this->assertSame($full, $column($long)->getTooltip());
+        $this->assertSame('Sisa 4 hari', $column($short)->formatState($column($short)->getState()));
+        $this->assertNull($column($short)->getTooltip());
     }
 
     public function test_any_reviewer_sees_signing_and_handover_requests_assigned_to_someone_else(): void

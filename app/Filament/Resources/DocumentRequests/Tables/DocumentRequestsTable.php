@@ -16,6 +16,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class DocumentRequestsTable
 {
+    /** Panjang maksimal teks Keterangan di tabel; teks lengkap (termasuk alasan keterlambatan) tampil sebagai tooltip. */
+    private const HANDOVER_NOTE_LIMIT = 60;
+
     /** Pola LIKE yang aman: karakter khusus (! % _) dari pencarian dianggap huruf biasa. */
     private static function likePattern(string $search): string
     {
@@ -43,7 +46,9 @@ class DocumentRequestsTable
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::statusLabel($state))->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
-            TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->wrap()
+            TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')
+                ->limit(self::HANDOVER_NOTE_LIMIT)->wrap()
+                ->tooltip(fn (DocumentRequest $record): ?string => mb_strlen((string) self::handoverNote($record)) > self::HANDOVER_NOTE_LIMIT ? self::handoverNote($record) : null)
                 ->color(fn (DocumentRequest $record): ?string => $record->status === 'handover' && $record->isHandoverLate() ? 'danger' : ($record->status === 'signing' ? 'warning' : null)),
             TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->timezone(config('lms.reminder_timezone'))->sortable(),
         ])->filters([
