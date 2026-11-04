@@ -29,9 +29,6 @@ class DocumentRequestResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
-    /** Status setelah draf keluar yang boleh dilihat semua Staff Legal; harus sama dengan DocumentRequestPolicy. */
-    public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
-
     protected static ?int $navigationSort = 2;
 
     protected static bool $isGloballySearchable = false;
@@ -53,7 +50,7 @@ class DocumentRequestResource extends Resource
             $query->where('requester_id', $user->id);
             $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where('pic_user_id', $user->id));
             if ($user->can('Review:DocumentRequest')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull('reviewer_id')->orWhere('reviewer_id', $user->id)->orWhereIn('status', self::LEGAL_VISIBLE_STATUSES)));
+                $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull('reviewer_id')->orWhere('reviewer_id', $user->id)->orWhereIn('status', DocumentRequest::LEGAL_VISIBLE_STATUSES)));
             }
         });
     }

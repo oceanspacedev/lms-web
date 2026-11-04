@@ -128,7 +128,7 @@ class DocumentRequestForm
                 'label' => match (true) {
                     $status === 'draft' => 'Draf dibuat',
                     $status === 'submitted' && $previous === 'revision' => 'Revisi dikirim',
-                    default => DocumentRequest::TIMELINE_LABELS[$status] ?? DocumentRequest::STATUSES[$status] ?? $status,
+                    default => DocumentRequest::TIMELINE_LABELS[$status] ?? DocumentRequest::statusLabel($status),
                 },
                 'actor' => filled($event['user'] ?? null) ? (string) $event['user'] : '—',
                 'at' => filled($event['at'] ?? null) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
@@ -144,7 +144,7 @@ class DocumentRequestForm
     {
         return $schema->columns(['default' => 1, 'lg' => 3])->components([
             Section::make('Ringkasan')->compact()->columns(2)->columnSpan(['default' => 1, 'lg' => 2])->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
-                TextEntry::make('status_label')->label('Status')->state(fn (DocumentRequest $record): string => DocumentRequest::STATUSES[$record->status])->badge(),
+                TextEntry::make('status_label')->label('Status')->state(fn (DocumentRequest $record): string => DocumentRequest::statusLabel($record->status))->badge(),
                 TextEntry::make('submitted_date')->label('Diajukan')->state(fn (DocumentRequest $record): ?string => collect($record->history)->firstWhere('status', 'submitted')['at'] ?? null)
                     ->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->placeholder('Belum diajukan'),
                 TextEntry::make('documentType.name')->label('Jenis dokumen')->wrap(),
@@ -161,7 +161,7 @@ class DocumentRequestForm
                 TextEntry::make('requester_phone')->label('WhatsApp')->visible(fn (DocumentRequest $record): bool => filled($record->requester_phone)),
                 TextEntry::make('requester_division')->label('Divisi')->visible(fn (DocumentRequest $record): bool => filled($record->requester_division))->wrap(),
             ]),
-            TextEntry::make('editable_status')->columnSpanFull()->label('Status')->visible(fn (?DocumentRequest $record): bool => $record && ! self::isReadOnly($record))->state(fn (DocumentRequest $record): string => DocumentRequest::STATUSES[$record->status])->badge(),
+            TextEntry::make('editable_status')->columnSpanFull()->label('Status')->visible(fn (?DocumentRequest $record): bool => $record && ! self::isReadOnly($record))->state(fn (DocumentRequest $record): string => DocumentRequest::statusLabel($record->status))->badge(),
             Section::make('Pengaju')->columnSpanFull()->visible(fn (?DocumentRequest $record): bool => (bool) $record?->public_token && ! self::isReadOnly($record))->columns(2)->schema([
                 TextEntry::make('requester_name')->label('Nama'), TextEntry::make('requester_phone')->label('WhatsApp'),
                 TextEntry::make('requester_division')->label('Divisi'), TextEntry::make('request_reason')->label('Keperluan')->columnSpanFull(),

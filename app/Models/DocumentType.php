@@ -44,7 +44,7 @@ class DocumentType extends Model
 
     public function resolveRequestPic(): ?User
     {
-        foreach ([$this->request_pic_id, $this->request_reviewer_id, $this->request_approver_id] as $userId) {
+        foreach ([$this->request_pic_id, $this->request_reviewer_id] as $userId) {
             $user = $userId ? User::active()->find($userId) : null;
             if ($user?->can('Review:DocumentRequest')) {
                 return $user;

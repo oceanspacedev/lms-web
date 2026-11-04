@@ -40,7 +40,7 @@ class DocumentRequestsTable
                         ->whereRaw("lower(document_requests.requester_name) like ? escape '!'", [self::likePattern($search)]))
                     ->orWhere(fn (Builder $query): Builder => $query->whereNull('document_requests.requester_name')
                         ->whereHas('requester', fn (Builder $requester): Builder => $requester->whereRaw("lower(users.name) like ? escape '!'", [self::likePattern($search)])))),
-            TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::STATUSES[$state])->color(fn (string $state): string => match ($state) {
+            TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::statusLabel($state))->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
             TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->wrap()

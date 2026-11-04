@@ -66,6 +66,15 @@ class DocumentTypeResourceTest extends TestCase
             ->assertSee('hanya berlaku di form Tambah Pengajuan internal (form publik selalu berupa pengajuan baru tanpa biaya).');
     }
 
+    public function test_document_type_form_hides_approver(): void
+    {
+        $this->signInWithPermissions(['ViewAny:DocumentType', 'Create:DocumentType', 'Update:DocumentType']);
+        $type = DocumentType::factory()->create();
+
+        Livewire::test(CreateDocumentType::class)->assertFormFieldDoesNotExist('request_approver_id')->assertFormFieldExists('request_reviewer_id');
+        Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])->assertFormFieldDoesNotExist('request_approver_id');
+    }
+
     public function test_reminder_schedule_comes_from_the_global_template_for_expiring_types_only(): void
     {
         $expiring = DocumentType::factory()->create(['has_expiry' => true]);

@@ -67,7 +67,7 @@ class DocumentRequestReminderSender
         return ReminderTemplate::renderBody($body, [
             'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title, 'pengaju' => $request->applicantName(),
             'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-', 'jenis_dokumen' => $request->documentType?->name ?? '-',
-            'status' => DocumentRequest::STATUSES[$request->status], 'hari_menunggu' => (string) $waitingDays,
+            'status' => DocumentRequest::statusLabel($request->status), 'hari_menunggu' => (string) $waitingDays,
             'tautan' => route('filament.admin.resources.document-requests.edit', ['record' => $request->id]),
         ]);
     }

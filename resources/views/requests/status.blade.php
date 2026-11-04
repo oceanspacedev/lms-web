@@ -27,7 +27,7 @@
     <div class="notice" role="status"><strong>Berhasil disimpan.</strong></div>
 @endif
 <section class="form-section receipt">
-    <div class="receipt-heading"><span>Pengajuan #{{ $submission->id }}</span><span class="status {{ $submission->status }}">{{ \App\Models\DocumentRequest::STATUSES[$submission->status] }}</span></div>
+    <div class="receipt-heading"><span>Pengajuan #{{ $submission->id }}</span><span class="status {{ $submission->status }}">{{ \App\Models\DocumentRequest::statusLabel($submission->status) }}</span></div>
     @unless($lookup)<h2>{{ $submission->title }}</h2>@endunless
     <p>{{ $submission->revisionNumber() ? 'Revisi ke-'.$submission->revisionNumber() : 'Pengajuan awal' }}</p>
     <dl><div><dt>Pengaju</dt><dd>{{ $submission->applicantName() }}</dd></div><div><dt>Diperbarui</dt><dd>{{ $submission->updated_at->timezone(config('lms.reminder_timezone'))->translatedFormat('d M Y H:i') }}</dd></div></dl>

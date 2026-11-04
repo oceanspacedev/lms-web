@@ -501,6 +501,23 @@ class DocumentImportTest extends TestCase
         }
     }
 
+    public function test_processing_a_chunk_in_the_console_does_not_change_the_php_time_limit(): void
+    {
+        $import = $this->check([$this->row()]);
+        $importer = app(DocumentImporter::class);
+        $importer->start($import, true);
+        $original = ini_get('max_execution_time');
+        ini_set('max_execution_time', '123');
+
+        try {
+            $importer->processChunk($import, $this->user, 1);
+
+            $this->assertSame('123', ini_get('max_execution_time'));
+        } finally {
+            ini_set('max_execution_time', (string) $original);
+        }
+    }
+
     public function test_chunked_import_can_be_resumed_without_duplicates(): void
     {
         $rows = array_map(fn (): array => $this->row(), range(1, 5));

@@ -81,7 +81,7 @@ class DocumentRequestNotifier
             'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
             'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
             'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
-            'status' => DocumentRequest::STATUSES[$request->status], 'catatan' => (string) $note,
+            'status' => DocumentRequest::statusLabel($request->status), 'catatan' => (string) $note,
             'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
             'batas_waktu' => $request->handoverDueDate()?->translatedFormat('d M Y') ?? '-', 'hari_terlambat' => (string) $request->daysLate(),
         ]);

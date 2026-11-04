@@ -131,20 +131,19 @@ class UserDeactivationTest extends TestCase
         $leaver = $this->staff('081200000001', ['ViewAny:Document', 'Review:DocumentRequest', 'Approve:DocumentRequest'], 'Staf Keluar');
         $newPic = $this->staff('081200000002', name: 'PIC Baru');
         $reviewer = $this->staff('081200000003', ['Review:DocumentRequest'], 'Pemeriksa Baru');
-        $approver = $this->staff('081200000004', ['Approve:DocumentRequest'], 'Penyetuju Baru');
         $active = $this->documentWithPic($leaver);
         $trashed = $this->documentWithPic($leaver);
         $trashed->delete();
         $submitted = $this->request('submitted', ['pic_user_id' => $leaver->id, 'reviewer_id' => $leaver->id]);
-        $inReview = $this->request('review', ['approver_id' => $leaver->id]);
+        $inSigning = $this->request('signing', ['approver_id' => $leaver->id]);
         $draft = $this->request('draft', ['requester_id' => $leaver->id, 'pic_user_id' => $leaver->id]);
         $archived = $this->request('archived', ['pic_user_id' => $leaver->id, 'reviewer_id' => $leaver->id, 'approver_id' => $leaver->id]);
         $type = DocumentType::factory()->create(['request_pic_id' => $leaver->id, 'request_reviewer_id' => $leaver->id, 'request_approver_id' => $leaver->id]);
 
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
             ->mountAction('deactivate')
-            ->assertMountedActionModalSee(['2 dokumen sebagai PIC', '3 pengajuan berjalan', '1 jenis dokumen', '1 draf pengajuan milik user ini dibiarkan'])
-            ->setActionData(['document_pic' => $newPic->id, 'reviewer' => $reviewer->id, 'approver' => $approver->id])
+            ->assertMountedActionModalSee(['2 dokumen sebagai PIC', '2 pengajuan berjalan', '1 jenis dokumen', '1 draf pengajuan milik user ini dibiarkan'])
+            ->setActionData(['document_pic' => $newPic->id, 'reviewer' => $reviewer->id])
             ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertNotified('User dinonaktifkan');
@@ -153,13 +152,13 @@ class UserDeactivationTest extends TestCase
         $this->assertSame(2, DocumentActivity::where('event', 'pic_reassigned')->where('user_id', $admin->id)->count());
         $this->assertSame('PIC dialihkan', DocumentActivity::EVENTS['pic_reassigned']);
         $this->assertSame([$reviewer->id, $reviewer->id], [$submitted->fresh()->pic_user_id, $submitted->fresh()->reviewer_id]);
-        $this->assertSame($approver->id, $inReview->fresh()->approver_id);
+        $this->assertNull($inSigning->fresh()->approver_id);
         $this->assertSame($reviewer->id, $draft->fresh()->pic_user_id);
         $this->assertSame($leaver->id, $draft->fresh()->requester_id);
         $this->assertSame([$leaver->id, $leaver->id, $leaver->id], [$archived->fresh()->pic_user_id, $archived->fresh()->reviewer_id, $archived->fresh()->approver_id]);
         $this->assertCount(1, $submitted->fresh()->history);
         $type->refresh();
-        $this->assertSame([$reviewer->id, $reviewer->id, $approver->id], [$type->request_pic_id, $type->request_reviewer_id, $type->request_approver_id]);
+        $this->assertSame([$reviewer->id, $reviewer->id, null], [$type->request_pic_id, $type->request_reviewer_id, $type->request_approver_id]);
         $this->assertFalse($leaver->fresh()->isActive());
         $this->assertTrue($leaver->fresh()->hasPermissionTo('Review:DocumentRequest'));
         $this->assertNotContains('inactive_pic', array_column(app(ReminderHealthChecker::class)->alerts(), 'key'));
@@ -208,20 +207,20 @@ class UserDeactivationTest extends TestCase
         $this->assertSame('6281200000003', DocumentRequestNotification::where('event_key', "lms-request-{$request->id}-1-stale1-u{$reviewer->id}")->sole()->recipient_phone);
     }
 
-    public function test_approval_team_option_clears_the_approver(): void
+    public function test_former_approver_is_not_blocked_and_their_approver_columns_are_cleared(): void
     {
-        $admin = $this->admin();
+        $this->admin();
         $leaver = $this->staff('081200000001', ['Approve:DocumentRequest']);
-        $this->staff('081200000002', ['Approve:DocumentRequest']);
-        $this->staff('081200000003', ['Approve:DocumentRequest']);
-        $request = $this->request('review', ['approver_id' => $leaver->id]);
+        $request = $this->request('signing', ['approver_id' => $leaver->id]);
         $type = DocumentType::factory()->create(['request_approver_id' => $leaver->id]);
 
-        $this->assertSame(UserDeactivator::APPROVAL_TEAM, array_key_first(app(UserDeactivator::class)->candidateOptions($leaver, UserDeactivator::GROUP_APPROVER)));
+        $this->assertSame([], app(UserDeactivator::class)->requiredGroups($leaver));
+        $this->assertNull(app(UserDeactivator::class)->missingCandidatesMessage($leaver));
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
-            ->callAction('deactivate', data: ['approver' => UserDeactivator::APPROVAL_TEAM])
+            ->callAction('deactivate')
             ->assertHasNoActionErrors();
 
+        $this->assertFalse($leaver->fresh()->isActive());
         $this->assertNull($request->fresh()->approver_id);
         $this->assertNull($type->fresh()->request_approver_id);
     }

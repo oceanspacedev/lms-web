@@ -106,8 +106,8 @@ class UserResource extends Resource
         $workload = app(UserDeactivator::class)->workload($record);
         $lines = array_filter([
             $workload['documents'] > 0 ? "{$workload['documents']} dokumen sebagai PIC (termasuk dokumen yang dihapus)" : null,
-            $workload['requests'] > 0 ? "{$workload['requests']} pengajuan berjalan sebagai PIC, pemeriksa, atau penyetuju" : null,
-            $workload['document_types'] > 0 ? "{$workload['document_types']} jenis dokumen sebagai PIC, pemeriksa, atau penyetuju pengajuan" : null,
+            $workload['requests'] > 0 ? "{$workload['requests']} pengajuan berjalan sebagai PIC atau pemeriksa" : null,
+            $workload['document_types'] > 0 ? "{$workload['document_types']} jenis dokumen sebagai PIC atau pemeriksa pengajuan" : null,
         ]);
         $summary = $lines === []
             ? '<p>User ini tidak memegang tugas apa pun.</p>'
@@ -132,8 +132,6 @@ class UserResource extends Resource
             UserDeactivator::GROUP_DOCUMENT_PIC => fn (): Select => Select::make(UserDeactivator::GROUP_DOCUMENT_PIC)->label('Pengganti PIC dokumen'),
             UserDeactivator::GROUP_REVIEWER => fn (): Select => Select::make(UserDeactivator::GROUP_REVIEWER)->label('Pengganti pemeriksa / PIC pengajuan')
                 ->helperText('Hanya user dengan izin "Periksa pengajuan". PIC pengajuan pada jenis dokumen juga harus punya nomor WhatsApp valid.'),
-            UserDeactivator::GROUP_APPROVER => fn (): Select => Select::make(UserDeactivator::GROUP_APPROVER)->label('Pengganti penyetuju')
-                ->helperText('"Tim persetujuan" berarti pengajuan bisa disetujui siapa saja yang punya izin "Setujui pengajuan".'),
         ];
 
         return array_map(fn (string $group): Select => $fields[$group]()

@@ -21,7 +21,6 @@ use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentImporter;
 use App\Services\DocumentImportTemplate;
-use App\Services\UserDeactivator;
 use Database\Seeders\DummyAccountSeeder;
 use DateTimeInterface;
 use Filament\Actions\Testing\TestAction;
@@ -484,24 +483,24 @@ class DeactivationAndImportFlowTest extends TestCase
         $document = Document::where('title', 'Sewa Gudang Barat')->sole();
         $this->assertSame($leaver->id, $document->pic_user_id);
 
-        // 3. Pengajuan publik masuk dengan staf ini sebagai PIC, pemeriksa, dan penyetuju.
+        // 3. Pengajuan publik masuk dengan staf ini sebagai PIC dan pemeriksa; kolom penyetuju lama tidak lagi diisi.
         $this->logOut();
         $request = $this->submitPublicRequest($vendorType, 'Kontrak Vendor Katering');
-        $this->assertSame([$leaver->id, $leaver->id, $leaver->id], [$request->pic_user_id, $request->reviewer_id, $request->approver_id]);
+        $this->assertSame([$leaver->id, $leaver->id, null], [$request->pic_user_id, $request->reviewer_id, $request->approver_id]);
         DB::table('sessions')->insert([
             ['id' => 'sesi-staf-keluar', 'user_id' => $leaver->id, 'payload' => '', 'last_activity' => now()->timestamp],
             ['id' => 'sesi-admin', 'user_id' => $this->admin->id, 'payload' => '', 'last_activity' => now()->timestamp],
         ]);
         $leaverMessagesBefore = count($this->messagesTo('6281200000001'));
 
-        // 4. Admin menonaktifkan staf dan memilih pengganti per kelompok tugas, termasuk "Tim persetujuan".
+        // 4. Admin menonaktifkan staf dan memilih pengganti per kelompok tugas.
         $this->actingAs($this->admin);
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
             ->mountAction('deactivate')
             ->assertMountedActionModalSee(['1 dokumen sebagai PIC', '1 pengajuan berjalan', '1 jenis dokumen'])
-            ->assertFormFieldExists('approver', fn (Select $field): bool => array_key_first($field->getOptions()) === UserDeactivator::APPROVAL_TEAM
-                && ! array_key_exists($leaver->id, $field->getOptions()))
-            ->setActionData(['document_pic' => $this->viewer->id, 'reviewer' => $this->legal->id, 'approver' => UserDeactivator::APPROVAL_TEAM])
+            ->assertFormFieldDoesNotExist('approver')
+            ->assertFormFieldExists('reviewer', fn (Select $field): bool => ! array_key_exists($leaver->id, $field->getOptions()))
+            ->setActionData(['document_pic' => $this->viewer->id, 'reviewer' => $this->legal->id])
             ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertNotified('User dinonaktifkan');

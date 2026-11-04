@@ -11,9 +11,6 @@ use App\Models\User;
  */
 class DocumentRequestPolicy
 {
-    /** Status setelah draf keluar yang boleh dilihat semua Staff Legal. */
-    private const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
-
     public function viewAny(User $user): bool
     {
         return $user->can('ViewAny:DocumentRequest');
@@ -22,8 +19,7 @@ class DocumentRequestPolicy
     public function view(User $user, DocumentRequest $request): bool
     {
         return $user->can('View:DocumentRequest') && ($request->requester_id === $user->id || $user->can('ViewAll:DocumentRequest') || ($request->status !== 'draft' && ($request->pic_user_id === $user->id ||
-            ($user->can('Review:DocumentRequest') && ($request->reviewer_id === null || $request->reviewer_id === $user->id || in_array($request->status, self::LEGAL_VISIBLE_STATUSES, true))) ||
-            ($user->can('Approve:DocumentRequest') && ($request->approver_id === null || $request->approver_id === $user->id))
+            ($user->can('Review:DocumentRequest') && ($request->reviewer_id === null || $request->reviewer_id === $user->id || in_array($request->status, DocumentRequest::LEGAL_VISIBLE_STATUSES, true)))
         )));
     }
 

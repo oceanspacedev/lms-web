@@ -123,7 +123,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->assertSame('submitted', $request->status);
         $this->assertSame('PT Mitra Distribusi', $request->partner_name);
         $this->assertSame($this->reviewer->id, $request->pic_user_id);
-        $this->assertSame($this->approver->id, $request->approver_id);
+        $this->assertNull($request->approver_id);
 
         // 2. Pengaju dan pemeriksa sama-sama diberi tahu; halaman status memperlihatkan tahap dan riwayat.
         $this->deliver();

@@ -32,7 +32,13 @@ class DocumentRequest extends Model
     /** @use HasFactory<DocumentRequestFactory> */
     use HasFactory;
 
-    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+
+    /** Label status tahap persetujuan lama; hanya untuk membaca data lama, tidak lagi menjadi status yang sah. */
+    private const LEGACY_STATUS_LABELS = ['review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan'];
+
+    /** Status setelah draf keluar yang boleh dilihat semua Staff Legal. */
+    public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
 
     /** Batas hari menyerahkan dokumen fisik setelah scan pertama; pengingat lanjutan di hari ke-7, 14, 28. */
     public const HANDOVER_DAYS = 7;
@@ -234,6 +240,12 @@ class DocumentRequest extends Model
         return (int) $start->diffInDays($today);
     }
 
+    /** Label status; status tahap persetujuan lama dan status tak dikenal tidak boleh membuat tampilan error. */
+    public static function statusLabel(string $status): string
+    {
+        return self::STATUSES[$status] ?? self::LEGACY_STATUS_LABELS[$status] ?? $status;
+    }
+
     public function editableBy(User $user): bool
     {
         return $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
@@ -392,7 +404,6 @@ class DocumentRequest extends Model
                     }
                     $request->pic_user_id = $pic->id;
                     $request->reviewer_id = $type->request_reviewer_id ?? $pic->id;
-                    $request->approver_id = $type->request_approver_id;
                     $request->public_token = Str::random(64);
                     $request->requirements = $type->publicRequirements();
                 }
@@ -452,7 +463,6 @@ class DocumentRequest extends Model
                     $type = DocumentType::where('is_active', true)->findOrFail($data['document_type_id'] ?? null);
                     $request->requester_id = $user->id;
                     $request->reviewer_id = $type->request_reviewer_id;
-                    $request->approver_id = $type->request_approver_id;
                     $request->requirements = ['fields' => $type->request_fields, 'attachments' => $type->request_attachments, 'has_expiry' => $type->has_expiry];
                 }
                 $request->fill($data);

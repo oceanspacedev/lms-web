@@ -70,7 +70,6 @@ class DocumentTypeForm
                         Toggle::make('required')->label('Wajib')->default(true),
                     ])->collapsed()->columnSpanFull()->itemLabel(fn (array $state): string => $state['label'] ?? 'Lampiran'),
                     Select::make('request_reviewer_id')->label('Pemeriksa')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->activeOrKeep($record?->request_reviewer_id)->pluck('name', 'id')->all())->searchable()->placeholder('Tim pemeriksa'),
-                    Select::make('request_approver_id')->label('Pemberi persetujuan')->options(fn (?DocumentType $record): array => User::permission('Approve:DocumentRequest')->activeOrKeep($record?->request_approver_id)->pluck('name', 'id')->all())->searchable()->placeholder('Tim persetujuan'),
                 ])->columns(2),
             ]);
     }

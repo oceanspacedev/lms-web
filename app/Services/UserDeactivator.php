@@ -29,12 +29,6 @@ class UserDeactivator
     /** Pengganti PIC dan pemeriksa pengajuan, serta PIC dan pemeriksa pengajuan pada jenis dokumen. */
     public const GROUP_REVIEWER = 'reviewer';
 
-    /** Pengganti penyetuju pengajuan dan penyetuju pengajuan pada jenis dokumen. */
-    public const GROUP_APPROVER = 'approver';
-
-    /** Nilai pilihan "Tim persetujuan": penyetuju dikosongkan sehingga siapa saja yang berhak bisa menyetujui. */
-    public const APPROVAL_TEAM = 'team';
-
     /** Pengajuan yang sudah selesai atau ditolak tidak dialihkan. */
     public const CLOSED_REQUEST_STATUSES = ['archived', 'rejected'];
 
@@ -50,9 +44,9 @@ class UserDeactivator
         return [
             'documents' => Document::withTrashed()->where('pic_user_id', $user->id)->count(),
             'requests' => $this->openRequests()->where(fn (Builder $query): Builder => $query->where('pic_user_id', $user->id)
-                ->orWhere('reviewer_id', $user->id)->orWhere('approver_id', $user->id))->count(),
+                ->orWhere('reviewer_id', $user->id))->count(),
             'document_types' => DocumentType::where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)
-                ->orWhere('request_reviewer_id', $user->id)->orWhere('request_approver_id', $user->id))->count(),
+                ->orWhere('request_reviewer_id', $user->id))->count(),
             'drafts' => DocumentRequest::where('status', 'draft')->where('requester_id', $user->id)->count(),
         ];
     }
@@ -72,9 +66,6 @@ class UserDeactivator
             || DocumentType::where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)->orWhere('request_reviewer_id', $user->id))->exists()) {
             $groups[] = self::GROUP_REVIEWER;
         }
-        if ($this->openRequests()->where('approver_id', $user->id)->exists() || DocumentType::where('request_approver_id', $user->id)->exists()) {
-            $groups[] = self::GROUP_APPROVER;
-        }
 
         return $groups;
     }
@@ -92,23 +83,18 @@ class UserDeactivator
         return $users->filter(fn (User $candidate): bool => match ($group) {
             self::GROUP_REVIEWER => $candidate->can('Review:DocumentRequest')
                 && (! $this->replacesRequestPicOfDocumentType($user) || $this->waghub->normalizePhone($candidate->phone) !== null),
-            self::GROUP_APPROVER => $candidate->can('Approve:DocumentRequest'),
             default => true,
         })->values();
     }
 
     /**
-     * Pilihan Select pengganti. Kelompok penyetuju mendapat opsi "Tim persetujuan" (nilai null pada pengajuan).
+     * Pilihan Select pengganti.
      *
      * @return array<int|string, string>
      */
     public function candidateOptions(User $user, string $group): array
     {
-        $options = $this->candidates($user, $group)->pluck('name', 'id')->all();
-
-        return $group === self::GROUP_APPROVER && $options !== []
-            ? [self::APPROVAL_TEAM => 'Tim persetujuan (siapa saja yang berhak)'] + $options
-            : $options;
+        return $this->candidates($user, $group)->pluck('name', 'id')->all();
     }
 
     /** Pesan penolakan bila ada kelompok tugas yang belum punya kandidat pengganti, atau null bila semua tersedia. */
@@ -120,7 +106,6 @@ class UserDeactivator
                     self::GROUP_REVIEWER => 'Belum ada user aktif lain dengan izin "Periksa pengajuan"'
                         .($this->replacesRequestPicOfDocumentType($user) ? ' dan nomor WhatsApp valid' : '')
                         .' untuk menggantikan tugas pemeriksaan. Berikan izin tersebut lewat menu Hak Akses terlebih dahulu.',
-                    self::GROUP_APPROVER => 'Belum ada user aktif lain dengan izin "Setujui pengajuan" untuk menggantikan tugas persetujuan. Berikan izin tersebut lewat menu Hak Akses terlebih dahulu.',
                     default => 'Belum ada user aktif lain untuk menggantikan PIC dokumen. Tambahkan user terlebih dahulu.',
                 };
             }
@@ -157,7 +142,7 @@ class UserDeactivator
      * Alihkan semua tugas user ke pengganti lalu nonaktifkan user, dalam satu transaksi.
      * Riwayat (history) pengajuan sengaja tidak ditambah, karena jumlahnya dipakai sebagai kunci notifikasi dan pengingat.
      *
-     * @param  array<string, int|string|null>  $replacements  Kunci: document_pic, reviewer, approver (approver boleh "team").
+     * @param  array<string, int|string|null>  $replacements  Kunci: document_pic, reviewer.
      *
      * @throws ValidationException
      */
@@ -188,10 +173,9 @@ class UserDeactivator
                 DocumentType::where('request_pic_id', $user->id)->update(['request_pic_id' => $resolved[self::GROUP_REVIEWER]]);
                 DocumentType::where('request_reviewer_id', $user->id)->update(['request_reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
             }
-            if (array_key_exists(self::GROUP_APPROVER, $resolved)) {
-                $this->openRequests()->where('approver_id', $user->id)->update(['approver_id' => $resolved[self::GROUP_APPROVER]]);
-                DocumentType::where('request_approver_id', $user->id)->update(['request_approver_id' => $resolved[self::GROUP_APPROVER]]);
-            }
+            // Tahap persetujuan sudah dihapus dari alur; kolom penyetuju tidak lagi dipakai, cukup dikosongkan agar tidak menggantung.
+            $this->openRequests()->where('approver_id', $user->id)->update(['approver_id' => null]);
+            DocumentType::where('request_approver_id', $user->id)->update(['request_approver_id' => null]);
 
             DocumentRequestNotification::whereIn('status', ['pending', 'failed'])
                 ->where(fn (Builder $query): Builder => $query
@@ -240,11 +224,6 @@ class UserDeactivator
         $resolved = [];
         foreach ($this->requiredGroups($user) as $group) {
             $value = $replacements[$group] ?? null;
-            if ($group === self::GROUP_APPROVER && $value === self::APPROVAL_TEAM) {
-                $resolved[$group] = null;
-
-                continue;
-            }
             $candidate = filled($value) ? $this->candidates($user, $group)->firstWhere('id', (int) $value) : null;
             if ($candidate === null) {
                 throw ValidationException::withMessages([$group => 'Pilih pengganti yang aktif dan memenuhi syarat.']);
