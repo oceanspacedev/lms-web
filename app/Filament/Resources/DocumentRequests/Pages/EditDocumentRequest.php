@@ -115,6 +115,7 @@ class EditDocumentRequest extends EditRecord
                     ['number', 'company_id', 'expiry_date', 'file'], 'Dokumen diarsipkan', 'Dokumen belum diarsipkan',
                 )),
             Action::make('cancel')->label('Batalkan')->color('danger')->modalWidth('lg')
+                ->modalHeading('Batalkan pengajuan?')->modalSubmitActionLabel('Ya, batalkan')->modalCancelActionLabel('Kembali')
                 ->visible(fn (): bool => in_array($this->record->status, ['signing', 'handover'], true) && auth()->user()->can('cancel', $this->record))
                 ->schema([Textarea::make('note')->label('Alasan pembatalan')->required()->maxLength(4000)->rows(3)])
                 ->action(fn (array $data) => $this->runFlowAction(

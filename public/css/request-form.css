@@ -44,7 +44,7 @@ button:disabled { opacity: .65; cursor: wait; }
 .receipt-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
 .status { padding: 4px 8px; border-radius: 4px; background: #f0ebf8; color: var(--accent); }
 .status.approved, .status.archived { color: #146337; background: #e7f6ec; }
-.status.rejected { color: #b3261e; background: #fce8e6; }
+.status.rejected, .status.cancelled { color: #b3261e; background: #fce8e6; }
 dl { margin: 24px 0; display: grid; gap: 12px; }
 dl div { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 12px; }
 dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }

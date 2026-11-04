@@ -70,7 +70,7 @@ class PanduanPageTest extends TestCase
         $page = Livewire::test(Panduan::class);
         $guides = $page->instance()->guides();
 
-        $this->assertCount(8, $guides);
+        $this->assertCount(10, $guides);
         foreach ($guides as $guide) {
             $page->assertSee($guide['title'])
                 ->assertSeeHtml('id="panduan-'.$guide['id'].'"')
@@ -89,8 +89,8 @@ class PanduanPageTest extends TestCase
         $page = Livewire::test(Panduan::class)->assertSee('Butuh akses lain');
         $guides = $page->instance()->guides();
 
-        $this->assertSame(['ajukan-dokumen', 'proses-pengajuan'], array_column(array_slice($guides, 0, 2), 'id'));
-        $this->assertSame([true, true, false, false, false, false, false], array_column($guides, 'canUse'));
+        $this->assertSame(['alur-pengajuan', 'ajukan-dokumen', 'proses-pengajuan', 'serahkan-dokumen'], array_column(array_slice($guides, 0, 4), 'id'));
+        $this->assertSame([true, true, true, true, false, false, false, false, false], array_column($guides, 'canUse'));
 
         $this->signIn(['ViewAny:Document', 'Create:Document', 'ViewAny:DocumentRequest', 'ViewAny:ReminderTemplate']);
         Livewire::test(Panduan::class)->assertDontSee('Butuh akses lain');
@@ -104,7 +104,7 @@ class PanduanPageTest extends TestCase
             ->assertDontSee('Nonaktifkan user')
             ->assertDontSeeHtml('id="panduan-nonaktifkan-user"')
             ->instance()->guides();
-        $this->assertCount(7, $guides);
+        $this->assertCount(9, $guides);
         $this->assertNotContains('nonaktifkan-user', array_column($guides, 'id'));
 
         $this->signInAsSuperAdmin();
