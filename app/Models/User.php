@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\Trashable;
+use App\Support\ActiveReference;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -74,14 +75,13 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * User aktif, ditambah user yang sedang tersimpan pada form (walau sudah nonaktif) agar data lama tetap bisa disimpan.
+     * User aktif, ditambah user yang sedang tersimpan pada form (walau sudah nonaktif atau di tempat sampah) agar data lama tetap bisa disimpan.
      *
      * @param  Builder<User>  $query
      */
     public function scopeActiveOrKeep(Builder $query, int|string|null $keepId): Builder
     {
-        return $query->where(fn (Builder $query): Builder => $query->whereNull($query->qualifyColumn('deactivated_at'))
-            ->when(filled($keepId), fn (Builder $query): Builder => $query->orWhere($query->qualifyColumn('id'), $keepId)));
+        return ActiveReference::constrain($query, $keepId, ['deactivated_at' => null]);
     }
 
     public function deactivatedBy(): BelongsTo

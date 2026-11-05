@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
 use App\Models\User;
+use App\Support\ActiveReference;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -149,10 +150,10 @@ class DocumentRequestForm
                 TextEntry::make('status_label')->label('Status')->state(fn (DocumentRequest $record): string => DocumentRequest::statusLabel($record->status))->badge(),
                 TextEntry::make('submitted_date')->label('Diajukan')->state(fn (DocumentRequest $record): ?string => collect($record->history)->firstWhere('status', 'submitted')['at'] ?? null)
                     ->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->placeholder('Belum diajukan'),
-                TextEntry::make('documentType.name')->label('Jenis dokumen')->wrap(),
-                TextEntry::make('business_name')->label('Badan usaha')->state(fn (DocumentRequest $record): ?string => $record->company?->name ?? $record->other_business_name)->wrap(),
+                TextEntry::make('documentType.name')->label('Jenis dokumen')->state(fn (DocumentRequest $record): ?string => $record->documentType?->displayName())->wrap(),
+                TextEntry::make('business_name')->label('Badan usaha')->state(fn (DocumentRequest $record): ?string => $record->company?->displayName() ?? $record->other_business_name)->wrap(),
                 TextEntry::make('partner_name')->label('Pihak lawan / mitra')->state(fn (DocumentRequest $record): ?string => $record->counterpartyName())->placeholder('—')->wrap(),
-                TextEntry::make('pic.name')->label('PIC')->placeholder('—'),
+                TextEntry::make('pic.name')->label('PIC')->state(fn (DocumentRequest $record): ?string => $record->pic?->displayName())->placeholder('—'),
                 TextEntry::make('revision_number')->label('Versi pengajuan')->state(fn (DocumentRequest $record): string => $record->revisionNumber() ? 'Revisi ke-'.$record->revisionNumber() : 'Pengajuan awal'),
                 TextEntry::make('submission_reason')->label('Keperluan')->state(fn (DocumentRequest $record): string => $record->request_reason ?: $record->title)->columnSpanFull()->wrap(),
                 TextEntry::make('review_note')->label(fn (DocumentRequest $record): string => $record->status === 'cancelled' ? 'Alasan pembatalan' : 'Catatan pemeriksa')
@@ -179,8 +180,8 @@ class DocumentRequestForm
             TextEntry::make('editable_review_note')->columnSpanFull()->label('Catatan pemeriksa')->visible(fn (?DocumentRequest $record): bool => $record && ! self::isReadOnly($record) && in_array($record->status, ['revision', 'rejected'], true))
                 ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last()['note'] ?? null)->extraAttributes(['style' => 'white-space: pre-line']),
             Section::make('Data pengajuan')->columnSpanFull()->visible(fn (?DocumentRequest $record): bool => ! self::isReadOnly($record))->columns(2)->schema([
-                Select::make('company_id')->label('Badan Usaha')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->disabledOn('edit'),
-                Select::make('document_type_id')->label('Jenis Dokumen')->options(fn (): array => DocumentType::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->live()->disabledOn('edit')
+                Select::make('company_id')->label('Badan Usaha')->options(fn (?DocumentRequest $record): array => ActiveReference::options(Company::where('is_active', true), $record?->company_id, fn (Company $company): string => $company->name))->searchable()->required()->disabledOn('edit'),
+                Select::make('document_type_id')->label('Jenis Dokumen')->options(fn (?DocumentRequest $record): array => ActiveReference::options(DocumentType::where('is_active', true), $record?->document_type_id, fn (DocumentType $type): string => $type->name))->searchable()->required()->live()->disabledOn('edit')
                     ->afterStateUpdated(function (Set $set): void {
                         $set('details', []);
                         $set('attachments', []);
@@ -189,7 +190,7 @@ class DocumentRequestForm
                 Select::make('purpose')->label('Tujuan Pengajuan')->options(DocumentRequest::PURPOSES)->default('new')->required()->live(),
                 TextInput::make('partner_name')->label('Pihak lawan / mitra')->maxLength(255)
                     ->helperText('Opsional. Kosongkan bila dokumen tidak punya pihak lawan, misalnya akta pendirian.'),
-                Select::make('pic_user_id')->label('PIC internal')->options(fn (?DocumentRequest $record): array => User::activeOrKeep($record?->pic_user_id)->pluck('name', 'id')->all())->default(fn (): int => auth()->id())->searchable()->required(),
+                Select::make('pic_user_id')->label('PIC internal')->options(fn (?DocumentRequest $record): array => ActiveReference::options(User::active(), $record?->pic_user_id, fn (User $user): string => $user->name))->default(fn (): int => auth()->id())->searchable()->required(),
                 TextInput::make('partner_pic')->label('PIC mitra')->maxLength(255),
                 TextInput::make('partner_contact')->label('Kontak mitra')->maxLength(255),
             ])->disabled(fn (?DocumentRequest $record): bool => $record && ! $record->editableBy(auth()->user())),

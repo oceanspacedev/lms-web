@@ -6,6 +6,7 @@ use App\Models\Concerns\Trashable;
 use App\Services\DocumentRequestNotifier;
 use App\Services\StorageFileName;
 use App\Services\WaghubService;
+use App\Support\ActiveReference;
 use Carbon\CarbonImmutable;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -85,32 +86,32 @@ class DocumentRequest extends Model
 
     public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class)->withTrashed();
     }
 
     public function documentType(): BelongsTo
     {
-        return $this->belongsTo(DocumentType::class);
+        return $this->belongsTo(DocumentType::class)->withTrashed();
     }
 
     public function requester(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'requester_id');
+        return $this->belongsTo(User::class, 'requester_id')->withTrashed();
     }
 
     public function pic(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'pic_user_id');
+        return $this->belongsTo(User::class, 'pic_user_id')->withTrashed();
     }
 
     public function reviewer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reviewer_id');
+        return $this->belongsTo(User::class, 'reviewer_id')->withTrashed();
     }
 
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approver_id');
+        return $this->belongsTo(User::class, 'approver_id')->withTrashed();
     }
 
     /**
@@ -486,7 +487,7 @@ class DocumentRequest extends Model
                 $request->requester_division = $data['requester_division'];
                 $request->request_reason = $data['request_reason'];
                 $request->other_business_name = $data['other_business_name'] ?? null;
-                Validator::make($request->attributesToArray(), ['company_id' => ['nullable', Rule::exists('companies', 'id')->where('is_active', true)], 'other_business_name' => [Rule::requiredIf($request->company_id === null), 'nullable', 'string', 'max:255']])->validate();
+                Validator::make($request->attributesToArray(), ['company_id' => ['nullable', ActiveReference::rule('companies', $existing?->company_id, ['is_active' => true])], 'other_business_name' => [Rule::requiredIf($request->company_id === null), 'nullable', 'string', 'max:255']])->validate();
                 $attachments = $request->attachments;
                 foreach ($request->requirements['attachments'] ?? [] as $item) {
                     $value = $data['attachments'][$item['key']] ?? null;
@@ -538,9 +539,9 @@ class DocumentRequest extends Model
                 }
                 $request->fill($data);
                 Validator::make($request->attributesToArray(), [
-                    'company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)],
-                    'document_type_id' => ['required', 'exists:document_types,id'],
-                    'pic_user_id' => ['required', 'exists:users,id,deactivated_at,NULL'], 'title' => ['required', 'string', 'max:255'],
+                    'company_id' => ['required', ActiveReference::rule('companies', $existing?->company_id, ['is_active' => true])],
+                    'document_type_id' => ['required', ActiveReference::rule('document_types', $existing?->document_type_id)],
+                    'pic_user_id' => ['required', ActiveReference::rule('users', $existing?->pic_user_id, ['deactivated_at' => null])], 'title' => ['required', 'string', 'max:255'],
                     'partner_name' => ['nullable', 'string', 'max:255'], 'purpose' => ['required', 'in:new,renewal,amendment'],
                     'partner_pic' => ['nullable', 'string', 'max:255'], 'partner_contact' => ['nullable', 'string', 'max:255'],
                     'start_date' => ['nullable', 'date'], 'expiry_date' => ['nullable', 'date', 'after_or_equal:start_date'],
@@ -585,10 +586,10 @@ class DocumentRequest extends Model
     private function storeAttachment(UploadedFile $file, array $item): string
     {
         $disk = Storage::disk('local');
-        $type = DocumentType::whereKey($this->document_type_id)->value('name');
+        $type = DocumentType::withTrashed()->whereKey($this->document_type_id)->value('name');
         $directory = 'lms/requests/'.StorageFileName::folder($type);
         $filename = StorageFileName::available($disk, $directory, StorageFileName::build([
-            StorageFileName::companyName(Company::find($this->company_id)) ?? $this->other_business_name,
+            StorageFileName::companyName(Company::withTrashed()->find($this->company_id)) ?? $this->other_business_name,
             $type,
             $item['label'] ?? $item['key'],
             $this->exists ? "pengajuan{$this->id}" : null,
@@ -795,10 +796,12 @@ class DocumentRequest extends Model
                 throw ValidationException::withMessages(['file' => 'Unggah dokumen yang sudah ditandatangani.']);
             }
             Validator::make(['number' => $number], ['number' => ['required', 'string', 'max:255']])->validate();
-            $companyId = $request->company_id ?? $companyId;
-            Validator::make(['company_id' => $companyId], ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
+            $ownCompanyId = $request->company_id;
+            $companyId = $ownCompanyId ?? $companyId;
+            Validator::make(['company_id' => $companyId], ['company_id' => ['required', ActiveReference::rule('companies', $ownCompanyId, ['is_active' => true])]])->validate();
             $request->company_id = $companyId;
-            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user);
+            // Badan usaha dan jenis dokumen yang sudah terpasang pada pengajuan tetap sah walau kini nonaktif atau di tempat sampah.
+            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
             $storedFile = [$document->currentVersion->disk, $document->currentVersion->file_path];
             $request->document_id = $document->id;
             $request->physical_received_at = now();
@@ -871,10 +874,10 @@ class DocumentRequest extends Model
     private function storeFlowFile(UploadedFile $file, string $kind): string
     {
         $disk = Storage::disk('local');
-        $type = DocumentType::whereKey($this->document_type_id)->value('name');
+        $type = DocumentType::withTrashed()->whereKey($this->document_type_id)->value('name');
         $directory = 'lms/requests/'.StorageFileName::folder($type);
         $filename = StorageFileName::available($disk, $directory, StorageFileName::build([
-            StorageFileName::companyName(Company::find($this->company_id)) ?? $this->other_business_name,
+            StorageFileName::companyName(Company::withTrashed()->find($this->company_id)) ?? $this->other_business_name,
             $type,
             $kind === 'draft' ? 'draft' : 'ttd',
             "pengajuan{$this->id}",

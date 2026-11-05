@@ -35,7 +35,7 @@ class DocumentRequestsTable
                     return ctype_digit($number) && strlen($number) <= 18 ? $query->orWhere('document_requests.id', (int) $number) : $query;
                 }),
             TextColumn::make('title')->label('Pengajuan')->searchable()->weight('medium')->limit(45)->wrap()->tooltip(fn (DocumentRequest $record): string => $record->title)
-                ->description(fn (DocumentRequest $record): string => $record->documentType->name.($record->revisionNumber() ? ' · Revisi ke-'.$record->revisionNumber() : '')),
+                ->description(fn (DocumentRequest $record): string => $record->documentType->displayName().($record->revisionNumber() ? ' · Revisi ke-'.$record->revisionNumber() : '')),
             TextColumn::make('partner_name')->label('Pihak Lawan / Mitra')->searchable()->state(fn (DocumentRequest $record): ?string => $record->counterpartyName())->placeholder('—')->limit(30)->wrap(),
             TextColumn::make('requester_name')->label('Pengaju')->limit(30)->wrap()->state(fn (DocumentRequest $record): string => $record->applicantName())
                 ->searchable(query: fn (Builder $query, string $search): Builder => $query

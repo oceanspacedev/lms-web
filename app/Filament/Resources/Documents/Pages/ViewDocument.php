@@ -31,7 +31,7 @@ class ViewDocument extends ViewRecord
 
     public function getSubheading(): ?string
     {
-        return collect([$this->getRecord()->company?->name, $this->getRecord()->documentType?->name])
+        return collect([$this->getRecord()->company?->displayName(), $this->getRecord()->documentType?->displayName()])
             ->filter()->implode(' · ');
     }
 

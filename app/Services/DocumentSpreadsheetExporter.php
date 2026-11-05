@@ -68,10 +68,10 @@ class DocumentSpreadsheetExporter
             $writer->addRow(new Row([
                 $this->textCell($document->title),
                 $this->textCell($document->document_number),
-                $this->textCell($document->company?->name),
-                $this->textCell($document->documentType?->name),
+                $this->textCell($document->company?->displayName()),
+                $this->textCell($document->documentType?->displayName()),
                 $this->textCell($document->counterparty),
-                $this->textCell($document->pic?->name),
+                $this->textCell($document->pic?->displayName()),
                 $this->dateCell($version?->issued_date?->toDateString(), $timezone, $dateStyle),
                 $this->dateCell($version?->expiry_date?->toDateString(), $timezone, $dateStyle),
                 Cell::fromValue($isDeleted ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$document->expiry_status]),

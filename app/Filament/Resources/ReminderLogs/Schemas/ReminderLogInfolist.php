@@ -20,7 +20,7 @@ class ReminderLogInfolist
                         ? DocumentResource::getUrl('view', ['record' => $record->documentVersion->document]) : null)
                     ->helperText(fn (ReminderLog $record): ?string => $record->documentVersion?->document?->trashed()
                         ? 'Dokumen ini sudah dihapus. Pulihkan dokumen agar pengingatnya berjalan lagi.' : null),
-                TextEntry::make('documentVersion.document.company.name')->label('Badan Usaha'),
+                TextEntry::make('documentVersion.document.company.name')->label('Badan Usaha')->state(fn (ReminderLog $record): ?string => $record->documentVersion?->document?->company?->displayName()),
                 TextEntry::make('documentVersion.version_number')->label('Versi')->prefix('v'),
                 TextEntry::make('offset_days')->label('Jadwal')->formatStateUsing(fn (int $state): string => $state < 0 ? 'H+'.abs($state) : 'H-'.$state),
                 TextEntry::make('recipient_phone')->label('WhatsApp')->placeholder('-'),

@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Companies\Schemas;
 
 use App\Models\Company;
+use App\Support\ActiveReference;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -11,6 +13,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 use Filament\Support\RawJs;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Unique;
 
 class CompanyForm
 {
@@ -29,7 +32,8 @@ class CompanyForm
                     ->label('Nama Badan Usaha')
                     ->required()
                     ->maxLength(255)
-                    ->unique(ignoreRecord: true),
+                    ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
+                    ->rules([fn (?Company $record): Closure => ActiveReference::uniqueRule(Company::class, 'name', $record?->getKey(), 'Nama ini dipakai badan usaha di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen.', true)]),
                 Select::make('legal_form')
                     ->label('Bentuk Badan Usaha')
                     ->placeholder('Pilih atau cari bentuk badan usaha')

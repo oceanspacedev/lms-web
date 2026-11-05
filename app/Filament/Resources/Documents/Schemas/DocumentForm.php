@@ -2,8 +2,12 @@
 
 namespace App\Filament\Resources\Documents\Schemas;
 
+use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
+use App\Models\User;
+use App\Support\ActiveReference;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -12,7 +16,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Validation\Rule;
 
 class DocumentForm
 {
@@ -22,19 +25,22 @@ class DocumentForm
             ->components([
                 Select::make('company_id')
                     ->label('Badan Usaha')
-                    ->relationship('company', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('is_active', true))
+                    ->relationship('company', 'name', modifyQueryUsing: fn (Builder $query, ?Document $record): Builder => ActiveReference::constrain($query, $record?->company_id, ['is_active' => true]))
+                    ->getOptionLabelFromRecordUsing(fn (Company $record): string => $record->displayName())
                     ->searchable()->preload()->required()->disabledOn('edit')->validatedWhenNotDehydrated(false)
-                    ->rules([Rule::exists('companies', 'id')->where('is_active', true)]),
+                    ->rules([fn (?Document $record): Closure => ActiveReference::rule('companies', $record?->company_id, ['is_active' => true])]),
                 Select::make('document_type_id')
                     ->label('Jenis Dokumen')
-                    ->relationship('documentType', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('is_active', true))
+                    ->relationship('documentType', 'name', modifyQueryUsing: fn (Builder $query, ?Document $record): Builder => ActiveReference::constrain($query, $record?->document_type_id, ['is_active' => true]))
+                    ->getOptionLabelFromRecordUsing(fn (DocumentType $record): string => $record->displayName())
                     ->searchable()->preload()->required()->live()->disabledOn('edit')->validatedWhenNotDehydrated(false)
-                    ->rules([Rule::exists('document_types', 'id')->where('is_active', true)]),
+                    ->rules([fn (?Document $record): Closure => ActiveReference::rule('document_types', $record?->document_type_id, ['is_active' => true])]),
                 TextInput::make('title')->label('Judul')->required()->maxLength(255),
                 TextInput::make('document_number')->label('Nomor Dokumen')->maxLength(255),
                 TextInput::make('counterparty')->label('Pihak Lawan')->maxLength(255),
                 Select::make('pic_user_id')->label('PIC')
                     ->relationship('pic', 'name', modifyQueryUsing: fn (Builder $query, ?Document $record): Builder => $query->activeOrKeep($record?->pic_user_id))
+                    ->getOptionLabelFromRecordUsing(fn (User $record): string => $record->displayName())
                     ->searchable()->preload()->required(),
                 DatePicker::make('issued_date')->label('Tanggal Terbit')->native(false)->visibleOn('create'),
                 DatePicker::make('expiry_date')

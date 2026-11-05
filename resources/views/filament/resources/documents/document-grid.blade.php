@@ -47,7 +47,7 @@
                         {{ $record->title }}
                     @endif
                 </h3>
-                <p class="document-card__company">{{ $record->company?->name ?? '—' }}</p>
+                <p class="document-card__company">{{ $record->company?->displayName() ?? '—' }}</p>
 
                 <div class="document-card__status-row">
                     @if ($record->trashed())

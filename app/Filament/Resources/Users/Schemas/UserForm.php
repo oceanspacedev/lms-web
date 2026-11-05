@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Users\Schemas;
 
 use App\Models\User;
 use App\Services\WaghubService;
+use App\Support\ActiveReference;
 use Closure;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -11,6 +12,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rules\Unique;
 
 class UserForm
 {
@@ -18,7 +20,9 @@ class UserForm
     {
         return $schema->components([
             TextInput::make('name')->label('Nama')->required()->maxLength(255),
-            TextInput::make('email')->label('Email')->email()->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('email')->label('Email')->email()->required()->maxLength(255)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
+                ->rules([fn (?User $record): Closure => ActiveReference::uniqueRule(User::class, 'email', $record?->getKey(), 'Email ini dipakai user di tempat sampah.', true)]),
             TextInput::make('phone')->label('Nomor HP / WhatsApp')->tel()->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])->maxLength(30)
                 ->helperText('Digunakan untuk pengingat dokumen dan masuk dengan kode WhatsApp. Contoh: 081234567890.')
                 ->rules([fn (?User $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {

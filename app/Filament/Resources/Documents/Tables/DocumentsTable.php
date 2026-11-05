@@ -56,27 +56,27 @@ class DocumentsTable
             ->columns([
                 TextColumn::make('title')->label('Dokumen')->searchable(['title', 'document_number', 'counterparty'])->sortable()->weight('medium')->limit(45)->wrap()->width('28%')->tooltip(fn (Document $record): string => $record->title)
                     ->description(fn (Document $record): ?string => $record->document_number),
-                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap(),
-                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap(),
+                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->company?->displayName() ?? $state),
+                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->documentType?->displayName() ?? $state),
                 TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->sortable(),
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state, Document $record): string => $record->trashed() ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state, Document $record): string => $record->trashed() ? 'gray' : Document::EXPIRY_STATUS_COLORS[$state])
                     ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null),
                 TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
-                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap(),
+                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
                 TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->orWhereHas('currentVersion', fn (Builder $version): Builder => $version
                         ->whereRaw("lower(file_path) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%'])
                         ->orWhereRaw("lower(file_name) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%']))),
             ])
             ->filters([
-                SelectFilter::make('company')->label('Badan Usaha')->relationship('company', 'name')->searchable()->preload(),
-                SelectFilter::make('document_type')->label('Jenis Dokumen')->relationship('documentType', 'name')->searchable()->preload(),
+                SelectFilter::make('company')->label('Badan Usaha')->relationship('company', 'name', fn (Builder $query): Builder => $query->withoutTrashed())->searchable()->preload(),
+                SelectFilter::make('document_type')->label('Jenis Dokumen')->relationship('documentType', 'name', fn (Builder $query): Builder => $query->withoutTrashed())->searchable()->preload(),
                 SelectFilter::make('expiry_status')->label('Status')->options(Document::EXPIRY_STATUSES)
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->withExpiryStatus($data['value']) : $query),
-                SelectFilter::make('pic')->label('PIC')->relationship('pic', 'name')->searchable()->preload(),
+                SelectFilter::make('pic')->label('PIC')->relationship('pic', 'name', fn (Builder $query): Builder => $query->withoutTrashed())->searchable()->preload(),
                 Filter::make('counterparty')->label('Pihak Lawan')
                     ->schema([TextInput::make('counterparty')->label('Pihak Lawan')->maxLength(255)->placeholder('Sebagian nama pihak lawan')])
                     ->query(fn (Builder $query, array $data): Builder => filled($data['counterparty'] ?? null)

@@ -107,7 +107,7 @@ class DocumentResource extends Resource
 
     public static function getGlobalSearchResultDetails(Model $record): array
     {
-        return ['Badan Usaha' => $record->company?->name ?? '-', 'Nomor' => $record->document_number ?? '-', 'Jenis Dokumen' => $record->documentType?->name ?? '-'];
+        return ['Badan Usaha' => $record->company?->displayName() ?? '-', 'Nomor' => $record->document_number ?? '-', 'Jenis Dokumen' => $record->documentType?->displayName() ?? '-'];
     }
 
     public static function form(Schema $schema): Schema

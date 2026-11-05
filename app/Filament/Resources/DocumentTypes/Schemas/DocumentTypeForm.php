@@ -4,6 +4,8 @@ namespace App\Filament\Resources\DocumentTypes\Schemas;
 
 use App\Models\DocumentType;
 use App\Models\User;
+use App\Support\ActiveReference;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -14,6 +16,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rules\Unique;
 
 class DocumentTypeForm
 {
@@ -25,7 +28,8 @@ class DocumentTypeForm
                     ->label('Nama Jenis Dokumen')
                     ->required()
                     ->maxLength(255)
-                    ->unique(ignoreRecord: true),
+                    ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
+                    ->rules([fn (?DocumentType $record): Closure => ActiveReference::uniqueRule(DocumentType::class, 'name', $record?->getKey(), 'Nama ini dipakai jenis dokumen di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen.', true)]),
                 Toggle::make('is_active')
                     ->label('Aktif')
                     ->default(true)
@@ -36,7 +40,7 @@ class DocumentTypeForm
                     ->live()
                     ->helperText('Jadwal pengingat diatur di Pengaturan WhatsApp dan berlaku untuk semua jenis dokumen bermasa berlaku. Mematikan pilihan ini untuk jenis yang sudah punya dokumen menghentikan status dan pengingat masa berlaku dokumen tersebut.'),
                 Section::make('Form Pengajuan')->description('"Isian tambahan" dan lampiran dengan pilihan "Selalu" tampil di form publik dan form internal; lampiran dengan pilihan "Ada biaya" atau "Perpanjangan / adendum" hanya berlaku di form Tambah Pengajuan internal (form publik selalu berupa pengajuan baru tanpa biaya).')->collapsed()->columnSpanFull()->schema([
-                    Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->activeOrKeep($record?->request_pic_id)->pluck('name', 'id')->all())->searchable()->placeholder('Otomatis (tim pemeriksa)'),
+                    Select::make('request_pic_id')->label('PIC pengajuan')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->whereNotNull('phone')->activeOrKeep($record?->request_pic_id)->get()->mapWithKeys(fn (User $user): array => [$user->id => $user->displayName()])->all())->searchable()->placeholder('Otomatis (tim pemeriksa)'),
                     Actions::make([
                         Action::make('cooperation')->label('Gunakan contoh Kerja Sama')->color('gray')
                             ->requiresConfirmation()->modalHeading('Ganti form pengajuan?')->modalDescription('Field dan daftar lampiran akan diganti.')
@@ -69,7 +73,7 @@ class DocumentTypeForm
                         Select::make('when')->label('Diperlukan')->options(['always' => 'Selalu', 'cost' => 'Ada biaya', 'renewal' => 'Perpanjangan / adendum'])->default('always')->required(),
                         Toggle::make('required')->label('Wajib')->default(true),
                     ])->collapsed()->columnSpanFull()->itemLabel(fn (array $state): string => $state['label'] ?? 'Lampiran'),
-                    Select::make('request_reviewer_id')->label('Pemeriksa')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->activeOrKeep($record?->request_reviewer_id)->pluck('name', 'id')->all())->searchable()->placeholder('Tim pemeriksa'),
+                    Select::make('request_reviewer_id')->label('Pemeriksa')->options(fn (?DocumentType $record): array => User::permission('Review:DocumentRequest')->activeOrKeep($record?->request_reviewer_id)->get()->mapWithKeys(fn (User $user): array => [$user->id => $user->displayName()])->all())->searchable()->placeholder('Tim pemeriksa'),
                 ])->columns(2),
             ]);
     }
