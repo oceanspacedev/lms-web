@@ -84,12 +84,14 @@ Tujuan:
 
 ### 3.4 Hapus permanen ditolak bila masih dipakai
 
-- **Keputusan pengguna:** hapus permanen **ditolak** selama data masih dipakai data lain yang **tidak** ada di tempat sampah. Pesannya menyebut dipakai di mana. Contoh: "Tidak bisa dihapus permanen: masih dipakai 2 dokumen (PKS Sewa Gudang, Kontrak Vendor) dan 1 pengajuan (#14). Hapus atau pindahkan data itu dulu."
+- **Keputusan pengguna:** hapus permanen **ditolak** selama data masih dipakai data lain yang **tidak** ada di tempat sampah. Pesannya menyebut dipakai di mana. Contoh: "Tidak bisa dihapus permanen: masih dipakai 2 dokumen (PKS Sewa Gudang, Kontrak Vendor) dan 1 pengajuan (#14). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi."
+  - Pesan per jenis data: Badan Usaha dan Jenis Dokumen memakai contoh di atas. Dokumen: "Tidak bisa dihapus permanen: masih dipakai pengajuan #14, #15. Hapus dulu pengajuan itu, lalu coba lagi." User: "Tidak bisa dihapus permanen: user ini masih tercatat di {daftar}. User yang punya riwayat cukup dibiarkan di tempat sampah — ia tetap tidak bisa masuk dan tidak menerima WhatsApp."
+  - Keterkaitan dihitung saat modal hapus permanen dibuka. Bila ditolak, modal langsung menampilkan pesan penolakan dan tombol "Ya, hapus permanen" dinonaktifkan; pemeriksaan di server tetap berlaku.
   - Daftar contoh dibatasi sekitar 5 nama, ditambah "dan N lainnya".
 - **Keputusan pengguna:** data terkait yang **ikut ada di tempat sampah** tidak dihitung sebagai "dipakai". Pengecualiannya User (§4.4).
   - **Keputusan pengembang:** data terkait yang di tempat sampah itu **ikut dihapus permanen**. Ini tidak terhindarkan: foreign key database bersifat `restrict`, sehingga induk tidak bisa hilang selama anak (meskipun ada di tempat sampah) masih menunjuknya.
-  - Modal konfirmasi wajib menyebutnya, misalnya "3 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen."
-- Pada hapus permanen massal, data yang ditolak dilewati dan alasannya dilaporkan di notifikasi hasil. Data lain tetap diproses.
+  - Modal konfirmasi wajib menyebutnya, misalnya "3 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen beserta semua versi dan filenya." Bagian "beserta semua versi dan filenya" hanya muncul bila ada dokumen yang ikut terhapus.
+- Pada hapus permanen massal, data yang ditolak dilewati dan alasannya dilaporkan di notifikasi hasil. Data lain tetap diproses. Modalnya sudah menyebut berapa yang akan ditolak, misalnya "2 dari 5 akan ditolak karena masih dipakai."
 
 ### 3.5 Riwayat penghapusan
 

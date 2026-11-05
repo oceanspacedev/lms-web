@@ -37,6 +37,7 @@ class DocumentTrashHandler implements TrashHandler
             trashed: [self::entry($requests()->onlyTrashed())],
             notes: $requestNumbers === [] ? [] : ['Dokumen ini hasil pengajuan '.implode(', ', $requestNumbers).'.'],
             subjectName: 'dokumen',
+            blockTemplate: TrashUsage::BLOCK_DOCUMENT,
         );
     }
 

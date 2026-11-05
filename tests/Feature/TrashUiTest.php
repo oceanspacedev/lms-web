@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
@@ -316,7 +317,8 @@ class TrashUiTest extends TestCase
 
         Livewire::test($scenario['list'])->filterTable('trashed', false)
             ->mountTableBulkAction('forceDelete', array_filter([...$free, $blocked]))
-            ->assertMountedActionModalSee(['Hapus permanen '.($blocked === null ? 2 : 3)." {$scenario['noun']}?", 'Tindakan ini tidak bisa dibatalkan.'])
+            ->assertMountedActionModalSee(['Hapus permanen '.($blocked === null ? 2 : 3)." {$scenario['noun']}?", 'Tindakan ini tidak bisa dibatalkan.',
+                ...($blocked === null ? [] : ['1 dari 3 akan ditolak karena masih dipakai.'])])
             ->callMountedTableBulkAction();
         $this->assertOnlyNotified($expected);
 
@@ -429,9 +431,45 @@ class TrashUiTest extends TestCase
         $this->trash(Document::factory()->create(['company_id' => $company->id]), $superAdmin);
         $this->trash($company, $superAdmin);
 
-        Livewire::test(ListCompanies::class)->filterTable('trashed', false)
+        $list = Livewire::test(ListCompanies::class)->filterTable('trashed', false)
             ->mountTableAction('forceDelete', $company)
-            ->assertMountedActionModalSee(['Tindakan ini tidak bisa dibatalkan.', '1 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen.']);
+            ->assertMountedActionModalSee(['Tindakan ini tidak bisa dibatalkan.', '1 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen beserta semua versi dan filenya.']);
+        $this->assertFalse($list->instance()->getMountedAction()->getModalSubmitAction()->isDisabled());
+
+        // Anak yang bukan dokumen tidak punya versi dan file, jadi kalimatnya tanpa "beserta semua versi dan filenya".
+        $type = DocumentType::factory()->create();
+        $this->trash(DocumentRequest::factory()->create(['document_type_id' => $type->id]), $superAdmin);
+        $this->trash($type, $superAdmin);
+        Livewire::test(ListDocumentTypes::class)->filterTable('trashed', false)
+            ->mountTableAction('forceDelete', $type)
+            ->assertMountedActionModalSee('1 pengajuan di tempat sampah yang memakai jenis dokumen ini juga akan dihapus permanen.')
+            ->assertMountedActionModalDontSee('beserta semua versi dan filenya');
+    }
+
+    /** @return array<string, array{string}> */
+    public static function blockingResources(): array
+    {
+        return array_diff_key(self::resources(), ['pengajuan' => true]);
+    }
+
+    #[DataProvider('blockingResources')]
+    public function test_force_delete_modal_explains_a_block_and_disables_the_submit_button(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $superAdmin = $this->signInAsSuperAdmin();
+        $blocked = ($scenario['blocked'])($superAdmin);
+        $message = app(TrashManager::class)->usage($blocked)->blockMessage();
+
+        $list = Livewire::test($scenario['list'])->filterTable('trashed', false)
+            ->mountTableAction('forceDelete', $blocked)
+            ->assertMountedActionModalSee(["Hapus permanen {$scenario['noun']} ini?", $message])
+            ->assertMountedActionModalDontSee(TrashActions::IRREVERSIBLE);
+        $this->assertTrue($list->instance()->getMountedAction()->getModalSubmitAction()->isDisabled());
+
+        // Pemeriksaan di server tetap berlaku walaupun tombolnya dilewati.
+        $list->callMountedTableAction();
+        $this->assertNotifiedWithBody('Hapus permanen ditolak', $message);
+        $this->assertSoftDeleted($blocked);
     }
 
     #[DataProvider('resources')]

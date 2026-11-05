@@ -88,7 +88,7 @@ class TrashManagerTest extends TestCase
 
         $message = $this->forceDeleteError($company, $actor);
 
-        $this->assertSame("Tidak bisa dihapus permanen: masih dipakai 1 dokumen (PKS Sewa Gudang) dan 1 pengajuan (#{$request->id}). Hapus atau pindahkan data itu dulu.", $message);
+        $this->assertSame("Tidak bisa dihapus permanen: masih dipakai 1 dokumen (PKS Sewa Gudang) dan 1 pengajuan (#{$request->id}). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.", $message);
         $this->assertSoftDeleted($company);
         $this->assertDatabaseMissing('trash_logs', ['action' => 'force_deleted']);
     }
@@ -138,7 +138,27 @@ class TrashManagerTest extends TestCase
         $this->manager()->trash($company, $actor);
 
         $this->assertSame(
-            'Tidak bisa dihapus permanen: masih dipakai 7 dokumen (Kontrak 1, Kontrak 2, Kontrak 3, Kontrak 4, Kontrak 5, dan 2 lainnya). Hapus atau pindahkan data itu dulu.',
+            'Tidak bisa dihapus permanen: masih dipakai 7 dokumen (Kontrak 1, Kontrak 2, Kontrak 3, Kontrak 4, Kontrak 5, dan 2 lainnya). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.',
+            $this->forceDeleteError($company, $actor),
+        );
+    }
+
+    public function test_block_message_for_a_trashed_child_names_the_child_and_its_own_advice(): void
+    {
+        $actor = User::factory()->create();
+        $company = Company::factory()->create();
+        $document = Document::factory()->for($company)->create(['title' => 'Kontrak Anak']);
+        $requests = DocumentRequest::factory()->count(7)->create(['status' => 'archived', 'document_id' => $document->id]);
+        $this->manager()->trash($document, $actor);
+        $this->manager()->trash($company, $actor);
+        $numbers = $requests->take(5)->map(fn (DocumentRequest $request): string => '#'.$request->id)->implode(', ');
+
+        $this->assertSame(
+            "Tidak bisa dihapus permanen: masih dipakai pengajuan {$numbers}, dan 2 lainnya. Hapus dulu pengajuan itu, lalu coba lagi.",
+            $this->manager()->usage($document)->blockMessage(),
+        );
+        $this->assertSame(
+            "Tidak bisa dihapus permanen: dokumen \"Kontrak Anak\" di tempat sampah masih dipakai pengajuan {$numbers}, dan 2 lainnya. Hapus dulu pengajuan itu, lalu coba lagi.",
             $this->forceDeleteError($company, $actor),
         );
     }
@@ -153,7 +173,7 @@ class TrashManagerTest extends TestCase
         $result = $this->manager()->bulk('forceDelete', [$unused[0], $used, $unused[1]], $actor);
 
         $this->assertSame(2, $result['done']);
-        $this->assertSame([['label' => 'PT Dipakai', 'reason' => 'Tidak bisa dihapus permanen: masih dipakai 1 dokumen (Kontrak Vendor). Hapus atau pindahkan data itu dulu.']], $result['skipped']);
+        $this->assertSame([['label' => 'PT Dipakai', 'reason' => 'Tidak bisa dihapus permanen: masih dipakai 1 dokumen (Kontrak Vendor). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.']], $result['skipped']);
         $this->assertSame(0, Company::withTrashed()->whereKey([$unused[0]->id, $unused[1]->id])->count());
         $this->assertSoftDeleted($used);
 
@@ -204,7 +224,7 @@ class TrashManagerTest extends TestCase
         $this->manager()->trash($type, $actor);
 
         $this->assertSame('Jenis dokumen ini masih dipakai 1 dokumen. Dokumen itu tidak ikut terhapus, dan nama jenis dokumen tetap tampil di sana dengan tanda (dihapus).', $this->manager()->usage($type)->summary());
-        $this->assertSame('Tidak bisa dihapus permanen: masih dipakai 1 dokumen (Akta Pendirian). Hapus atau pindahkan data itu dulu.', $this->forceDeleteError($type, $actor));
+        $this->assertSame('Tidak bisa dihapus permanen: masih dipakai 1 dokumen (Akta Pendirian). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.', $this->forceDeleteError($type, $actor));
     }
 
     public function test_files_from_purge_are_deleted_after_commit_and_failures_are_logged(): void

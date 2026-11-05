@@ -18,12 +18,24 @@ final readonly class TrashUsage
     public array $trashed;
 
     /**
+     * Pola alasan hapus permanen ditolak. `{holder}` menjadi penyebut data anak yang dipakai (diikuti spasi) atau kosong,
+     * `{subject}` menjadi penyebut itu atau "{jenis data} ini", `{list}` menjadi "2 dokumen (A, B) dan 1 pengajuan (#14)",
+     * dan `{examples}` hanya contohnya, misalnya "#14, #15".
+     */
+    public const BLOCK_MASTER_DATA = 'Tidak bisa dihapus permanen: {holder}masih dipakai {list}. Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.';
+
+    public const BLOCK_DOCUMENT = 'Tidak bisa dihapus permanen: {holder}masih dipakai pengajuan {examples}. Hapus dulu pengajuan itu, lalu coba lagi.';
+
+    public const BLOCK_USER = 'Tidak bisa dihapus permanen: {subject} masih tercatat di {list}. User yang punya riwayat cukup dibiarkan di tempat sampah — ia tetap tidak bisa masuk dan tidak menerima WhatsApp.';
+
+    /**
      * @param  list<array{label: string, count: int, examples: list<string>}>  $active
      * @param  list<array{label: string, count: int, examples: list<string>}>  $trashed
      * @param  list<string>  $notes  Kalimat tambahan untuk modal hapus.
      * @param  string  $subjectName  Sebutan jenis data dalam huruf kecil, misalnya "badan usaha".
+     * @param  string  $blockTemplate  Pola alasan hapus permanen ditolak, salah satu konstanta BLOCK_*.
      */
-    public function __construct(array $active = [], array $trashed = [], public array $notes = [], public string $subjectName = 'data')
+    public function __construct(array $active = [], array $trashed = [], public array $notes = [], public string $subjectName = 'data', public string $blockTemplate = self::BLOCK_MASTER_DATA)
     {
         $this->active = self::withoutEmpty($active);
         $this->trashed = self::withoutEmpty($trashed);
@@ -35,23 +47,31 @@ final readonly class TrashUsage
     }
 
     /**
-     * Alasan hapus permanen ditolak, misalnya "Tidak bisa dihapus permanen: masih dipakai 2 dokumen (A, B) dan 1 pengajuan (#14). Hapus atau pindahkan data itu dulu."
+     * Alasan hapus permanen ditolak menurut `$blockTemplate`, misalnya "Tidak bisa dihapus permanen: masih dipakai 2 dokumen (A, B)
+     * dan 1 pengajuan (#14). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi." Contoh dibatasi lima, ditambah "dan N lainnya".
      *
      * @param  string|null  $holder  Penyebut data yang dipakai bila bukan data yang sedang dihapus, misalnya 'dokumen "X" di tempat sampah'.
      */
     public function blockMessage(?string $holder = null): string
     {
-        $entries = array_map(function (array $entry): string {
+        $examples = array_map(function (array $entry): array {
             $examples = array_slice($entry['examples'], 0, self::EXAMPLE_LIMIT);
             $others = $entry['count'] - count($examples);
             if ($examples !== [] && $others > 0) {
                 $examples[] = "dan {$others} lainnya";
             }
 
-            return "{$entry['count']} {$entry['label']}".($examples === [] ? '' : ' ('.implode(', ', $examples).')');
+            return $examples;
         }, $this->active);
+        $entries = array_map(fn (array $entry, array $examples): string => "{$entry['count']} {$entry['label']}".($examples === [] ? '' : ' ('.implode(', ', $examples).')'),
+            $this->active, $examples);
 
-        return 'Tidak bisa dihapus permanen: '.($holder === null ? '' : $holder.' ').'masih dipakai '.self::join($entries).'. Hapus atau pindahkan data itu dulu.';
+        return strtr($this->blockTemplate, [
+            '{holder}' => $holder === null ? '' : $holder.' ',
+            '{subject}' => $holder ?? $this->subjectName.' ini',
+            '{list}' => self::join($entries),
+            '{examples}' => self::join(array_map(fn (array $examples): string => implode(', ', $examples), $examples)),
+        ]);
     }
 
     /** Kalimat keterkaitan untuk modal hapus, atau string kosong bila tidak ada yang perlu disebut. */

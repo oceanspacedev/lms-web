@@ -334,7 +334,7 @@ class UserTrashTest extends TestCase
         $user = User::withTrashed()->find($user->id);
 
         $this->assertThrows(fn () => $this->manager()->forceDelete($user, $admin), ValidationException::class,
-            'Tidak bisa dihapus permanen: masih dipakai 1 dokumen sebagai PIC (Kontrak Lama). Hapus atau pindahkan data itu dulu.');
+            'Tidak bisa dihapus permanen: user ini masih tercatat di 1 dokumen sebagai PIC (Kontrak Lama). User yang punya riwayat cukup dibiarkan di tempat sampah — ia tetap tidak bisa masuk dan tidak menerima WhatsApp.');
 
         $this->assertNotNull(User::withTrashed()->find($user->id));
         $this->assertTrue(Document::withTrashed()->find($document->id)->trashed());

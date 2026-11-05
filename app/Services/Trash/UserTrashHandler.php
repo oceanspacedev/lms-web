@@ -56,6 +56,7 @@ class UserTrashHandler implements TrashHandler
                 self::entry('riwayat impor', DocumentImport::query()->where('user_id', $id), fn (DocumentImport $import): string => $import->excel_name ?: '#'.$import->id),
             ],
             subjectName: 'user',
+            blockTemplate: TrashUsage::BLOCK_USER,
         );
     }
 

@@ -142,7 +142,7 @@ class DocumentForceDeleteTest extends TestCase
         $this->manager()->trash($document, $actor);
 
         $this->assertSame(
-            "Tidak bisa dihapus permanen: masih dipakai 1 pengajuan (#{$request->id}). Hapus atau pindahkan data itu dulu.",
+            "Tidak bisa dihapus permanen: masih dipakai pengajuan #{$request->id}. Hapus dulu pengajuan itu, lalu coba lagi.",
             $this->forceDeleteError($document, $actor),
         );
         $this->assertSoftDeleted($document);

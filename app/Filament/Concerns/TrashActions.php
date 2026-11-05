@@ -88,15 +88,20 @@ class TrashActions
     }
 
     /**
-     * Hapus permanen satu data di tempat sampah. Bila masih dipakai data aktif, aksi tetap bisa dijalankan
-     * tetapi berakhir dengan notifikasi bahaya berisi alasannya.
+     * Hapus permanen satu data di tempat sampah. Keterkaitannya dihitung saat modal dibuka: bila masih dipakai data aktif,
+     * modal menyebut alasannya dan tombol hapus permanen dinonaktifkan. TrashManager tetap memeriksa ulang saat dijalankan.
      */
     public static function forceDelete(string $noun): ForceDeleteAction
     {
         return ForceDeleteAction::make()->label('Hapus permanen')->tooltip("Hapus permanen {$noun}")
             ->authorize('forceDelete')
             ->modalHeading("Hapus permanen {$noun} ini?")
-            ->modalDescription(fn (Model $record): string => self::forceDeleteDescription($record::class, app(TrashManager::class)->usage($record)->trashed, "{$noun} ini"))
+            ->modalDescription(function (Model $record) use ($noun): string {
+                $usage = app(TrashManager::class)->usage($record);
+
+                return $usage->blocksForceDelete() ? $usage->blockMessage() : self::forceDeleteDescription($record::class, $usage->trashed, "{$noun} ini");
+            })
+            ->modalSubmitAction(fn (Action $action, Model $record): Action => $action->disabled(app(TrashManager::class)->usage($record)->blocksForceDelete()))
             ->modalSubmitActionLabel('Ya, hapus permanen')
             ->modalCancelActionLabel('Kembali')
             ->action(function (ForceDeleteAction $action, Model $record): void {
@@ -142,9 +147,11 @@ class TrashActions
             ->modalHeading(fn (Collection $records): string => 'Hapus permanen '.self::selection($records, trashed: true)->count()." {$noun}?")
             ->modalDescription(function (ForceDeleteBulkAction $action, Collection $records) use ($noun): string {
                 $trash = app(TrashManager::class);
-                $cascaded = self::selection($records, trashed: true)->flatMap(fn (Model $record): array => $trash->usage($record)->trashed)->all();
+                $selected = self::selection($records, trashed: true);
+                [$blocked, $allowed] = $selected->map(fn (Model $record): TrashUsage => $trash->usage($record))->partition(fn (TrashUsage $usage): bool => $usage->blocksForceDelete());
+                $description = self::forceDeleteDescription($action->getModel(), $allowed->flatMap(fn (TrashUsage $usage): array => $usage->trashed)->all(), "{$noun} terpilih");
 
-                return self::forceDeleteDescription($action->getModel(), $cascaded, "{$noun} terpilih").' Data yang masih dipakai data aktif dilewati.';
+                return $blocked->isEmpty() ? $description : "{$description} {$blocked->count()} dari {$selected->count()} akan ditolak karena masih dipakai.";
             })
             ->modalSubmitActionLabel('Ya, hapus permanen')
             ->modalCancelActionLabel('Kembali')
@@ -391,7 +398,8 @@ class TrashActions
 
     /**
      * "Tindakan ini tidak bisa dibatalkan." ditambah data di tempat sampah yang ikut terhapus permanen, misalnya
-     * "3 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen." (spec §3.4).
+     * "3 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen beserta semua versi dan filenya." (spec §3.4).
+     * Bagian "beserta semua versi dan filenya" hanya bila ada dokumen yang ikut terhapus.
      *
      * @param  class-string<Model>  $model
      * @param  list<array{label: string, count: int, examples: list<string>}>  $cascaded
@@ -399,9 +407,11 @@ class TrashActions
     private static function forceDeleteDescription(string $model, array $cascaded, string $target): string
     {
         $sentences = [self::IRREVERSIBLE];
-        $counts = collect($cascaded)->groupBy('label')->map(fn (Collection $entries, string $label): string => $entries->sum('count').' '.$label)->values()->all();
+        $grouped = collect($cascaded)->groupBy('label');
+        $counts = $grouped->map(fn (Collection $entries, string $label): string => $entries->sum('count').' '.$label)->values()->all();
         if ($counts !== []) {
-            $sentences[] = TrashUsage::join($counts)." di tempat sampah yang memakai {$target} juga akan dihapus permanen.";
+            $sentences[] = TrashUsage::join($counts)." di tempat sampah yang memakai {$target} juga akan dihapus permanen"
+                .($grouped->has('dokumen') ? ' beserta semua versi dan filenya.' : '.');
         }
         $sentences[] = match ($model) {
             Document::class => 'Semua versi beserta filenya, riwayat aktivitas, dan log pengingat ikut dihapus.',
