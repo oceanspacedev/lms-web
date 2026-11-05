@@ -108,6 +108,10 @@ class PanduanPageTest extends TestCase
             ->assertSee('Hapus dari daftar atau halaman ubah')
             ->assertSee('Cek Riwayat Penghapusan')
             ->assertDontSeeHtml('Video panduan: Hapus');
+        // Pengecualian User: pulih dalam keadaan nonaktif, dan hapus permanennya ditolak selama namanya masih tercatat.
+        $steps = collect($guide['steps'])->pluck('description', 'text');
+        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali.', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertStringContainsString('Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.', $steps['Hapus permanen ditolak bila masih dipakai']);
     }
 
     public function test_features_the_user_can_use_come_first_and_the_rest_are_grouped(): void

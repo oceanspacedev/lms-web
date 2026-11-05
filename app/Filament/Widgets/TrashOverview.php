@@ -18,15 +18,16 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Collection;
 
 /**
- * Kartu "Tempat sampah" di dasbor super admin (spec §3.3): jumlah data yang menunggu keputusan dengan rincian per menu.
+ * Kartu "Tempat sampah" di dasbor super admin (spec §3.3), misalnya "7 data menunggu keputusan · 5 dokumen, 2 user".
  * Tautannya membuka menu dengan data terbanyak, tersaring "Hanya data dihapus". Disembunyikan bila tempat sampah kosong.
+ * Tampil di bagian atas dasbor, tepat setelah peringatan pengingat dan pengajuan yang menunggu tindakan.
  */
 class TrashOverview extends StatsOverviewWidget
 {
     /** Nilai filter `trashed` (TernaryFilter) untuk "Hanya data dihapus". */
     private const ONLY_TRASHED = '0';
 
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 2;
 
     public static function canView(): bool
     {
@@ -55,7 +56,7 @@ class TrashOverview extends StatsOverviewWidget
 
         return [
             Stat::make('Tempat sampah', $counts->sum('count'))
-                ->description($counts->map(fn (array $menu): string => "{$menu['count']} {$menu['noun']}")->implode(', ') ?: 'Kosong')
+                ->description($counts->isEmpty() ? 'Kosong' : 'data menunggu keputusan · '.$counts->map(fn (array $menu): string => "{$menu['count']} {$menu['noun']}")->implode(', '))
                 ->descriptionIcon(Heroicon::OutlinedTrash)
                 ->color('gray')
                 ->url($biggest === null ? null : $biggest['resource']::getUrl('index', ['filters' => ['trashed' => ['value' => self::ONLY_TRASHED]]])),

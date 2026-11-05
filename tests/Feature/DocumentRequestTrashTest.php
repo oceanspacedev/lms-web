@@ -14,6 +14,7 @@ use App\Services\DocumentRequestNotifier;
 use App\Services\DocumentRequestReminderSender;
 use App\Services\HandoverReminderSender;
 use App\Services\Trash\TrashManager;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -329,7 +330,39 @@ class DocumentRequestTrashTest extends TestCase
         $this->assertNotNull($document->fresh());
         $this->assertFalse($document->fresh()->trashed());
         $log = TrashLog::where('action', 'force_deleted')->sole();
-        $this->assertSame(['document_request', $request->id, 'Pengajuan Uji', $actor->id, null], [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details]);
+        $this->assertSame(['document_request', $request->id, 'Pengajuan Uji', $actor->id, ['actor_name' => $actor->name]], [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details]);
+    }
+
+    public function test_files_of_trashed_request_download_for_super_admin_only(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $superAdmin = User::factory()->create()->assignRole(config('filament-shield.super_admin.name'));
+        $staff = User::factory()->create();
+        $staff->givePermissionTo(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'Review:DocumentRequest']);
+        foreach (['lms/requests/perjanjian/ktp.pdf', 'lms/requests/perjanjian/draft.pdf', 'lms/requests/perjanjian/ttd.pdf'] as $path) {
+            Storage::disk('local')->put($path, '%PDF-1.4 isi');
+        }
+        $request = $this->handover(3, [
+            'requirements' => ['fields' => [], 'attachments' => [['key' => 'ktp', 'label' => 'KTP', 'required' => true]], 'has_expiry' => false],
+            'attachments' => ['ktp' => 'lms/requests/perjanjian/ktp.pdf'],
+            'draft_path' => 'lms/requests/perjanjian/draft.pdf', 'draft_name' => 'draft.pdf',
+            'signed_path' => 'lms/requests/perjanjian/ttd.pdf', 'signed_name' => 'ttd.pdf',
+        ]);
+        $urls = [
+            route('requests.attachment', ['documentRequest' => $request, 'key' => 'ktp']),
+            route('requests.file', ['documentRequest' => $request, 'kind' => 'draft']),
+            route('requests.file', ['documentRequest' => $request, 'kind' => 'signed']),
+        ];
+        foreach ($urls as $url) {
+            $this->actingAs($staff)->get($url)->assertOk();
+        }
+
+        $this->manager()->trash($request, $superAdmin);
+
+        foreach ($urls as $url) {
+            $this->actingAs($superAdmin)->get($url)->assertOk();
+            $this->actingAs($staff)->get($url)->assertForbidden();
+        }
     }
 
     public function test_force_delete_never_removes_files_outside_request_folder(): void

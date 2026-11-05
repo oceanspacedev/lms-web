@@ -247,6 +247,34 @@ class TrashManagerTest extends TestCase
         $this->assertSame(1, TrashLog::count());
     }
 
+    public function test_stale_trashed_instance_cannot_be_force_deleted_or_restored_after_someone_else_restored_it(): void
+    {
+        $actor = User::factory()->create();
+        $company = $this->trashedCompany($actor, ['name' => 'PT Sudah Dipulihkan']);
+        $stale = Company::withTrashed()->findOrFail($company->id);
+        $this->manager()->restore(Company::withTrashed()->findOrFail($company->id), User::factory()->create());
+        $this->assertTrue($stale->trashed());
+
+        $this->assertSame('Data ini belum ada di tempat sampah.', $this->forceDeleteError($stale, $actor));
+        $this->assertDatabaseHas('companies', ['id' => $company->id, 'deleted_at' => null]);
+
+        try {
+            $this->manager()->restore($stale, $actor);
+            $this->fail('Pulihkan seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertSame('Data ini tidak ada di tempat sampah.', collect($exception->errors())->flatten()->first());
+        }
+        $this->assertSame(['deleted', 'restored'], TrashLog::orderBy('id')->pluck('action')->all());
+    }
+
+    public function test_logs_keep_the_actor_name(): void
+    {
+        $actor = User::factory()->create(['name' => 'Penghapus Tercatat']);
+        $this->trashedCompany($actor, ['name' => 'PT Nama Pelaku']);
+
+        $this->assertSame(['actor_name' => 'Penghapus Tercatat'], TrashLog::sole()->details);
+    }
+
     public function test_records_without_a_registered_handler_are_rejected(): void
     {
         $this->expectException(LogicException::class);

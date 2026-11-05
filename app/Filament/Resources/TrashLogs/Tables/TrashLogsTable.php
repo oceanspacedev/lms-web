@@ -22,7 +22,9 @@ class TrashLogsTable
                     ->color(fn (string $state): string => match ($state) {
                         'deleted' => 'warning', 'restored' => 'success', 'force_deleted' => 'danger', default => 'gray'
                     }),
-                TextColumn::make('user.name')->label('Oleh')->placeholder('-'),
+                // User yang sudah dihapus permanen tidak ada lagi; namanya tersimpan di log saat tindakan dilakukan.
+                TextColumn::make('user.name')->label('Oleh')->placeholder('-')
+                    ->state(fn (TrashLog $record): ?string => $record->user?->name ?? $record->details['actor_name'] ?? null),
                 TextColumn::make('details')->label('Keterangan')->wrap()->placeholder('-')
                     ->state(fn (TrashLog $record): ?string => self::remarks($record)),
             ])

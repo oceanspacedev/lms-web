@@ -238,8 +238,8 @@ class Panduan extends Page
                     ['Hapus dari daftar atau halaman ubah', null, 'Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman ubah. Setiap penghapusan selalu meminta konfirmasi.'],
                     ['Data masuk tempat sampah', null, 'Data hilang dari daftar, tetapi belum terhapus. Dokumen yang dihapus menghentikan pengingat masa berlakunya.'],
                     ['Super admin buka filter Data dihapus', null, 'Ada di tabel tiap menu. Pilih "Hanya data dihapus" untuk melihat isi tempat sampah, atau klik kartu Tempat sampah di dasbor.'],
-                    ['Pulihkan atau Hapus permanen', null, 'Pulihkan mengembalikan data seperti semula. Hapus permanen tidak bisa dibatalkan dan ikut menghapus file-nya. Keduanya hanya bisa dilakukan super admin.'],
-                    ['Hapus permanen ditolak bila masih dipakai', null, 'Pesan penolakan menyebut data yang masih memakainya. Hapus atau pindahkan data itu dulu. Data pemakai yang sudah di tempat sampah ikut terhapus permanen.'],
+                    ['Pulihkan atau Hapus permanen', null, 'Pulihkan mengembalikan data seperti semula. User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali. Hapus permanen tidak bisa dibatalkan dan ikut menghapus file-nya. Keduanya hanya bisa dilakukan super admin.'],
+                    ['Hapus permanen ditolak bila masih dipakai', null, 'Pesan penolakan menyebut data yang masih memakainya. Hapus atau pindahkan data itu dulu. Data pemakai yang sudah di tempat sampah ikut terhapus permanen. Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.'],
                     ['Cek Riwayat Penghapusan', null, 'Setiap hapus, pulihkan, dan hapus permanen tercatat: jenis data, nama, tindakan, siapa, dan kapan. Hanya terlihat oleh super admin.'],
                 ],
                 impacts: [

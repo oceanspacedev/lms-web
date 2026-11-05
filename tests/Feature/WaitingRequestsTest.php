@@ -7,6 +7,7 @@ use App\Filament\Widgets\DocumentStatusOverview;
 use App\Filament\Widgets\ExpiringByCompany;
 use App\Filament\Widgets\ExpiringDocuments;
 use App\Filament\Widgets\ReminderHealthAlerts;
+use App\Filament\Widgets\TrashOverview;
 use App\Filament\Widgets\WaitingRequestsOverview;
 use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
@@ -210,11 +211,13 @@ class WaitingRequestsTest extends TestCase
     {
         $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'ViewAny:Document']);
         $this->request('submitted', 1);
-        $expected = [ReminderHealthAlerts::class, WaitingRequestsOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
+        $expected = [ReminderHealthAlerts::class, WaitingRequestsOverview::class, TrashOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
 
-        $this->assertSame([0, 1, 2, 3, 4], array_map(fn (string $widget): int => $widget::getSort(), $expected));
+        $this->assertSame([0, 1, 2, 3, 4, 5], array_map(fn (string $widget): int => $widget::getSort(), $expected));
         $visible = Livewire::test(Dashboard::class)->instance()->getVisibleWidgets();
         $this->assertContains(WaitingRequestsOverview::class, $visible);
-        $this->assertSame(array_slice($expected, 1), array_values(array_intersect($visible, array_slice($expected, 1))));
+        // Kartu Tempat sampah khusus super admin; urutannya di dasbor super admin diuji di TrashOverviewTest.
+        $expectedVisible = [WaitingRequestsOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
+        $this->assertSame($expectedVisible, array_values(array_intersect($visible, $expected)));
     }
 }

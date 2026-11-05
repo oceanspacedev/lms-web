@@ -16,8 +16,13 @@ class DocumentRequestPolicy
         return $user->can('ViewAny:DocumentRequest');
     }
 
+    /** Pengajuan di tempat sampah hanya untuk super admin (baca-saja). */
     public function view(User $user, DocumentRequest $request): bool
     {
+        if ($request->trashed() && ! $user->isSuperAdmin()) {
+            return false;
+        }
+
         return $user->can('View:DocumentRequest') && ($request->requester_id === $user->id || $user->can('ViewAll:DocumentRequest') || ($request->status !== 'draft' && ($request->pic_user_id === $user->id ||
             ($user->can('Review:DocumentRequest') && ($request->reviewer_id === null || $request->reviewer_id === $user->id || in_array($request->status, DocumentRequest::LEGAL_VISIBLE_STATUSES, true)))
         )));

@@ -112,7 +112,8 @@ class TrashActions
             ->modalDescription(fn (DeleteBulkAction $action, Collection $records): string => self::bulkDeleteDescription($action->getModel(), self::selection($records, trashed: false)))
             ->modalSubmitActionLabel('Ya, hapus')
             ->modalCancelActionLabel('Kembali')
-            ->action(fn (Collection $records) => self::runBulk('trash', self::selection($records, trashed: false), 'dipindahkan ke tempat sampah'));
+            ->action(fn (Collection $records) => self::runBulk('trash', self::selection($records, trashed: false), 'dipindahkan ke tempat sampah'))
+            ->successNotification(null);
     }
 
     public static function bulkRestore(string $noun): RestoreBulkAction
@@ -124,7 +125,8 @@ class TrashActions
             ->modalDescription(fn (RestoreBulkAction $action): string => self::restoreDescription($action->getModel()))
             ->modalSubmitActionLabel('Ya, pulihkan')
             ->modalCancelActionLabel('Kembali')
-            ->action(fn (Collection $records) => self::runBulk('restore', self::selection($records, trashed: true), 'dipulihkan'));
+            ->action(fn (Collection $records) => self::runBulk('restore', self::selection($records, trashed: true), 'dipulihkan'))
+            ->successNotification(null);
     }
 
     /** Hapus permanen massal: data yang masih dipakai dilewati, sisanya tetap diproses. */
@@ -142,7 +144,8 @@ class TrashActions
             })
             ->modalSubmitActionLabel('Ya, hapus permanen')
             ->modalCancelActionLabel('Kembali')
-            ->action(fn (Collection $records) => self::runBulk('forceDelete', self::selection($records, trashed: true), 'dihapus permanen'));
+            ->action(fn (Collection $records) => self::runBulk('forceDelete', self::selection($records, trashed: true), 'dihapus permanen'))
+            ->successNotification(null);
     }
 
     /** @return list<DeleteBulkAction|RestoreBulkAction|ForceDeleteBulkAction> */
@@ -211,6 +214,7 @@ class TrashActions
 
     /**
      * Notifikasi hasil, misalnya "4 dipindahkan ke tempat sampah, 1 dilewati: PT A (alasan)".
+     * Satu-satunya notifikasi aksi massal; notifikasi sukses bawaan Filament dimatikan di tiap aksi.
      *
      * @param  'trash'|'restore'|'forceDelete'  $operation
      * @param  Collection<int, Model>  $records

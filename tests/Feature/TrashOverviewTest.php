@@ -7,6 +7,7 @@ use App\Filament\Resources\TrashLogs\Pages\ListTrashLogs;
 use App\Filament\Resources\TrashLogs\TrashLogResource;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\UserResource;
+use App\Filament\Widgets\DocumentStatusOverview;
 use App\Filament\Widgets\TrashOverview;
 use App\Models\Company;
 use App\Models\Document;
@@ -72,16 +73,20 @@ class TrashOverviewTest extends TestCase
         Company::factory()->create();
 
         $this->assertTrue(TrashOverview::canView());
-        $this->assertContains(TrashOverview::class, Livewire::test(Dashboard::class)->instance()->getVisibleWidgets());
+        $visible = array_values(Livewire::test(Dashboard::class)->instance()->getVisibleWidgets());
+        $this->assertContains(TrashOverview::class, $visible);
+        // Kartu tampil di bagian atas: setelah peringatan dan pengajuan menunggu, sebelum ringkasan status dokumen.
+        $this->assertContains(DocumentStatusOverview::class, $visible);
+        $this->assertLessThan(array_search(DocumentStatusOverview::class, $visible, true), array_search(TrashOverview::class, $visible, true));
 
         $stats = $this->stats();
         $this->assertCount(1, $stats);
         $this->assertSame('Tempat sampah', (string) $stats[0]->getLabel());
         $this->assertSame(3, $stats[0]->getValue());
-        $this->assertSame('2 dokumen, 1 badan usaha', (string) $stats[0]->getDescription());
+        $this->assertSame('data menunggu keputusan · 2 dokumen, 1 badan usaha', (string) $stats[0]->getDescription());
         // Menu dengan jumlah terbanyak adalah Dokumen, tersaring "hanya data dihapus" (nilai 0 pada TrashedFilter).
         $this->assertSame(DocumentResource::getUrl('index', ['filters' => ['trashed' => ['value' => '0']]]), $stats[0]->getUrl());
-        Livewire::test(TrashOverview::class)->assertSee('2 dokumen, 1 badan usaha');
+        Livewire::test(TrashOverview::class)->assertSee('data menunggu keputusan · 2 dokumen, 1 badan usaha');
 
         $this->signInAsDeleter();
         $this->assertFalse(TrashOverview::canView());
@@ -117,6 +122,22 @@ class TrashOverviewTest extends TestCase
 
         Livewire::withQueryParams(['filters' => ['trashed' => ['value' => '0']]])->test(ListUsers::class)
             ->assertCanSeeTableRecords([$leaver])->assertCanNotSeeTableRecords([$active]);
+    }
+
+    public function test_trash_log_keeps_the_actor_name_after_the_actor_is_force_deleted(): void
+    {
+        $admin = $this->signInAsSuperAdmin();
+        $leaver = User::factory()->create(['name' => 'Petugas Sudah Keluar', 'deactivated_at' => now(), 'deactivated_by' => $admin->id]);
+        $trash = app(TrashManager::class);
+        $trash->trash(Company::factory()->create(['name' => 'PT Jejak Petugas']), $leaver);
+        $trash->trash($leaver, $admin);
+        $trash->forceDelete($leaver, $admin);
+
+        $log = TrashLog::where('subject_label', 'PT Jejak Petugas')->sole();
+        $this->assertNull($log->user_id);
+        $this->assertSame('Petugas Sudah Keluar', $log->details['actor_name']);
+        Livewire::test(ListTrashLogs::class)->assertTableColumnStateSet('user.name', 'Petugas Sudah Keluar', $log)
+            ->assertTableColumnStateSet('user.name', $admin->name, TrashLog::where('action', 'force_deleted')->sole());
     }
 
     public function test_trash_log_page_lists_actions_for_super_admin_and_forbidden_for_others(): void

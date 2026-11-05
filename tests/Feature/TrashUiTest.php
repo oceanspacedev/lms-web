@@ -198,6 +198,13 @@ class TrashUiTest extends TestCase
         $this->assertSame($body, $notification['body']);
     }
 
+    /** Aksi massal hanya mengirim notifikasi hasilnya sendiri, tanpa notifikasi bawaan Filament ("Data berhasil dihapus"). */
+    private function assertOnlyNotified(string $title): void
+    {
+        $titles = collect([...session('filament.claimed_notifications', []), ...session('filament.notifications', [])])->pluck('title')->all();
+        $this->assertSame([$title], $titles);
+    }
+
     #[DataProvider('resources')]
     public function test_delete_action_moves_record_to_trash_with_usage_in_modal(string $key): void
     {
@@ -279,7 +286,8 @@ class TrashUiTest extends TestCase
         $this->assertNotSoftDeleted($toRestore);
         $list->callTableAction('forceDelete', $toPurge)->assertHasNoTableActionErrors()->assertNotified('Dihapus permanen');
         $this->assertModelMissing($toPurge);
-        $list->callTableBulkAction('restore', $bulkRestored)->assertNotified('2 dipulihkan');
+        $list->callTableBulkAction('restore', $bulkRestored);
+        $this->assertOnlyNotified('2 dipulihkan');
         foreach ($bulkRestored as $record) {
             $this->assertNotSoftDeleted($record);
         }
@@ -309,8 +317,8 @@ class TrashUiTest extends TestCase
         Livewire::test($scenario['list'])->filterTable('trashed', false)
             ->mountTableBulkAction('forceDelete', array_filter([...$free, $blocked]))
             ->assertMountedActionModalSee(['Hapus permanen '.($blocked === null ? 2 : 3)." {$scenario['noun']}?", 'Tindakan ini tidak bisa dibatalkan.'])
-            ->callMountedTableBulkAction()
-            ->assertNotified($expected);
+            ->callMountedTableBulkAction();
+        $this->assertOnlyNotified($expected);
 
         foreach ($free as $record) {
             $this->assertModelMissing($record);
@@ -337,10 +345,10 @@ class TrashUiTest extends TestCase
         Livewire::test($scenario['list'])
             ->mountTableBulkAction('delete', [...$selected, $used])
             ->assertMountedActionModalSee(["Hapus 3 {$scenario['noun']}?", self::EXPLANATION, $usageSentence])
-            ->callMountedTableBulkAction()
-            ->assertNotified($key === 'user'
-                ? '2 dipindahkan ke tempat sampah, 1 dilewati: '.$used->trashLabel().' ('.UserTrashHandler::HAS_WORK_REASON.')'
-                : '3 dipindahkan ke tempat sampah');
+            ->callMountedTableBulkAction();
+        $this->assertOnlyNotified($key === 'user'
+            ? '2 dipindahkan ke tempat sampah, 1 dilewati: '.$used->trashLabel().' ('.UserTrashHandler::HAS_WORK_REASON.')'
+            : '3 dipindahkan ke tempat sampah');
 
         foreach ($selected as $record) {
             $this->assertSoftDeleted($record);

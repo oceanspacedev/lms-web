@@ -114,7 +114,7 @@ class DocumentForceDeleteTest extends TestCase
             Storage::disk('s3')->assertMissing($path);
         }
         $log = TrashLog::where('action', 'force_deleted')->sole();
-        $this->assertSame(['document', $document->id, 'Kontrak Salah Unggah', $actor->id, null], [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details]);
+        $this->assertSame(['document', $document->id, 'Kontrak Salah Unggah', $actor->id, ['actor_name' => $actor->name]], [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details]);
     }
 
     public function test_trashing_does_not_touch_files(): void

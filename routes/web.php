@@ -40,10 +40,11 @@ Route::post('/pengajuan/cek', [PublicDocumentRequestController::class, 'lookupSu
 Route::get('/pengajuan/{token}', [PublicDocumentRequestController::class, 'status'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:public-request-status')->name('requests.public.status');
 Route::post('/pengajuan/{token}', [PublicDocumentRequestController::class, 'revise'])->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:public-request-revise')->name('requests.public.revise');
 
+// Pengajuan di tempat sampah ikut ter-bind supaya super admin bisa mengunduh berkasnya; policy `view` menolak pengguna lain.
 Route::get('/admin/document-requests/{documentRequest}/attachments/{key}', DocumentRequestAttachmentController::class)
-    ->middleware('auth:web')->name('requests.attachment');
+    ->middleware('auth:web')->withTrashed()->name('requests.attachment');
 Route::get('/admin/document-requests/{documentRequest}/files/{kind}', DocumentRequestFileController::class)
-    ->whereIn('kind', ['draft', 'signed'])->middleware('auth:web')->name('requests.file');
+    ->whereIn('kind', ['draft', 'signed'])->middleware('auth:web')->withTrashed()->name('requests.file');
 Route::get('/pengajuan/{token}/berkas/{kind}', [DocumentRequestFileController::class, 'publicDownload'])->where('token',
     '[A-Za-z0-9]{64}')->middleware('throttle:public-request-status')->name('requests.public.file');
 Route::post('/pengajuan/{token}/scan', [PublicDocumentRequestController::class, 'uploadScan'])->where('token',

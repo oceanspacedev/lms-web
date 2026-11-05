@@ -72,7 +72,7 @@ class TrashManager
         $handler = $this->handlerFor($record);
 
         DB::transaction(function () use ($record, $actor, $handler): void {
-            if (! $record->trashed()) {
+            if (! $this->isTrashedInDatabase($record)) {
                 throw self::invalid('Data ini tidak ada di tempat sampah.');
             }
 
@@ -99,7 +99,7 @@ class TrashManager
 
         try {
             [$log, $files] = DB::transaction(function () use ($record, $actor, $handler, $subject, $key, $label): array {
-                if (! $record->trashed()) {
+                if (! $this->isTrashedInDatabase($record)) {
                     throw self::invalid('Data ini belum ada di tempat sampah.');
                 }
                 $usage = $handler->usage($record);
@@ -199,6 +199,17 @@ class TrashManager
     }
 
     /**
+     * Status tempat sampah menurut baris di database, dikunci sampai transaksi selesai. Model yang dimuat lebih dulu bisa
+     * basi: data yang sudah dipulihkan orang lain tidak boleh ikut terhapus permanen atau tercatat dipulihkan dua kali.
+     */
+    private function isTrashedInDatabase(Model $record): bool
+    {
+        return $record->newQueryWithoutScopes()->whereKey($record->getKey())->lockForUpdate()->value($record->getDeletedAtColumn()) !== null;
+    }
+
+    /**
+     * Nama pelaku disimpan di `details.actor_name`, karena `user_id` menjadi kosong bila user itu kelak dihapus permanen.
+     *
      * @param  array<string, mixed>|null  $details
      */
     private function log(string $subject, int|string $key, string $label, string $action, User $actor, ?array $details = null): TrashLog
@@ -209,7 +220,7 @@ class TrashManager
             'subject_label' => $label,
             'action' => $action,
             'user_id' => $actor->id,
-            'details' => $details,
+            'details' => [...($details ?? []), 'actor_name' => $actor->name],
         ]);
     }
 
