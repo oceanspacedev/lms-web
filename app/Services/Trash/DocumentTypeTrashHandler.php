@@ -4,6 +4,7 @@ namespace App\Services\Trash;
 
 use App\Models\DocumentType;
 use App\Models\ReminderTemplate;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -31,10 +32,10 @@ class DocumentTypeTrashHandler extends MasterDataTrashHandler
      * Template pengingat dihapus setelah jenis dokumennya, kecuali pengaturan pengingat global
      * atau template yang masih dipasang di jenis dokumen lain (termasuk yang di tempat sampah).
      */
-    public function purge(Model $record): array
+    public function purge(Model $record, User $actor): array
     {
         $templateId = $record->reminder_template_id;
-        $files = parent::purge($record);
+        $files = parent::purge($record, $actor);
 
         if ($templateId !== null && ! DocumentType::withTrashed()->where('reminder_template_id', $templateId)->exists()) {
             ReminderTemplate::whereKey($templateId)->whereNull('global_key')->first()?->delete();

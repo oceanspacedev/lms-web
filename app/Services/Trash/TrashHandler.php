@@ -28,11 +28,12 @@ interface TrashHandler
 
     /**
      * Menghapus permanen data beserta anaknya yang di tempat sampah, di dalam transaksi yang dibuka TrashManager.
-     * Anak dihapus lewat TrashManager::purge() supaya memakai handler-nya sendiri. File tidak disentuh di sini.
+     * Anak dihapus lewat TrashManager::purge($child, $actor) supaya memakai handler-nya sendiri dan tercatat di log.
+     * File tidak disentuh di sini.
      *
      * @return list<array{disk: string, path: string}> File yang dihapus TrashManager setelah transaksi berhasil.
      */
-    public function purge(Model $record): array;
+    public function purge(Model $record, User $actor): array;
 
     /** Alasan data tidak boleh dipindahkan ke tempat sampah oleh `$actor`, atau null bila boleh. */
     public function trashDenialReason(Model $record, User $actor): ?string;

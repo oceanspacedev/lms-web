@@ -10,7 +10,10 @@ use App\Models\ReminderTemplate;
 use App\Models\TrashLog;
 use App\Models\User;
 use App\Services\Trash\CompanyTrashHandler;
+use App\Services\Trash\TrashHandler;
 use App\Services\Trash\TrashManager;
+use App\Services\Trash\TrashUsage;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
@@ -211,9 +214,9 @@ class TrashManagerTest extends TestCase
         Exceptions::fake();
         $handler = new class extends CompanyTrashHandler
         {
-            public function purge(Model $record): array
+            public function purge(Model $record, User $actor): array
             {
-                parent::purge($record);
+                parent::purge($record, $actor);
 
                 return [['disk' => 'local', 'path' => 'lms/terhapus.pdf'], ['disk' => 'disk-tidak-ada', 'path' => 'lms/tertinggal.pdf']];
             }
@@ -249,5 +252,98 @@ class TrashManagerTest extends TestCase
         $this->expectException(LogicException::class);
 
         $this->manager()->usage(ReminderTemplate::factory()->create());
+    }
+
+    public function test_cascaded_trashed_dependents_get_their_own_force_deleted_log_rows(): void
+    {
+        Storage::fake('local');
+        $dependentHandler = new class implements TrashHandler
+        {
+            public function supports(Model $record): bool
+            {
+                return $record instanceof Document || $record instanceof DocumentRequest;
+            }
+
+            public function usage(Model $record): TrashUsage
+            {
+                return new TrashUsage;
+            }
+
+            public function beforeTrash(Model $record, User $actor, array $data): void {}
+
+            public function afterRestore(Model $record, User $actor): void {}
+
+            public function purge(Model $record, User $actor): array
+            {
+                $record->forceDelete();
+
+                return [['disk' => 'local', 'path' => "lms/{$record->trashSubject()}-{$record->getKey()}.pdf"]];
+            }
+
+            public function trashDenialReason(Model $record, User $actor): ?string
+            {
+                return null;
+            }
+        };
+        $manager = new TrashManager([new CompanyTrashHandler, $dependentHandler]);
+        $this->app->instance(TrashManager::class, $manager);
+        $actor = User::factory()->create();
+        $company = Company::factory()->create(['name' => 'PT Induk']);
+        $document = Document::factory()->for($company)->create(['title' => 'Kontrak Lama']);
+        $request = DocumentRequest::factory()->for($company)->create(['title' => 'Pengajuan Uji']);
+        $document->delete();
+        $request->delete();
+        Storage::disk('local')->put("lms/document-{$document->id}.pdf", 'isi');
+        Storage::disk('local')->put("lms/document_request-{$request->id}.pdf", 'isi');
+        $manager->trash($company, $actor);
+
+        $manager->forceDelete($company, $actor);
+
+        $via = ['subject' => 'company', 'id' => $company->id, 'label' => 'PT Induk'];
+        $logs = TrashLog::where('action', 'force_deleted')->orderBy('id')->get()
+            ->map(fn (TrashLog $log): array => [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details['via'] ?? null])->all();
+        $this->assertSame([
+            ['document_request', $request->id, 'Pengajuan Uji', $actor->id, $via],
+            ['document', $document->id, 'Kontrak Lama', $actor->id, $via],
+            ['company', $company->id, 'PT Induk', $actor->id, null],
+        ], $logs);
+        $this->assertDatabaseMissing('documents', ['id' => $document->id]);
+        $this->assertDatabaseMissing('document_requests', ['id' => $request->id]);
+        Storage::disk('local')->assertMissing(["lms/document-{$document->id}.pdf", "lms/document_request-{$request->id}.pdf"]);
+    }
+
+    public function test_purge_is_only_for_dependents_during_force_delete(): void
+    {
+        $company = Company::factory()->create();
+        $company->delete();
+
+        $this->expectException(LogicException::class);
+
+        $this->manager()->purge($company, User::factory()->create());
+    }
+
+    public function test_restore_document_type_whose_pic_was_deactivated_succeeds(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $pic = User::factory()->create(['phone' => '081200000001']);
+        $pic->givePermissionTo('Review:DocumentRequest');
+        $type = DocumentType::factory()->create(['request_pic_id' => $pic->id]);
+        $actor = User::factory()->create();
+        $this->manager()->trash($type, $actor);
+        $pic->forceFill(['deactivated_at' => now()])->save();
+        $restoredEvents = 0;
+        DocumentType::restored(function () use (&$restoredEvents): void {
+            $restoredEvents++;
+        });
+
+        $this->manager()->restore($type, $actor);
+
+        $fresh = DocumentType::find($type->id);
+        $this->assertNotNull($fresh);
+        $this->assertNull($fresh->deleted_by);
+        $this->assertSame($pic->id, $fresh->request_pic_id);
+        $this->assertFalse($type->isDirty());
+        $this->assertSame(1, $restoredEvents);
+        $this->assertDatabaseHas('trash_logs', ['subject_type' => 'document_type', 'subject_id' => $type->id, 'action' => 'restored', 'user_id' => $actor->id]);
     }
 }

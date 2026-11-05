@@ -5,6 +5,7 @@ namespace App\Services\Trash;
 use App\Models\TrashLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -25,6 +26,14 @@ class TrashManager
      * @param  iterable<TrashHandler>  $handlers
      */
     public function __construct(private iterable $handlers) {}
+
+    /**
+     * Data yang sedang dihapus permanen, untuk `details.via` pada log anak yang ikut terhapus.
+     * Karena itu TrashManager didaftarkan sebagai singleton: handler memanggil purge() pada instance yang sama.
+     *
+     * @var array{subject: string, id: int|string, label: string}|null
+     */
+    private ?array $cascadeRoot = null;
 
     /**
      * @param  array<string, mixed>  $data  Isian modal hapus, diteruskan ke handler.
@@ -67,10 +76,7 @@ class TrashManager
                 throw self::invalid('Data ini tidak ada di tempat sampah.');
             }
 
-            $record->deleted_by = null;
-            if (! $record->restore()) {
-                throw new LogicException('Data gagal dipulihkan: '.$record::class.' #'.$record->getKey());
-            }
+            $this->restoreWithoutSaving($record);
             $handler->afterRestore($record, $actor);
             $this->log($record->trashSubject(), $record->getKey(), $record->trashLabel(), 'restored', $actor);
         });
@@ -88,44 +94,62 @@ class TrashManager
         $key = $record->getKey();
         $label = $record->trashLabel();
 
-        [$log, $files] = DB::transaction(function () use ($record, $actor, $handler, $subject, $key, $label): array {
-            if (! $record->trashed()) {
-                throw self::invalid('Data ini belum ada di tempat sampah.');
-            }
-            $usage = $handler->usage($record);
-            if ($usage->blocksForceDelete()) {
-                throw self::invalid($usage->blockMessage());
-            }
+        $previousRoot = $this->cascadeRoot;
+        $this->cascadeRoot = ['subject' => $subject, 'id' => $key, 'label' => $label];
 
-            $files = $handler->purge($record);
-            $log = $this->log($subject, $key, $label, 'force_deleted', $actor, $usage->trashed === [] ? null : ['cascaded' => $usage->trashed]);
+        try {
+            [$log, $files] = DB::transaction(function () use ($record, $actor, $handler, $subject, $key, $label): array {
+                if (! $record->trashed()) {
+                    throw self::invalid('Data ini belum ada di tempat sampah.');
+                }
+                $usage = $handler->usage($record);
+                if ($usage->blocksForceDelete()) {
+                    throw self::invalid($usage->blockMessage());
+                }
 
-            return [$log, $files];
-        });
+                $files = $handler->purge($record, $actor);
+                $log = $this->log($subject, $key, $label, 'force_deleted', $actor, $usage->trashed === [] ? null : ['cascaded' => $usage->trashed]);
+
+                return [$log, $files];
+            });
+        } finally {
+            $this->cascadeRoot = $previousRoot;
+        }
 
         DB::afterCommit(fn () => $this->deleteFiles($log, $files));
     }
 
     /**
      * Menghapus permanen anak di tempat sampah lewat handler-nya, di dalam transaksi hapus permanen induknya.
-     * Dipanggil dari TrashHandler::purge(); tidak membuka transaksi dan tidak menulis log sendiri.
+     * Dipanggil dari TrashHandler::purge() selama forceDelete() berjalan; tidak membuka transaksi sendiri.
+     * Setiap anak mendapat baris log `force_deleted` sendiri dengan `details.via` menunjuk data yang dihapus permanen.
      *
      * @return list<array{disk: string, path: string}>
      *
      * @throws ValidationException bila anak itu masih dipakai data aktif.
-     * @throws LogicException bila tidak ada handler untuk anak itu.
+     * @throws LogicException bila dipanggil di luar forceDelete() atau tidak ada handler untuk anak itu.
      */
-    public function purge(Model $record): array
+    public function purge(Model $record, User $actor): array
     {
+        if ($this->cascadeRoot === null) {
+            throw new LogicException('TrashManager::purge() hanya untuk anak di tempat sampah selama forceDelete() berjalan.');
+        }
+
         $handler = $this->handlerFor($record);
+        $subject = $record->trashSubject();
+        $key = $record->getKey();
+        $label = $record->trashLabel();
         $usage = $handler->usage($record);
         if ($usage->blocksForceDelete()) {
-            $holder = Str::lower(TrashLog::SUBJECTS[$record->trashSubject()]).' "'.$record->trashLabel().'" di tempat sampah';
+            $holder = Str::lower(TrashLog::SUBJECTS[$subject]).' "'.$label.'" di tempat sampah';
 
             throw self::invalid($usage->blockMessage($holder));
         }
 
-        return $handler->purge($record);
+        $files = $handler->purge($record, $actor);
+        $this->log($subject, $key, $label, 'force_deleted', $actor, ['via' => $this->cascadeRoot]);
+
+        return $files;
     }
 
     public function usage(Model $record): TrashUsage
@@ -212,6 +236,30 @@ class TrashManager
         if ($leftFiles !== []) {
             $log->update(['details' => [...($log->details ?? []), 'left_files' => $leftFiles]]);
         }
+    }
+
+    /**
+     * Mengosongkan `deleted_at` dan `deleted_by` lewat query, tanpa save(), supaya validasi `saving` model
+     * (misalnya PIC jenis dokumen yang sudah nonaktif) tidak menghalangi pemulihan.
+     * Event `restoring` dan `restored` tetap dikirim seperti SoftDeletes::restore().
+     */
+    private function restoreWithoutSaving(Model $record): void
+    {
+        $dispatcher = $record::getEventDispatcher();
+        if ($dispatcher?->until('eloquent.restoring: '.$record::class, $record) === false) {
+            throw new LogicException('Data gagal dipulihkan: '.$record::class.' #'.$record->getKey());
+        }
+
+        $columns = [$record->getDeletedAtColumn(), 'deleted_by'];
+        $record->forceFill([$record->getDeletedAtColumn() => null, 'deleted_by' => null]);
+        if ($record->usesTimestamps() && $record->getUpdatedAtColumn() !== null) {
+            $record->setUpdatedAt($record->freshTimestamp());
+            $columns[] = $record->getUpdatedAtColumn();
+        }
+        $record->newQueryWithoutScopes()->whereKey($record->getKey())->update(Arr::only($record->getAttributes(), $columns));
+        $record->syncOriginalAttributes($columns);
+
+        $dispatcher?->dispatch('eloquent.restored: '.$record::class, $record);
     }
 
     private static function invalid(string $message): ValidationException

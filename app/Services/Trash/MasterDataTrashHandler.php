@@ -53,14 +53,14 @@ abstract class MasterDataTrashHandler implements TrashHandler
     /**
      * Pengajuan di tempat sampah dihapus lebih dulu, karena pengajuan Selesai menunjuk dokumen arsipnya.
      */
-    public function purge(Model $record): array
+    public function purge(Model $record, User $actor): array
     {
         $trash = app(TrashManager::class);
         $files = [];
         foreach ([DocumentRequest::class, Document::class] as $dependentClass) {
             $dependents = $dependentClass::onlyTrashed()->where($this->foreignKey(), $record->getKey())->orderBy('id')->get();
             foreach ($dependents as $dependent) {
-                array_push($files, ...$trash->purge($dependent));
+                array_push($files, ...$trash->purge($dependent, $actor));
             }
         }
         $record->forceDelete();

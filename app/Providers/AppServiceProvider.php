@@ -31,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->tag([CompanyTrashHandler::class, DocumentTypeTrashHandler::class], TrashHandler::class);
         $this->app->when(TrashManager::class)->needs('$handlers')->giveTagged(TrashHandler::class);
+        $this->app->singleton(TrashManager::class);
     }
 
     /**
