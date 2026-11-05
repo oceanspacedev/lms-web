@@ -20,13 +20,17 @@ class UsersTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('deactivatedBy'))
             ->columns([
                 TextColumn::make('name')->label('Nama')->searchable()->sortable()->weight('medium')->limit(35)->wrap(),
-                TextColumn::make('email')->label('Email')->searchable()->sortable(),
-                TextColumn::make('phone')->label('WhatsApp')->searchable()->placeholder('Belum diisi'),
-                TextColumn::make('roles.name')->label('Peran')->badge()->placeholder('Belum ada peran'),
+                TextColumn::make('email')->label('Email')->searchable()->sortable()->visibleFrom('md'),
+                TextColumn::make('phone')->label('WhatsApp')->searchable()->placeholder('Belum diisi')->visibleFrom('md'),
+                TextColumn::make('roles.name')->label('Peran')->badge()->placeholder('Belum ada peran')->visibleFrom('md'),
                 TextColumn::make('status')->label('Status')->badge()
-                    ->state(fn (User $record): string => $record->isActive() ? 'Aktif' : 'Nonaktif')
-                    ->color(fn (User $record): string => $record->isActive() ? 'success' : 'gray')
-                    ->description(fn (User $record): ?string => $record->isActive() ? null
+                    ->state(fn (User $record): string => match (true) {
+                        $record->trashed() => 'Dihapus',
+                        $record->isActive() => 'Aktif',
+                        default => 'Nonaktif',
+                    })
+                    ->color(fn (User $record): string => $record->isActive() && ! $record->trashed() ? 'success' : 'gray')
+                    ->description(fn (User $record): ?string => $record->isActive() || $record->trashed() ? null
                         : 'Dinonaktifkan oleh '.($record->deactivatedBy?->name ?? '-').' pada '.$record->deactivated_at->timezone(config('lms.reminder_timezone'))->format('d/m/Y H:i')),
                 TrashActions::deletedColumn(),
             ])
@@ -42,16 +46,17 @@ class UsersTable
                 TrashActions::filter(),
             ])
             ->recordActions([
-                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
+                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah')->hidden(fn (User $record): bool => $record->trashed()),
+                TrashActions::viewTrashed('user'),
                 UserResource::deactivateAction()->iconButton()->tooltip('Nonaktifkan'),
                 UserResource::reactivateAction()->iconButton()->tooltip('Aktifkan kembali'),
-                TrashActions::delete('user')->iconButton()->tooltip('Hapus'),
-                TrashActions::restore('user')->iconButton()->tooltip('Pulihkan'),
-                TrashActions::forceDelete('user')->iconButton()->tooltip('Hapus permanen'),
+                TrashActions::delete('user')->iconButton(),
+                TrashActions::restore('user')->iconButton(),
+                TrashActions::forceDelete('user')->iconButton(),
             ])
             ->toolbarActions(TrashActions::bulkActions('user'))
             ->defaultSort('name')
-            ->emptyStateHeading('Belum ada user')
-            ->emptyStateDescription('Tambahkan user dan pilih peran sesuai tanggung jawabnya.');
+            ->emptyStateHeading(TrashActions::emptyStateHeading('Belum ada user'))
+            ->emptyStateDescription(TrashActions::emptyStateDescription('user', 'Tambahkan user dan pilih peran sesuai tanggung jawabnya.'));
     }
 }

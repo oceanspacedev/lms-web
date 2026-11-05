@@ -434,14 +434,97 @@ class TrashUiTest extends TestCase
             ->assertMountedActionModalSee(['Tindakan ini tidak bisa dibatalkan.', '1 dokumen di tempat sampah yang memakai badan usaha ini juga akan dihapus permanen.']);
     }
 
-    public function test_trashed_rows_show_when_and_by_whom_they_were_deleted(): void
+    #[DataProvider('resources')]
+    public function test_trashed_rows_show_when_and_by_whom_they_were_deleted(string $key): void
     {
+        $scenario = $this->scenario($key);
         $superAdmin = $this->signInAsSuperAdmin();
         $superAdmin->update(['name' => 'Admin Pusat']);
-        $company = $this->trashed(fn (): Company => Company::factory()->create(), $superAdmin);
+        $trashed = $this->trashed($key === 'document_request' ? fn (): Model => DocumentRequest::factory()->handover()->create() : $scenario['free'], $superAdmin);
+        $active = $scenario['free']();
 
-        Livewire::test(ListCompanies::class)->filterTable('trashed', false)
-            ->assertTableColumnFormattedStateSet('deleted_at', 'Dihapus', $company)
-            ->assertTableColumnHasDescription('deleted_at', '05/11/2026 16:00 WIB oleh Admin Pusat', $company);
+        $list = Livewire::test($scenario['list'])->filterTable('trashed', true)
+            ->assertTableColumnFormattedStateSet('deleted_at', '05/11/2026 16:00 WIB oleh Admin Pusat', $trashed);
+        $this->assertFalse($list->instance()->getTable()->getColumn('deleted_at')->isBadge());
+
+        // Badan Usaha, Jenis Dokumen, User, dan Dokumen: status "Dihapus" abu-abu; Pengajuan tetap status alurnya, tanpa Keterangan.
+        match ($key) {
+            'company', 'document_type' => $list->assertTableColumnFormattedStateSet('is_active', 'Dihapus', $trashed)
+                ->assertTableColumnFormattedStateSet('is_active', 'Aktif', $active),
+            'user' => $list->assertTableColumnStateSet('status', 'Dihapus', $trashed)->assertTableColumnStateSet('status', 'Aktif', $active),
+            'document' => $list->assertTableColumnFormattedStateSet('expiry_status', 'Dihapus', $trashed),
+            'document_request' => $list->assertTableColumnFormattedStateSet('status', 'Menunggu Dokumen Fisik', $trashed)
+                ->assertTableColumnStateSet('handover_note', null, $trashed),
+        };
+    }
+
+    #[DataProvider('resources')]
+    public function test_trashed_rows_offer_view_instead_of_edit(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $superAdmin = $this->signInAsSuperAdmin();
+        $trashed = $this->trashed($scenario['free'], $superAdmin);
+        $active = $scenario['free']();
+        $editAction = match ($key) {
+            'document_request' => 'open',
+            default => 'edit',
+        };
+
+        $list = Livewire::test($scenario['list'])->filterTable('trashed', true)
+            ->assertTableActionHidden($editAction, $trashed)->assertTableActionVisible($editAction, $active)
+            ->assertTableActionVisible('view', $trashed)
+            ->assertTableActionHasIcon('view', 'heroicon-o-eye', $trashed)
+            ->assertTableActionHasLabel('view', "Lihat {$scenario['noun']}", $trashed)
+            ->assertTableActionHasUrl('view', $scenario['resource']::getUrl($scenario['page'], ['record' => $trashed]), $trashed);
+        if ($key !== 'document') {
+            $list->assertTableActionHidden('view', $active);
+        }
+    }
+
+    #[DataProvider('resources')]
+    public function test_trashed_record_page_shows_notice_and_returns_to_the_trash_view(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $superAdmin = $this->signInAsSuperAdmin();
+        $superAdmin->update(['name' => 'Admin Pusat']);
+        $trashed = $this->trashed($scenario['free'], $superAdmin);
+        $notice = 'Data ini ada di tempat sampah — dihapus 05/11/2026 16:00 WIB oleh Admin Pusat. Pulihkan untuk mengubahnya.';
+        $trashIndex = $scenario['resource']::getUrl('index', ['filters' => ['trashed' => ['value' => '0']]]);
+
+        $page = Livewire::test($scenario['detail'], ['record' => $trashed->getRouteKey()])
+            ->assertSee($notice)->assertActionHasUrl('back', $trashIndex);
+        if ($key !== 'document') {
+            $title = $key === 'document_request' ? $trashed->title : $trashed->name;
+            $this->assertSame("Detail {$title}", (string) $page->instance()->getTitle());
+            $this->assertSame('Detail', $page->instance()->getBreadcrumb());
+        }
+
+        // Setelah dipulihkan: tetap di halaman yang kini bisa diubah, dengan judul biasa.
+        $page->callAction('restore')->assertHasNoActionErrors()->assertNoRedirect()
+            ->assertDontSee($notice)->assertActionHasUrl('back', $scenario['resource']::getUrl('index'));
+        if ($key !== 'document') {
+            $this->assertStringStartsNotWith('Detail', (string) $page->instance()->getTitle());
+        }
+        // Pengajuan yang sudah diajukan memang hanya-baca bagi selain pengaju, jadi hanya tiga menu ini yang diperiksa.
+        if (in_array($key, ['company', 'document_type', 'user'], true)) {
+            $page->assertFormFieldEnabled($scenario['field']);
+        }
+
+        $toPurge = $this->trashed($scenario['free'], $superAdmin);
+        Livewire::test($scenario['detail'], ['record' => $toPurge->getRouteKey()])
+            ->callAction('forceDelete')->assertHasNoActionErrors()->assertRedirect($trashIndex);
+        $this->assertModelMissing($toPurge);
+    }
+
+    #[DataProvider('resources')]
+    public function test_empty_trash_view_says_the_trash_is_empty(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $this->signInAsSuperAdmin();
+        $scenario['free']();
+
+        Livewire::test($scenario['list'])->filterTable('trashed', false)
+            ->assertSee('Tempat sampah kosong')->assertSee("Tidak ada {$scenario['noun']} di tempat sampah.");
+        Livewire::test($scenario['list'])->assertDontSee('Tempat sampah kosong');
     }
 }

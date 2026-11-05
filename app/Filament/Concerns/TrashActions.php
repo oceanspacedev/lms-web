@@ -18,6 +18,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
@@ -41,12 +42,15 @@ class TrashActions
 
     public const IRREVERSIBLE = 'Tindakan ini tidak bisa dibatalkan.';
 
+    /** Nilai filter `trashed` (TernaryFilter) untuk "Hanya data dihapus". */
+    public const ONLY_TRASHED = '0';
+
     /**
      * Hapus satu data ke tempat sampah. Untuk user aktif, modal memakai alur Nonaktifkan: tugas dialihkan ke pengganti yang dipilih.
      */
     public static function delete(string $noun): DeleteAction
     {
-        return DeleteAction::make()->label('Hapus')
+        return DeleteAction::make()->label('Hapus')->tooltip("Hapus {$noun}")
             ->authorize('delete')
             ->modalHeading("Hapus {$noun} ini?")
             ->modalDescription(fn (Model $record): HtmlString => self::deleteDescription($record))
@@ -70,7 +74,7 @@ class TrashActions
 
     public static function restore(string $noun): RestoreAction
     {
-        return RestoreAction::make()->label('Pulihkan')
+        return RestoreAction::make()->label('Pulihkan')->tooltip("Pulihkan {$noun}")
             ->authorize('restore')
             ->modalHeading("Pulihkan {$noun} ini?")
             ->modalDescription(fn (Model $record): string => self::restoreDescription($record::class))
@@ -89,7 +93,7 @@ class TrashActions
      */
     public static function forceDelete(string $noun): ForceDeleteAction
     {
-        return ForceDeleteAction::make()->label('Hapus permanen')
+        return ForceDeleteAction::make()->label('Hapus permanen')->tooltip("Hapus permanen {$noun}")
             ->authorize('forceDelete')
             ->modalHeading("Hapus permanen {$noun} ini?")
             ->modalDescription(fn (Model $record): string => self::forceDeleteDescription($record::class, app(TrashManager::class)->usage($record)->trashed, "{$noun} ini"))
@@ -162,14 +166,69 @@ class TrashActions
             ->visible(fn (): bool => auth()->user()?->isSuperAdmin() ?? false);
     }
 
-    /** Badge "Dihapus" dengan waktu dan penghapusnya; tampil hanya saat super admin menyalakan filter Data dihapus. */
+    /**
+     * Kolom "Dihapus" berisi waktu dan penghapusnya, misalnya "05/11/2026 16:00 WIB oleh Admin Pusat"; tanda "Dihapus" ada di kolom status.
+     * Tampil hanya saat super admin menyalakan filter Data dihapus, dan disembunyikan di layar sempit.
+     */
     public static function deletedColumn(): TextColumn
     {
-        return TextColumn::make('deleted_at')->label('Dihapus')->badge()->color('gray')->icon('heroicon-o-trash')
-            ->formatStateUsing(fn (): string => 'Dihapus')
-            ->description(fn (Model $record): ?string => self::deletedDescription($record))
+        return TextColumn::make('deleted_at')->label('Dihapus')
+            ->formatStateUsing(fn (Model $record): ?string => self::deletedDescription($record))
             ->placeholder('—')
+            ->visibleFrom('md')
             ->visible(fn (HasTable $livewire): bool => self::trashedFilterValue($livewire) !== null);
+    }
+
+    /** Aksi "Lihat {noun}" (ikon mata) untuk baris di tempat sampah, pengganti aksi Ubah: membuka halaman detail yang hanya-baca. */
+    public static function viewTrashed(string $noun): Action
+    {
+        return Action::make('view')->label("Lihat {$noun}")->icon('heroicon-o-eye')->color('gray')->iconButton()->tooltip("Lihat {$noun}")
+            ->url(fn (Model $record, HasTable $livewire): string => $livewire::getResource()::getUrl('edit', ['record' => $record]))
+            ->visible(fn (Model $record): bool => $record->trashed());
+    }
+
+    /**
+     * Judul tabel kosong: "Tempat sampah kosong" saat filter "Hanya data dihapus" aktif, selain itu `$otherwise`.
+     *
+     * @param  string|(Closure(HasTable): string)  $otherwise
+     * @return Closure(HasTable): string
+     */
+    public static function emptyStateHeading(string|Closure $otherwise): Closure
+    {
+        return fn (HasTable $livewire): string => self::isShowingOnlyTrashed($livewire) ? 'Tempat sampah kosong' : value($otherwise, $livewire);
+    }
+
+    /**
+     * Keterangan tabel kosong: "Tidak ada {noun} di tempat sampah." saat filter "Hanya data dihapus" aktif, selain itu `$otherwise`.
+     *
+     * @param  string|(Closure(HasTable): ?string)|null  $otherwise
+     * @return Closure(HasTable): ?string
+     */
+    public static function emptyStateDescription(string $noun, string|Closure|null $otherwise): Closure
+    {
+        return fn (HasTable $livewire): ?string => self::isShowingOnlyTrashed($livewire) ? "Tidak ada {$noun} di tempat sampah." : value($otherwise, $livewire);
+    }
+
+    /**
+     * Daftar resource tersaring "Hanya data dihapus": tujuan kartu dasbor, tombol Kembali, dan hapus permanen dari halaman detail.
+     *
+     * @param  class-string<\Filament\Resources\Resource>  $resource
+     */
+    public static function trashIndexUrl(string $resource): string
+    {
+        return $resource::getUrl('index', ['filters' => ['trashed' => ['value' => self::ONLY_TRASHED]]]);
+    }
+
+    /** Pemberitahuan di atas halaman detail data yang ada di tempat sampah. */
+    public static function trashedNotice(Model $record): string
+    {
+        return 'Data ini ada di tempat sampah — dihapus '.self::deletedDescription($record).'. Pulihkan untuk mengubahnya.';
+    }
+
+    /** Super admin sedang melihat isi tempat sampah saja (filter "Hanya data dihapus"). */
+    public static function isShowingOnlyTrashed(HasTable $livewire): bool
+    {
+        return self::trashedFilterValue($livewire) === false;
     }
 
     /**

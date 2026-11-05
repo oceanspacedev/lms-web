@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Schemas;
 
+use App\Filament\Concerns\TrashActions;
 use App\Models\Document;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
@@ -16,9 +17,7 @@ class DocumentInfolist
         return $schema
             ->columns(['default' => 1, 'xl' => 3])
             ->components([
-                Callout::make('Dokumen ini sudah dihapus')->warning()->columnSpanFull()
-                    ->description(fn (Document $record): string => $record->deletedAtLabel().'. Dokumen tidak tampil di daftar, file tidak bisa diunduh atau dipratinjau, dan pengingat masa berlaku berhenti. '
-                        .'Pulihkan dokumen untuk memakainya kembali, atau hapus permanen bila tidak diperlukan.')
+                Callout::make(fn (Document $record): string => TrashActions::trashedNotice($record))->warning()->columnSpanFull()
                     ->visible(fn (Document $record): bool => $record->trashed()),
                 Section::make('Informasi Dokumen')
                     ->columnSpan(['default' => 1, 'xl' => 2])

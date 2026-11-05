@@ -36,13 +36,13 @@ class EditDocumentRequest extends EditRecord
 
     public function getTitle(): string
     {
-        return $this->record->title;
+        return ($this->record->trashed() ? 'Detail ' : '').$this->record->title;
     }
 
-    /** Halaman hanya-baca (pengajuan tidak dapat diubah user ini) disebut "Detail", bukan "Ubah". */
+    /** Halaman hanya-baca (pengajuan tidak dapat diubah user ini, atau ada di tempat sampah) disebut "Detail", bukan "Ubah". */
     public function getBreadcrumb(): string
     {
-        return $this->record->editableBy(auth()->user()) ? parent::getBreadcrumb() : 'Detail';
+        return $this->record->editableBy(auth()->user()) && ! $this->record->trashed() ? parent::getBreadcrumb() : 'Detail';
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model

@@ -123,7 +123,7 @@ class DocumentTrashTest extends TestCase
 
         $this->assertNotSoftDeleted($document);
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSuccessful()->assertDontSee('Dokumen ini sudah dihapus')
+            ->assertSuccessful()->assertDontSee('Data ini ada di tempat sampah')
             ->assertActionVisible('download')->assertActionVisible('preview')->assertActionHidden('restore');
         $this->get(DocumentResource::getUrl('view', ['record' => $document]))->assertOk()->assertSee($document->title);
     }
@@ -159,13 +159,12 @@ class DocumentTrashTest extends TestCase
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
             ->assertSuccessful()
-            ->assertSee('Dokumen ini sudah dihapus')->assertSee('Dihapus pada 05/10/2026 22:00 WIB')
-            ->assertSee('Pulihkan dokumen untuk memakainya kembali')
+            ->assertSee('Data ini ada di tempat sampah — dihapus 05/10/2026 22:00 WIB. Pulihkan untuk mengubahnya.')
             ->assertActionVisible('restore')->assertActionVisible('forceDelete')
             ->assertActionHidden('download')->assertActionHidden('preview')->assertActionHidden('edit')
             ->assertActionHidden('renew')->assertActionHidden('updateVersion')->assertActionHidden('delete');
         $this->get(DocumentResource::getUrl('view', ['record' => $document]))
-            ->assertOk()->assertSee('Dokumen ini sudah dihapus')->assertSee('Pulihkan');
+            ->assertOk()->assertSee('Data ini ada di tempat sampah')->assertSee('Pulihkan');
     }
 
     public function test_restoring_from_the_detail_page_clears_the_notice_and_returns_the_actions(): void
@@ -174,9 +173,9 @@ class DocumentTrashTest extends TestCase
         $document = $this->trashedDocument();
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSee('Dokumen ini sudah dihapus')
+            ->assertSee('Data ini ada di tempat sampah')
             ->callAction('restore')->assertHasNoActionErrors()
-            ->assertDontSee('Dokumen ini sudah dihapus')
+            ->assertDontSee('Data ini ada di tempat sampah')
             ->assertActionHidden('restore')->assertActionVisible('download')->assertActionVisible('preview')->assertActionVisible('edit');
         $this->assertNotSoftDeleted($document);
     }

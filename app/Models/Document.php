@@ -126,18 +126,6 @@ class Document extends Model
         });
     }
 
-    /** Keterangan waktu penghapusan dalam zona waktu aplikasi, mis. "Dihapus pada 05/10/2026 22:00 WIB"; null bila belum dihapus. */
-    public function deletedAtLabel(): ?string
-    {
-        if ($this->deleted_at === null) {
-            return null;
-        }
-
-        $timezone = config('lms.reminder_timezone');
-
-        return 'Dihapus pada '.$this->deleted_at->copy()->timezone($timezone)->format('d/m/Y H:i').' '.($timezone === 'Asia/Jakarta' ? 'WIB' : $timezone);
-    }
-
     public function scopeWithExpiryStatus(Builder $query, string $status): Builder
     {
         if ($status === 'no_expiry') {

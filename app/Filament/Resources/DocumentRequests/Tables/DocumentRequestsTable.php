@@ -29,7 +29,7 @@ class DocumentRequestsTable
     public static function configure(Table $table): Table
     {
         return $table->striped()->modifyQueryUsing(fn (Builder $query): Builder => $query->with('lateReasons'))->paginated([10, 25, 50])->searchPlaceholder('Cari nomor, pengajuan, pihak lawan / mitra, atau pengaju')->columns([
-            TextColumn::make('id')->label('No.')->formatStateUsing(fn (int|string $state): string => '#'.$state)->sortable()
+            TextColumn::make('id')->label('No.')->formatStateUsing(fn (int|string $state): string => '#'.$state)->sortable()->visibleFrom('md')
                 ->searchable(query: function (Builder $query, string $search): Builder {
                     $number = ltrim(trim($search), '#');
 
@@ -37,8 +37,8 @@ class DocumentRequestsTable
                 }),
             TextColumn::make('title')->label('Pengajuan')->searchable()->weight('medium')->limit(45)->wrap()->tooltip(fn (DocumentRequest $record): string => $record->title)
                 ->description(fn (DocumentRequest $record): string => $record->documentType->displayName().($record->revisionNumber() ? ' · Revisi ke-'.$record->revisionNumber() : '')),
-            TextColumn::make('partner_name')->label('Pihak Lawan / Mitra')->searchable()->state(fn (DocumentRequest $record): ?string => $record->counterpartyName())->placeholder('—')->limit(30)->wrap(),
-            TextColumn::make('requester_name')->label('Pengaju')->limit(30)->wrap()->state(fn (DocumentRequest $record): string => $record->applicantDisplayName())
+            TextColumn::make('partner_name')->label('Pihak Lawan / Mitra')->searchable()->state(fn (DocumentRequest $record): ?string => $record->counterpartyName())->placeholder('—')->limit(30)->wrap()->visibleFrom('md'),
+            TextColumn::make('requester_name')->label('Pengaju')->limit(30)->wrap()->visibleFrom('md')->state(fn (DocumentRequest $record): string => $record->applicantDisplayName())
                 ->searchable(query: fn (Builder $query, string $search): Builder => $query
                     ->orWhere(fn (Builder $query): Builder => $query->whereNotNull('document_requests.requester_name')
                         ->whereRaw("lower(document_requests.requester_name) like ? escape '!'", [self::likePattern($search)]))
@@ -47,11 +47,11 @@ class DocumentRequestsTable
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::statusLabel($state))->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
             }),
-            TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')
+            TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->visibleFrom('md')
                 ->limit(self::HANDOVER_NOTE_LIMIT)->wrap()
                 ->tooltip(fn (DocumentRequest $record): ?string => mb_strlen((string) self::handoverNote($record)) > self::HANDOVER_NOTE_LIMIT ? self::handoverNote($record) : null)
                 ->color(fn (DocumentRequest $record): ?string => $record->status === 'handover' && $record->isHandoverLate() ? 'danger' : ($record->status === 'signing' ? 'warning' : null)),
-            TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->timezone(config('lms.reminder_timezone'))->sortable(),
+            TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->timezone(config('lms.reminder_timezone'))->sortable()->visibleFrom('md'),
             TrashActions::deletedColumn(),
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
@@ -77,28 +77,33 @@ class DocumentRequestsTable
             TrashActions::filter(),
         ])
             ->recordActions([
-                Action::make('open')->label('Buka')->icon('heroicon-o-eye')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record])),
-                TrashActions::delete('pengajuan')->iconButton()->tooltip('Hapus'),
-                TrashActions::restore('pengajuan')->iconButton()->tooltip('Pulihkan'),
-                TrashActions::forceDelete('pengajuan')->iconButton()->tooltip('Hapus permanen'),
+                Action::make('open')->label('Buka')->icon('heroicon-o-eye')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record]))
+                    ->hidden(fn (DocumentRequest $record): bool => $record->trashed()),
+                TrashActions::viewTrashed('pengajuan'),
+                TrashActions::delete('pengajuan')->iconButton(),
+                TrashActions::restore('pengajuan')->iconButton(),
+                TrashActions::forceDelete('pengajuan')->iconButton(),
             ])
             ->toolbarActions(TrashActions::bulkActions('pengajuan'))
             ->defaultSort('updated_at', 'desc')
-            ->emptyStateHeading(fn (HasTable $livewire): string => match (self::emptyReason($livewire)) {
+            ->emptyStateHeading(TrashActions::emptyStateHeading(fn (HasTable $livewire): string => match (self::emptyReason($livewire)) {
                 'search' => 'Pengajuan tidak ditemukan',
                 'actionable' => 'Tidak ada pengajuan yang perlu tindakan Anda',
                 default => 'Belum ada pengajuan',
-            })
-            ->emptyStateDescription(fn (HasTable $livewire): ?string => match (self::emptyReason($livewire)) {
+            }))
+            ->emptyStateDescription(TrashActions::emptyStateDescription('pengajuan', fn (HasTable $livewire): ?string => match (self::emptyReason($livewire)) {
                 'search' => 'Ubah kata pencarian atau reset filter untuk melihat pengajuan lainnya.',
                 'actionable' => 'Buka tab Semua untuk melihat seluruh pengajuan.',
                 default => null,
-            });
+            }));
     }
 
-    /** Keterangan pemantauan dokumen fisik; kosong untuk status lain. lateReasons dimuat bersama daftar agar tidak N+1. */
+    /** Keterangan pemantauan dokumen fisik; kosong untuk status lain dan pengajuan di tempat sampah. lateReasons dimuat bersama daftar agar tidak N+1. */
     private static function handoverNote(DocumentRequest $record): ?string
     {
+        if ($record->trashed()) {
+            return null;
+        }
         if ($record->status === 'handover') {
             if (! $record->isHandoverLate()) {
                 return $record->handoverRemainingLabel();

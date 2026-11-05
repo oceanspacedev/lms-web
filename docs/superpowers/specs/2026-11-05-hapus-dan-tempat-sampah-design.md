@@ -70,12 +70,17 @@ Tujuan:
 
 - **Keputusan pengembang:** tempat sampah dilihat per menu, lewat filter **"Data dihapus"** di tabel masing-masing. Pilihannya: tanpa data dihapus (bawaan) / dengan data dihapus / hanya data dihapus. Pola ini sudah dipakai menu Dokumen saat ini.
   - Filter ini hanya terlihat oleh super admin.
-- Baris yang dihapus ditandai jelas: badge "Dihapus", tanggal hapus, dan siapa yang menghapus.
+- Baris yang dihapus ditandai jelas: kolom status berisi badge abu-abu "Dihapus" (Badan Usaha, Jenis Dokumen, User, Dokumen), dan kolom "Dihapus" berisi teks "{d/m/Y H:i} WIB oleh {nama}" tanpa badge kedua. Pengajuan tetap menampilkan status alurnya, tetapi kolom Keterangan kosong ("—").
+- Baris di tempat sampah tidak punya aksi Ubah (pensil); gantinya ikon mata "Lihat {jenis data}" ke halaman detail yang hanya-baca.
+- Bila filter "Hanya data dihapus" tidak menemukan apa pun: judul "Tempat sampah kosong", keterangan "Tidak ada {jenis data} di tempat sampah."
+- Di layar sempit (di bawah `md`) kolom sekunder disembunyikan; yang tetap tampil hanya nama/judul, status, dan aksi.
 - **Keputusan pengembang:** di dasbor super admin ada kartu kecil **"Tempat sampah"**, misalnya "7 data menunggu keputusan" dengan rincian per menu. Kartu ini tautan ke tabel yang sudah tersaring "hanya data dihapus". Kartu disembunyikan bila tempat sampah kosong.
 - Aksi untuk baris yang dihapus, satu per satu atau massal:
   - **Pulihkan**: modal konfirmasi, lalu data kembali seperti semula.
   - **Hapus permanen**: modal konfirmasi berwarna merah dengan teks "Tindakan ini tidak bisa dibatalkan."
 - Halaman detail data yang dihapus bisa dibuka super admin dalam mode hanya-baca, dengan tombol Pulihkan dan Hapus permanen. Pengguna lain mendapat 404.
+  - Judulnya "Detail {nama}" dan breadcrumb-nya "Detail" (bukan "Ubah"). Di atasnya ada pemberitahuan: "Data ini ada di tempat sampah — dihapus {d/m/Y H:i} WIB oleh {nama}. Pulihkan untuk mengubahnya." Halaman detail Dokumen memakai kalimat yang sama.
+  - Tombol Kembali menuju daftar dengan filter "Hanya data dihapus". Setelah Hapus permanen dari halaman ini, pengguna dibawa ke daftar yang sama. Setelah Pulihkan, pengguna tetap di halaman itu, yang kini bisa diubah dan berjudul biasa.
 
 ### 3.4 Hapus permanen ditolak bila masih dipakai
 

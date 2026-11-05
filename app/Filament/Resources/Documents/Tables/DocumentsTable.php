@@ -55,17 +55,17 @@ class DocumentsTable
             ->columns([
                 TextColumn::make('title')->label('Dokumen')->searchable(['title', 'document_number', 'counterparty'])->sortable()->weight('medium')->limit(45)->wrap()->width('28%')->tooltip(fn (Document $record): string => $record->title)
                     ->description(fn (Document $record): ?string => $record->document_number),
-                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->company?->displayName() ?? $state),
-                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->documentType?->displayName() ?? $state),
-                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->sortable(),
+                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap()->visibleFrom('md')->formatStateUsing(fn (string $state, Document $record): string => $record->company?->displayName() ?? $state),
+                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap()->visibleFrom('md')->formatStateUsing(fn (string $state, Document $record): string => $record->documentType?->displayName() ?? $state),
+                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->sortable()->visibleFrom('md'),
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state, Document $record): string => $record->trashed() ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state, Document $record): string => $record->trashed() ? 'gray' : Document::EXPIRY_STATUS_COLORS[$state])
                     ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null),
                 TrashActions::deletedColumn(),
-                TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
-                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
-                TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)
+                TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')->limit(30)->wrap()->placeholder('-'),
+                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
+                TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->orWhereHas('currentVersion', fn (Builder $version): Builder => $version
                         ->whereRaw("lower(file_path) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%'])
                         ->orWhereRaw("lower(file_name) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%']))),
@@ -115,21 +115,21 @@ class DocumentsTable
             ->filtersFormColumns(1)
             ->deferFilters(false)
             ->recordActions([
-                ViewAction::make()->label('Lihat')->iconButton()->tooltip('Lihat dokumen'),
+                ViewAction::make()->label('Lihat dokumen')->icon('heroicon-o-eye')->iconButton()->tooltip('Lihat dokumen'),
                 EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah dokumen'),
                 Action::make('download')->label('Unduh')->icon('heroicon-o-arrow-down-tray')
                     ->iconButton()->tooltip('Unduh file')
                     ->url(fn (Document $record): string => route('documents.download', $record))->openUrlInNewTab()
                     ->visible(fn (Document $record): bool => ! $record->trashed() && Gate::allows('view', $record)),
-                TrashActions::delete('dokumen')->iconButton()->tooltip('Hapus dokumen'),
-                TrashActions::restore('dokumen')->iconButton()->tooltip('Pulihkan dokumen'),
-                TrashActions::forceDelete('dokumen')->iconButton()->tooltip('Hapus permanen dokumen'),
+                TrashActions::delete('dokumen')->iconButton(),
+                TrashActions::restore('dokumen')->iconButton(),
+                TrashActions::forceDelete('dokumen')->iconButton(),
             ])
             ->toolbarActions(TrashActions::bulkActions('dokumen'))
             ->defaultSort('created_at', 'desc')
-            ->emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
-                ? 'Dokumen tidak ditemukan' : 'Belum ada dokumen')
-            ->emptyStateDescription(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
-                ? 'Ubah kata pencarian atau reset filter untuk melihat dokumen lainnya.' : 'Tambahkan dokumen legal untuk mulai mengarsipkan.');
+            ->emptyStateHeading(TrashActions::emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
+                ? 'Dokumen tidak ditemukan' : 'Belum ada dokumen'))
+            ->emptyStateDescription(TrashActions::emptyStateDescription('dokumen', fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
+                ? 'Ubah kata pencarian atau reset filter untuk melihat dokumen lainnya.' : 'Tambahkan dokumen legal untuk mulai mengarsipkan.'));
     }
 }
