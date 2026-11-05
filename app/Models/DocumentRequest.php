@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Trashable;
 use App\Services\DocumentRequestNotifier;
 use App\Services\StorageFileName;
 use App\Services\WaghubService;
@@ -30,7 +31,17 @@ use Throwable;
 class DocumentRequest extends Model
 {
     /** @use HasFactory<DocumentRequestFactory> */
-    use HasFactory;
+    use HasFactory, Trashable;
+
+    public function trashSubject(): string
+    {
+        return 'document_request';
+    }
+
+    public function trashLabel(): string
+    {
+        return (string) $this->title;
+    }
 
     public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
 

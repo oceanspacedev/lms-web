@@ -43,6 +43,16 @@ class DocumentTrashTest extends TestCase
         return $user;
     }
 
+    /** Pulihkan hanya untuk super admin; peran super admin mendapat semua izin dari PermissionSeeder. */
+    private function signInAsSuperAdmin(): User
+    {
+        $user = User::factory()->create();
+        $user->assignRole(config('filament-shield.super_admin.name'));
+        $this->actingAs($user);
+
+        return $user;
+    }
+
     private function document(string $title = 'Kontrak Dihapus'): Document
     {
         return Document::archive([
@@ -98,7 +108,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_restoring_from_the_list_brings_the_document_back_and_its_detail_page_works(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(ListDocuments::class)->assertCanNotSeeTableRecords([$document])
@@ -115,7 +125,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_trashed_rows_offer_only_view_and_restore(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $trashed = $this->trashedDocument();
         $active = $this->document('Dokumen Aktif');
 
@@ -131,7 +141,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_grid_marks_trashed_documents_as_deleted(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $trashed = $this->trashedDocument();
 
         Livewire::test(ListDocuments::class)->call('setDocumentView', 'grid')->filterTable('trashed', false)
@@ -140,7 +150,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_trashed_document_detail_page_opens_with_notice_and_only_view_safe_actions(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
@@ -156,7 +166,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_restoring_from_the_detail_page_clears_the_notice_and_returns_the_actions(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
@@ -169,7 +179,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_trashed_document_cannot_be_edited_until_restored(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->assertForbidden();
@@ -180,9 +190,9 @@ class DocumentTrashTest extends TestCase
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->assertSuccessful();
     }
 
-    public function test_user_without_restore_permission_cannot_restore(): void
+    public function test_only_super_admin_can_restore_even_with_the_restore_permission(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Delete:Document']);
+        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Delete:Document', 'Restore:Document', 'RestoreAny:Document']);
         $document = $this->trashedDocument();
 
         $this->assertFalse(DocumentResource::canRestore($document));
@@ -197,7 +207,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_trashed_document_cannot_be_downloaded_until_restored(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->document();
         Storage::disk('s3')->buildTemporaryUrlsUsing(fn (): string => 'https://storage.test/signed');
         $this->get(route('documents.download', $document))->assertRedirect();
@@ -212,7 +222,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_deleting_and_restoring_are_recorded_in_the_activity_history(): void
     {
-        $user = $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Delete:Document', 'Restore:Document']);
+        $user = $this->signInAsSuperAdmin();
         $document = $this->document();
 
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->callAction('delete')->assertHasNoActionErrors();
@@ -232,7 +242,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_restoring_from_the_detail_page_refreshes_the_version_history(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
         $version = $document->currentVersion;
 
@@ -247,7 +257,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_version_history_does_not_offer_downloads_for_a_trashed_document(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
         $version = $document->currentVersion;
 

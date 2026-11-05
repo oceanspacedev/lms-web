@@ -33,10 +33,10 @@ class PermissionSeeder extends Seeder
         'Document' => self::ALL_ACTIONS,
         'DocumentType' => self::ALL_ACTIONS,
         'Role' => self::ALL_ACTIONS,
-        'DocumentRequest' => ['ViewAny', 'View', 'Create', 'Update'],
+        'DocumentRequest' => self::ALL_ACTIONS,
         'ReminderTemplate' => ['ViewAny', 'View', 'Create', 'Update'],
         'ReminderLog' => ['ViewAny', 'View'],
-        'User' => ['ViewAny', 'View', 'Create', 'Update'],
+        'User' => self::ALL_ACTIONS,
     ];
 
     public function run(): void

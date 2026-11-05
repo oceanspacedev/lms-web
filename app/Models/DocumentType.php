@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Trashable;
 use App\Services\WaghubService;
 use Database\Factories\DocumentTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -81,7 +82,17 @@ class DocumentType extends Model
     }
 
     /** @use HasFactory<DocumentTypeFactory> */
-    use HasFactory;
+    use HasFactory, Trashable;
+
+    public function trashSubject(): string
+    {
+        return 'document_type';
+    }
+
+    public function trashLabel(): string
+    {
+        return (string) $this->name;
+    }
 
     protected $attributes = ['reminder_days' => '[]', 'request_fields' => '[]', 'request_attachments' => '[]'];
 

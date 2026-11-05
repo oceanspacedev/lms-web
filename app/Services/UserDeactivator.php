@@ -127,6 +127,24 @@ class UserDeactivator
         };
     }
 
+    /**
+     * Alasan aksi Hapus tidak boleh dijalankan, atau null bila boleh.
+     * User aktif mengikuti aturan Nonaktifkan; user yang sudah nonaktif hanya tidak boleh dihapus oleh dirinya sendiri,
+     * atau (bila super admin) oleh non-super-admin.
+     */
+    public function deletionDenialReason(User $actor, User $user): ?string
+    {
+        if ($user->isActive()) {
+            return $this->deactivationDenialReason($actor, $user);
+        }
+
+        return match (true) {
+            $actor->is($user) => 'Anda tidak dapat menghapus akun sendiri.',
+            $user->isSuperAdmin() && ! $actor->isSuperAdmin() => 'Hanya super admin yang dapat menghapus super admin.',
+            default => null,
+        };
+    }
+
     /** Alasan aksi Aktifkan kembali tidak boleh dijalankan, atau null bila boleh. */
     public function reactivationDenialReason(User $actor, User $user): ?string
     {

@@ -191,9 +191,9 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
-            DocumentRequestResource::class => ['viewAny', 'view', 'create', 'update'],
+            DocumentRequestResource::class => ['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', 'restore', 'restoreAny', 'forceDelete', 'forceDeleteAny'],
             ReminderTemplateResource::class => ['viewAny', 'view', 'create', 'update'],
-            UserResource::class => ['viewAny', 'view', 'create', 'update'],
+            UserResource::class => ['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', 'restore', 'restoreAny', 'forceDelete', 'forceDeleteAny'],
             ReminderLogResource::class => ['viewAny', 'view'],
             RoleResource::class => [
                 'viewAny',

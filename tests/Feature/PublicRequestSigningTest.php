@@ -131,7 +131,7 @@ class PublicRequestSigningTest extends TestCase
             $this->assertSame($status, $submission->status);
             $this->assertNull($submission->signed_path);
             $this->assertSame(['lms/requests/perjanjian/draft.pdf'], Storage::disk('local')->allFiles('lms/requests/perjanjian'));
-            $submission->delete();
+            $submission->forceDelete();
         }
     }
 

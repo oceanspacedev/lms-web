@@ -5,69 +5,71 @@ declare(strict_types=1);
 namespace App\Policies;
 
 use App\Models\DocumentType;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 class DocumentTypePolicy
 {
     use HandlesAuthorization;
 
-    public function viewAny(AuthUser $authUser): bool
+    public function viewAny(User $authUser): bool
     {
         return $authUser->can('ViewAny:DocumentType');
     }
 
-    public function view(AuthUser $authUser, DocumentType $documentType): bool
+    public function view(User $authUser, DocumentType $documentType): bool
     {
         return $authUser->can('View:DocumentType');
     }
 
-    public function create(AuthUser $authUser): bool
+    public function create(User $authUser): bool
     {
         return $authUser->can('Create:DocumentType');
     }
 
-    public function update(AuthUser $authUser, DocumentType $documentType): bool
+    public function update(User $authUser, DocumentType $documentType): bool
     {
         return $authUser->can('Update:DocumentType');
     }
 
-    public function delete(AuthUser $authUser, DocumentType $documentType): bool
+    public function delete(User $authUser, DocumentType $documentType): bool
     {
         return $authUser->can('Delete:DocumentType');
     }
 
-    public function deleteAny(AuthUser $authUser): bool
+    public function deleteAny(User $authUser): bool
     {
         return $authUser->can('DeleteAny:DocumentType');
     }
 
-    public function restore(AuthUser $authUser, DocumentType $documentType): bool
+    /** Hanya super admin; izin Restore:* tidak membukanya. */
+    public function restore(User $authUser, DocumentType $documentType): bool
     {
-        return $authUser->can('Restore:DocumentType');
+        return $authUser->isSuperAdmin();
     }
 
-    public function forceDelete(AuthUser $authUser, DocumentType $documentType): bool
+    /** Hanya super admin; izin ForceDelete:* tidak membukanya. */
+    public function forceDelete(User $authUser, DocumentType $documentType): bool
     {
-        return $authUser->can('ForceDelete:DocumentType');
+        return $authUser->isSuperAdmin();
     }
 
-    public function forceDeleteAny(AuthUser $authUser): bool
+    public function forceDeleteAny(User $authUser): bool
     {
-        return $authUser->can('ForceDeleteAny:DocumentType');
+        return $authUser->isSuperAdmin();
     }
 
-    public function restoreAny(AuthUser $authUser): bool
+    public function restoreAny(User $authUser): bool
     {
-        return $authUser->can('RestoreAny:DocumentType');
+        return $authUser->isSuperAdmin();
     }
 
-    public function replicate(AuthUser $authUser, DocumentType $documentType): bool
+    public function replicate(User $authUser, DocumentType $documentType): bool
     {
         return $authUser->can('Replicate:DocumentType');
     }
 
-    public function reorder(AuthUser $authUser): bool
+    public function reorder(User $authUser): bool
     {
         return $authUser->can('Reorder:DocumentType');
     }

@@ -76,12 +76,34 @@ class DocumentRequestPolicy
 
     public function delete(User $user, DocumentRequest $request): bool
     {
-        return false;
+        return $user->can('Delete:DocumentRequest');
     }
 
     public function deleteAny(User $user): bool
     {
-        return false;
+        return $user->can('DeleteAny:DocumentRequest');
+    }
+
+    /** Hanya super admin; izin Restore:* tidak membukanya. */
+    public function restore(User $user, DocumentRequest $request): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    /** Hanya super admin; izin ForceDelete:* tidak membukanya. */
+    public function forceDelete(User $user, DocumentRequest $request): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->isSuperAdmin();
     }
 
     /** Bukan pengajuan sendiri, dan pemeriksa belum ditunjuk atau ditunjuk ke user ini. */

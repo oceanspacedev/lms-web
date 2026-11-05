@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Trashable;
 use App\Services\StorageFileName;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -13,7 +14,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +58,17 @@ class Document extends Model
     }
 
     /** @use HasFactory<DocumentFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, Trashable;
+
+    public function trashSubject(): string
+    {
+        return 'document';
+    }
+
+    public function trashLabel(): string
+    {
+        return (string) $this->title;
+    }
 
     protected static function booted(): void
     {
