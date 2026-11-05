@@ -7,6 +7,7 @@ use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -35,13 +36,15 @@ class UsersTable
                 TrashActions::deletedColumn(),
             ])
             ->filters([
-                // User di tempat sampah selalu nonaktif; "Aktif" (bawaan) tetap memuatnya supaya filter Data dihapus langsung menampilkannya.
+                // User di tempat sampah selalu nonaktif. "Aktif" (bawaan) tetap memuatnya hanya pada "Hanya data dihapus", supaya isi
+                // tempat sampah langsung tampil; pada "Dengan data dihapus" user di tempat sampah tidak ikut disebut aktif.
                 TernaryFilter::make('status')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif')->default(true)
-                    ->queries(
-                        true: fn (Builder $query): Builder => $query->where(fn (Builder $query): Builder => $query->whereNull('deactivated_at')->orWhereNotNull('users.deleted_at')),
-                        false: fn (Builder $query): Builder => $query->whereNotNull('deactivated_at'),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
+                    ->query(fn (Builder $query, array $data, HasTable $livewire): Builder => match (true) {
+                        blank($data['value'] ?? null) => $query,
+                        ! $data['value'] => $query->whereNotNull('deactivated_at'),
+                        TrashActions::isShowingOnlyTrashed($livewire) => $query->where(fn (Builder $query): Builder => $query->whereNull('deactivated_at')->orWhereNotNull('users.deleted_at')),
+                        default => $query->whereNull('deactivated_at')->whereNull('users.deleted_at'),
+                    }),
                 SelectFilter::make('roles')->label('Peran')->relationship('roles', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('guard_name', 'web'))->searchable()->preload(),
                 TrashActions::filter(),
             ])

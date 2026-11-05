@@ -96,8 +96,11 @@ class UserResource extends Resource
             });
     }
 
-    /** Ringkasan tugas user yang dihitung dari database, untuk deskripsi modal Nonaktifkan dan Hapus. */
-    public static function workloadSummary(User $record): HtmlString
+    /**
+     * Ringkasan tugas user yang dihitung dari database, untuk deskripsi modal Nonaktifkan dan Hapus.
+     * Di modal Hapus (`$forDeletion`) peran dan izin disebut tersimpan untuk pemulihan, bukan untuk diaktifkan kembali.
+     */
+    public static function workloadSummary(User $record, bool $forDeletion = false): HtmlString
     {
         $workload = app(UserDeactivator::class)->workload($record);
         $lines = array_filter([
@@ -113,7 +116,9 @@ class UserResource extends Resource
             $summary .= "<p>{$workload['drafts']} draf pengajuan milik user ini dibiarkan apa adanya.</p>";
         }
 
-        return new HtmlString($summary.'<p>User langsung keluar dari aplikasi. Peran dan izinnya tetap disimpan agar bisa diaktifkan kembali.</p>');
+        $kept = $forDeletion ? 'Peran dan izinnya tetap disimpan bila user dipulihkan.' : 'Peran dan izinnya tetap disimpan agar bisa diaktifkan kembali.';
+
+        return new HtmlString($summary."<p>User langsung keluar dari aplikasi. {$kept}</p>");
     }
 
     /**

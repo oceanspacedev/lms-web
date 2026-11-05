@@ -22,7 +22,7 @@ class UserForm
             TextInput::make('name')->label('Nama')->required()->maxLength(255),
             TextInput::make('email')->label('Email')->email()->required()->maxLength(255)
                 ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
-                ->rules([fn (?User $record): Closure => ActiveReference::uniqueRule(User::class, 'email', $record?->getKey(), 'Email ini dipakai user di tempat sampah.', true)]),
+                ->rules([fn (?User $record): Closure => ActiveReference::uniqueRule(User::class, 'email', $record?->getKey(), 'Email ini dipakai user di tempat sampah. Pulihkan user itu (super admin) atau pakai email lain.', true)]),
             TextInput::make('phone')->label('Nomor HP / WhatsApp')->tel()->mask(RawJs::make(WaghubService::PHONE_INPUT_MASK))->extraInputAttributes(['inputmode' => 'tel'])->maxLength(30)
                 ->helperText('Digunakan untuk pengingat dokumen dan masuk dengan kode WhatsApp. Contoh: 081234567890.')
                 ->rules([fn (?User $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {

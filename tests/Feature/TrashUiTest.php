@@ -32,6 +32,7 @@ use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -41,7 +42,20 @@ class TrashUiTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const EXPLANATION = 'Data dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.';
+    private static function explanation(string $noun): string
+    {
+        return ucfirst($noun).' dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.';
+    }
+
+    /** Kalimat tambahan modal hapus yang mengarahkan ke Batalkan atau Nonaktifkan; null untuk menu lain. */
+    private static function deleteAdvice(string $key): ?string
+    {
+        return match ($key) {
+            'document_request' => 'Untuk menghentikan pengajuan yang sah, pakai Batalkan — riwayatnya tetap tercatat. Hapus hanya untuk data uji atau salah input.',
+            'user' => 'Staf keluar atau pindah? Pakai Nonaktifkan. Hapus hanya untuk user yang salah dibuat.',
+            default => null,
+        };
+    }
 
     protected function setUp(): void
     {
@@ -145,7 +159,7 @@ class TrashUiTest extends TestCase
                 'list' => ListDocumentRequests::class, 'detail' => EditDocumentRequest::class, 'page' => 'edit', 'resource' => DocumentRequestResource::class,
                 'noun' => 'pengajuan', 'model' => 'DocumentRequest', 'field' => 'title',
                 'free' => fn (): Model => DocumentRequest::factory()->create(['status' => 'submitted']),
-                'used' => fn (): array => [DocumentRequest::factory()->signing()->create(), 'Pengajuan ini masih berjalan (Menunggu Tanda Tangan). Pengingat ke pengaju akan berhenti.', [], null],
+                'used' => fn (): array => [DocumentRequest::factory()->signing()->create(), 'Pengajuan ini masih berjalan (Menunggu Tanda Tangan). Pengingat terkait pengajuan ini akan berhenti.', [], null],
                 'blocked' => null,
             ],
         };
@@ -184,6 +198,19 @@ class TrashUiTest extends TestCase
         app(TrashManager::class)->trash($record, $actor);
     }
 
+    /**
+     * Daftar dengan filter "Dengan data dihapus". Untuk User, filter Status "Aktif" bawaan dikosongkan, karena pada pilihan ini
+     * user di tempat sampah tidak ikut disebut aktif.
+     *
+     * @param  array{list: class-string}  $scenario
+     */
+    private function listWithTrashed(array $scenario, string $key): Testable
+    {
+        $list = Livewire::test($scenario['list'])->filterTable('trashed', true);
+
+        return $key === 'user' ? $list->filterTable('status', null) : $list;
+    }
+
     private function trashed(\Closure $factory, User $actor): Model
     {
         $record = $factory();
@@ -216,7 +243,8 @@ class TrashUiTest extends TestCase
 
         $modal = Livewire::test($scenario['detail'], ['record' => $record->getRouteKey()])
             ->mountAction('delete')
-            ->assertMountedActionModalSee(["Hapus {$scenario['noun']} ini?", self::EXPLANATION, $summary, 'Ya, hapus', 'Kembali']);
+            ->assertMountedActionModalSee(array_filter(["Hapus {$scenario['noun']} ini?", self::explanation($scenario['noun']), $summary, self::deleteAdvice($key), 'Ya, hapus', 'Kembali']))
+            ->assertMountedActionModalDontSee('Data dipindahkan');
         if ($dontSee !== null) {
             $modal->assertMountedActionModalDontSee($dontSee);
         }
@@ -224,7 +252,7 @@ class TrashUiTest extends TestCase
 
         Livewire::test($scenario['detail'], ['record' => $record->getRouteKey()])
             ->callAction('delete', data: $data)->assertHasNoActionErrors()
-            ->assertNotified('Dipindahkan ke tempat sampah')
+            ->assertNotified(ucfirst($scenario['noun']).' dipindahkan ke tempat sampah')
             ->assertRedirect($scenario['resource']::getUrl('index'));
         $this->assertSoftDeleted($record);
 
@@ -283,12 +311,13 @@ class TrashUiTest extends TestCase
             ->mountTableAction('forceDelete', $toPurge)
             ->assertMountedActionModalSee(["Hapus permanen {$scenario['noun']} ini?", 'Tindakan ini tidak bisa dibatalkan.']);
 
-        $list->callTableAction('restore', $toRestore)->assertHasNoTableActionErrors()->assertNotified('Data dipulihkan');
+        $list->callTableAction('restore', $toRestore)->assertHasNoTableActionErrors()
+            ->assertNotified($key === 'user' ? 'User dipulihkan dalam keadaan nonaktif' : ucfirst($scenario['noun']).' dipulihkan');
         $this->assertNotSoftDeleted($toRestore);
-        $list->callTableAction('forceDelete', $toPurge)->assertHasNoTableActionErrors()->assertNotified('Dihapus permanen');
+        $list->callTableAction('forceDelete', $toPurge)->assertHasNoTableActionErrors()->assertNotified(ucfirst($scenario['noun']).' dihapus permanen');
         $this->assertModelMissing($toPurge);
         $list->callTableBulkAction('restore', $bulkRestored);
-        $this->assertOnlyNotified('2 dipulihkan');
+        $this->assertOnlyNotified("2 {$scenario['noun']} dipulihkan");
         foreach ($bulkRestored as $record) {
             $this->assertNotSoftDeleted($record);
         }
@@ -310,7 +339,7 @@ class TrashUiTest extends TestCase
         $superAdmin = $this->signInAsSuperAdmin();
         $free = [$this->trashed($scenario['free'], $superAdmin), $this->trashed($scenario['free'], $superAdmin)];
         $blocked = $scenario['blocked'] === null ? null : ($scenario['blocked'])($superAdmin);
-        $expected = '2 dihapus permanen';
+        $expected = "2 {$scenario['noun']} dihapus permanen";
         if ($blocked !== null) {
             $expected .= ', 1 dilewati: '.$blocked->trashLabel().' ('.app(TrashManager::class)->usage($blocked)->blockMessage().')';
         }
@@ -341,16 +370,17 @@ class TrashUiTest extends TestCase
             'company', 'document_type' => '1 di antaranya masih dipakai dokumen.',
             'document' => '1 di antaranya masih dipakai pengajuan.',
             'user' => '1 di antaranya punya tugas yang harus dialihkan, jadi dilewati; hapus satu per satu.',
-            'document_request' => '3 di antaranya masih berjalan; pengingat ke pengaju akan berhenti.',
+            'document_request' => '3 di antaranya masih berjalan; pengingat terkait pengajuan itu akan berhenti.',
         };
 
         Livewire::test($scenario['list'])
             ->mountTableBulkAction('delete', [...$selected, $used])
-            ->assertMountedActionModalSee(["Hapus 3 {$scenario['noun']}?", self::EXPLANATION, $usageSentence])
+            ->assertMountedActionModalSee(array_filter(["Hapus 3 {$scenario['noun']}?", self::explanation($scenario['noun']), $usageSentence, self::deleteAdvice($key)]))
+            ->assertMountedActionModalDontSee('baris lain dilewati')
             ->callMountedTableBulkAction();
         $this->assertOnlyNotified($key === 'user'
-            ? '2 dipindahkan ke tempat sampah, 1 dilewati: '.$used->trashLabel().' ('.UserTrashHandler::HAS_WORK_REASON.')'
-            : '3 dipindahkan ke tempat sampah');
+            ? '2 user dipindahkan ke tempat sampah, 1 dilewati: '.$used->trashLabel().' ('.UserTrashHandler::HAS_WORK_REASON.')'
+            : "3 {$scenario['noun']} dipindahkan ke tempat sampah");
 
         foreach ($selected as $record) {
             $this->assertSoftDeleted($record);
@@ -388,7 +418,8 @@ class TrashUiTest extends TestCase
 
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
             ->mountAction('delete')
-            ->assertMountedActionModalSee(['Hapus user ini?', '1 dokumen sebagai PIC', 'Pengganti PIC dokumen'])
+            ->assertMountedActionModalSee(['Hapus user ini?', '1 dokumen sebagai PIC', 'Pengganti PIC dokumen', 'Peran dan izinnya tetap disimpan bila user dipulihkan.'])
+            ->assertMountedActionModalDontSee('agar bisa diaktifkan kembali')
             ->assertActionMounted('delete');
 
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
@@ -398,7 +429,7 @@ class TrashUiTest extends TestCase
 
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
             ->callAction('delete', data: ['document_pic' => $replacement->id])->assertHasNoActionErrors()
-            ->assertNotified('Dipindahkan ke tempat sampah');
+            ->assertNotified('User dipindahkan ke tempat sampah');
         $this->assertSoftDeleted($leaver);
         $this->assertNotNull($leaver->fresh()->deactivated_at);
         $this->assertSame($replacement->id, $document->fresh()->pic_user_id);
@@ -481,7 +512,7 @@ class TrashUiTest extends TestCase
         $trashed = $this->trashed($key === 'document_request' ? fn (): Model => DocumentRequest::factory()->handover()->create() : $scenario['free'], $superAdmin);
         $active = $scenario['free']();
 
-        $list = Livewire::test($scenario['list'])->filterTable('trashed', true)
+        $list = $this->listWithTrashed($scenario, $key)
             ->assertTableColumnFormattedStateSet('deleted_at', '05/11/2026 16:00 WIB oleh Admin Pusat', $trashed);
         $this->assertFalse($list->instance()->getTable()->getColumn('deleted_at')->isBadge());
 
@@ -508,7 +539,7 @@ class TrashUiTest extends TestCase
             default => 'edit',
         };
 
-        $list = Livewire::test($scenario['list'])->filterTable('trashed', true)
+        $list = $this->listWithTrashed($scenario, $key)
             ->assertTableActionHidden($editAction, $trashed)->assertTableActionVisible($editAction, $active)
             ->assertTableActionVisible('view', $trashed)
             ->assertTableActionHasIcon('view', 'heroicon-o-eye', $trashed)
@@ -564,5 +595,107 @@ class TrashUiTest extends TestCase
         Livewire::test($scenario['list'])->filterTable('trashed', false)
             ->assertSee('Tempat sampah kosong')->assertSee("Tidak ada {$scenario['noun']} di tempat sampah.");
         Livewire::test($scenario['list'])->assertDontSee('Tempat sampah kosong');
+    }
+
+    /** Hapus (bisa dipulihkan) abu-abu, Pulihkan abu-abu, Hapus permanen merah dengan ikon berbeda; tombol modal sesuai tingkat bahayanya. */
+    #[DataProvider('resources')]
+    public function test_trash_actions_follow_one_color_icon_and_wording_convention(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $superAdmin = $this->signInAsSuperAdmin();
+        $active = $scenario['free']();
+        $trashed = $this->trashed($scenario['free'], $superAdmin);
+        $noun = $scenario['noun'];
+
+        $this->listWithTrashed($scenario, $key)
+            ->assertTableActionHasColor('delete', 'gray', $active)->assertTableActionHasIcon('delete', 'heroicon-o-trash', $active)
+            ->assertTableActionHasColor('restore', 'gray', $trashed)->assertTableActionHasIcon('restore', 'heroicon-o-arrow-uturn-left', $trashed)
+            ->assertTableActionHasColor('forceDelete', 'danger', $trashed)->assertTableActionHasIcon('forceDelete', 'heroicon-o-x-circle', $trashed);
+
+        $expectations = [
+            'delete' => [$active, "Hapus {$noun}", 'Ya, hapus', 'danger'],
+            'restore' => [$trashed, "Pulihkan {$noun}", 'Ya, pulihkan', 'primary'],
+            'forceDelete' => [$trashed, "Hapus permanen {$noun}", 'Ya, hapus permanen', 'danger'],
+        ];
+        foreach ($expectations as $name => [$record, $tooltip, $submitLabel, $submitColor]) {
+            $action = $this->listWithTrashed($scenario, $key)->mountTableAction($name, $record)->instance()->getMountedAction();
+            $this->assertSame($tooltip, $action->getTooltip(), $name);
+            $this->assertSame([$submitLabel, $submitColor], [$action->getModalSubmitAction()->getLabel(), $action->getModalSubmitAction()->getColor()], $name);
+        }
+
+        $bulk = $this->listWithTrashed($scenario, $key)
+            ->assertTableBulkActionHasColor('delete', 'gray')->assertTableBulkActionHasIcon('delete', 'heroicon-o-trash')
+            ->assertTableBulkActionHasColor('restore', 'gray')->assertTableBulkActionHasIcon('restore', 'heroicon-o-arrow-uturn-left')
+            ->assertTableBulkActionHasColor('forceDelete', 'danger')->assertTableBulkActionHasIcon('forceDelete', 'heroicon-o-x-circle');
+        $submit = $bulk->mountTableBulkAction('delete', [$active])->instance()->getMountedAction()->getModalSubmitAction();
+        $this->assertSame(['Ya, hapus', 'danger'], [$submit->getLabel(), $submit->getColor()]);
+    }
+
+    public function test_restored_user_notification_points_to_the_reactivate_button(): void
+    {
+        $superAdmin = $this->signInAsSuperAdmin();
+        $user = $this->trashed(fn (): User => User::factory()->create(), $superAdmin);
+
+        Livewire::test(ListUsers::class)->filterTable('trashed', false)
+            ->mountTableAction('restore', $user)
+            ->assertMountedActionModalSee('User kembali dalam keadaan nonaktif. Bila user perlu masuk lagi, klik tombol Aktifkan kembali di halaman user.')
+            ->callMountedTableAction()->assertHasNoTableActionErrors();
+
+        $this->assertNotifiedWithBody('User dipulihkan dalam keadaan nonaktif', 'Aktifkan kembali lewat tombol Aktifkan kembali di halaman user.');
+        $notification = collect([...session('filament.claimed_notifications', []), ...session('filament.notifications', [])])->firstWhere('title', 'User dipulihkan dalam keadaan nonaktif');
+        $this->assertSame([['Buka user', UserResource::getUrl('edit', ['record' => $user])]], array_map(fn (array $action): array => [$action['label'], $action['url']], $notification['actions']));
+    }
+
+    public function test_active_status_filter_shows_trashed_users_only_in_the_trash_view(): void
+    {
+        $superAdmin = $this->signInAsSuperAdmin();
+        $active = User::factory()->create();
+        $inactive = User::factory()->create(['deactivated_at' => now(), 'deactivated_by' => $superAdmin->id]);
+        $trashed = $this->trashed(fn (): User => User::factory()->create(), $superAdmin);
+
+        Livewire::test(ListUsers::class)->filterTable('trashed', true)
+            ->assertCanSeeTableRecords([$active])->assertCanNotSeeTableRecords([$trashed, $inactive]);
+        Livewire::test(ListUsers::class)->filterTable('trashed', false)
+            ->assertCanSeeTableRecords([$trashed])->assertCanNotSeeTableRecords([$active, $inactive]);
+        Livewire::test(ListUsers::class)->filterTable('trashed', true)->filterTable('status', false)
+            ->assertCanSeeTableRecords([$inactive, $trashed])->assertCanNotSeeTableRecords([$active]);
+    }
+
+    #[DataProvider('resources')]
+    public function test_bulk_actions_skip_irrelevant_rows_and_never_report_nothing_as_success(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $superAdmin = $this->signInAsSuperAdmin();
+        $noun = $scenario['noun'];
+        $active = [$scenario['free'](), $scenario['free']()];
+        $trashed = $this->trashed($scenario['free'], $superAdmin);
+
+        foreach (['delete' => [[$trashed], 'dihapus'], 'restore' => [$active, 'dipulihkan'], 'forceDelete' => [$active, 'dihapus permanen']] as $name => [$records, $verb]) {
+            $this->listWithTrashed($scenario, $key)
+                ->mountTableBulkAction($name, $records)
+                ->assertSet('mountedActions', []);
+            $this->assertNotificationStatus("Tidak ada {$noun} di pilihan ini yang bisa {$verb}.", 'warning');
+        }
+
+        $this->listWithTrashed($scenario, $key)
+            ->mountTableBulkAction('delete', [...$active, $trashed])
+            ->assertMountedActionModalSee("Hapus 2 {$noun}? (1 baris lain dilewati.)");
+        $this->listWithTrashed($scenario, $key)
+            ->mountTableBulkAction('restore', [$active[0], $trashed])
+            ->assertMountedActionModalSee("Pulihkan 1 {$noun}? (1 baris lain dilewati.)");
+
+        if ($scenario['blocked'] !== null) {
+            $blocked = ($scenario['blocked'])($superAdmin);
+            Livewire::test($scenario['list'])->filterTable('trashed', false)->callTableBulkAction('forceDelete', [$blocked]);
+            $title = "0 {$noun} dihapus permanen, 1 dilewati: ".$blocked->trashLabel().' ('.app(TrashManager::class)->usage($blocked)->blockMessage().')';
+            $this->assertNotificationStatus($title, 'warning');
+        }
+    }
+
+    private function assertNotificationStatus(string $title, string $status): void
+    {
+        $notification = collect([...session('filament.claimed_notifications', []), ...session('filament.notifications', [])])->firstWhere('title', $title);
+        $this->assertNotNull($notification, "Notifikasi \"{$title}\" tidak dikirim.");
+        $this->assertSame($status, $notification['status']);
     }
 }

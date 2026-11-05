@@ -33,7 +33,7 @@ class CompanyForm
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
-                    ->rules([fn (?Company $record): Closure => ActiveReference::uniqueRule(Company::class, 'name', $record?->getKey(), 'Nama ini dipakai badan usaha di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen.', true)]),
+                    ->rules([fn (?Company $record): Closure => ActiveReference::uniqueRule(Company::class, 'name', $record?->getKey(), 'Nama ini dipakai badan usaha di tempat sampah. Pulihkan data itu (super admin) atau pakai nama lain.', true)]),
                 Select::make('legal_form')
                     ->label('Bentuk Badan Usaha')
                     ->placeholder('Pilih atau cari bentuk badan usaha')

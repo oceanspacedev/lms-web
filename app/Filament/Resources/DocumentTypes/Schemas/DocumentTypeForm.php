@@ -29,7 +29,7 @@ class DocumentTypeForm
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
-                    ->rules([fn (?DocumentType $record): Closure => ActiveReference::uniqueRule(DocumentType::class, 'name', $record?->getKey(), 'Nama ini dipakai jenis dokumen di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen.', true)]),
+                    ->rules([fn (?DocumentType $record): Closure => ActiveReference::uniqueRule(DocumentType::class, 'name', $record?->getKey(), 'Nama ini dipakai jenis dokumen di tempat sampah. Pulihkan data itu (super admin) atau pakai nama lain.', true)]),
                 Toggle::make('is_active')
                     ->label('Aktif')
                     ->default(true)

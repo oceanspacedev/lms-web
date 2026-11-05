@@ -103,7 +103,7 @@ class DocumentTrashTest extends TestCase
             ->mountAction('delete')
             ->assertMountedActionModalSee([
                 'Hapus dokumen ini?',
-                'Data dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.',
+                'Dokumen dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.',
                 'Pengingat masa berlakunya berhenti dan file tidak ikut dihapus.',
                 'Ya, hapus',
             ])

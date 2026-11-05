@@ -99,7 +99,7 @@ class DocumentRequestTrashTest extends TestCase
         $this->assertSame(2, DocumentRequestResource::countActionable());
 
         $this->assertSame(
-            'Pengajuan ini masih berjalan (Menunggu Dokumen Fisik). Pengingat ke pengaju akan berhenti.',
+            'Pengajuan ini masih berjalan (Menunggu Dokumen Fisik). Pengingat terkait pengajuan ini akan berhenti.',
             $this->manager()->usage($request)->summary(),
         );
         $this->manager()->trash($request, $actor);
@@ -121,7 +121,7 @@ class DocumentRequestTrashTest extends TestCase
     {
         $this->assertSame('', $this->manager()->usage($this->handover(3, ['status' => 'archived']))->summary());
         $this->assertSame(
-            'Pengajuan ini masih berjalan (Diperiksa). Pengingat ke pengaju akan berhenti.',
+            'Pengajuan ini masih berjalan (Diperiksa). Pengingat terkait pengajuan ini akan berhenti.',
             $this->manager()->usage(DocumentRequest::factory()->create(['status' => 'submitted']))->summary(),
         );
     }

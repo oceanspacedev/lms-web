@@ -216,7 +216,7 @@ class TrashedParentDisplayTest extends TestCase
         Livewire::test(CreateCompany::class)
             ->fillForm(['name' => 'PT Kembar', 'legal_form' => 'PT'])->call('create')
             ->assertHasFormErrors(['name'])
-            ->assertSee('Nama ini dipakai badan usaha di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen.');
+            ->assertSee('Nama ini dipakai badan usaha di tempat sampah. Pulihkan data itu (super admin) atau pakai nama lain.');
         $this->assertDatabaseCount('companies', 1);
     }
 
@@ -228,7 +228,7 @@ class TrashedParentDisplayTest extends TestCase
         Livewire::test(CreateDocumentType::class)
             ->fillForm(['name' => 'Jenis Kembar'])->call('create')
             ->assertHasFormErrors(['name'])
-            ->assertSee('Nama ini dipakai jenis dokumen di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen.');
+            ->assertSee('Nama ini dipakai jenis dokumen di tempat sampah. Pulihkan data itu (super admin) atau pakai nama lain.');
     }
 
     public function test_new_user_with_trashed_email_is_rejected_with_trash_message(): void
@@ -239,7 +239,7 @@ class TrashedParentDisplayTest extends TestCase
         Livewire::test(CreateUser::class)
             ->fillForm(['name' => 'Orang Baru', 'email' => 'lama@contoh.test', 'password' => 'rahasia-panjang-123'])->call('create')
             ->assertHasFormErrors(['email'])
-            ->assertSee('Email ini dipakai user di tempat sampah.');
+            ->assertSee('Email ini dipakai user di tempat sampah. Pulihkan user itu (super admin) atau pakai email lain.');
     }
 
     public function test_export_and_archive_file_name_keep_trashed_company_name(): void

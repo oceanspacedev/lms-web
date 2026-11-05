@@ -52,19 +52,21 @@ Tujuan:
 
 ### 3.1 Menghapus satu data
 
-- Tombol **Hapus** (merah) ada di halaman ubah/detail tiap menu, dan sebagai ikon di baris tabel.
+- Tombol **Hapus** ada di halaman ubah/detail tiap menu, dan sebagai ikon di baris tabel. Warna dan ikon sama di kelima menu: Hapus abu-abu dengan ikon tempat sampah (masih bisa dipulihkan), tooltip "Hapus {jenis data}"; Pulihkan abu-abu dengan ikon panah kembali, tooltip "Pulihkan {jenis data}"; Hapus permanen merah dengan ikon `heroicon-o-x-circle`, tooltip "Hapus permanen {jenis data}". Tombol modalnya "Ya, hapus" (merah), "Ya, pulihkan" (utama), dan "Ya, hapus permanen" (merah).
 - Selalu ada **modal konfirmasi**. Isinya:
   - Judul, misalnya "Hapus badan usaha ini?"
-  - Penjelasan: "Data dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen."
+  - Penjelasan dengan sebutan jenis datanya, misalnya "Badan usaha dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen."
+  - Pengajuan menambahkan "Untuk menghentikan pengajuan yang sah, pakai Batalkan — riwayatnya tetap tercatat. Hapus hanya untuk data uji atau salah input." User menambahkan "Staf keluar atau pindah? Pakai Nonaktifkan. Hapus hanya untuk user yang salah dibuat." (juga di modal hapus massal).
   - **Keterkaitan**, bila ada (keputusan pengguna: data yang masih terhubung tetap boleh dihapus, dengan konfirmasi). Contoh: "Badan usaha ini masih dipakai **12 dokumen** dan **3 pengajuan**. Dokumen dan pengajuan itu tidak ikut terhapus, dan nama badan usaha tetap tampil di sana dengan tanda (dihapus)."
   - Tombol: "Ya, hapus" / "Kembali".
-- Setelah berhasil: notifikasi "Dipindahkan ke tempat sampah", lalu kembali ke daftar.
+- Setelah berhasil: notifikasi "{Jenis data} dipindahkan ke tempat sampah" (misalnya "Badan usaha dipindahkan ke tempat sampah"), lalu kembali ke daftar. Pulihkan dan hapus permanen memakai "{Jenis data} dipulihkan" dan "{Jenis data} dihapus permanen".
 
 ### 3.2 Hapus massal
 
 - Di tiap tabel ada kotak centang per baris. Setelah memilih, muncul aksi **Hapus terpilih**.
-- Modal konfirmasi menyebut jumlah ("Hapus 5 badan usaha?") dan ringkasan keterkaitan ("2 di antaranya masih dipakai dokumen atau pengajuan").
-- Baris yang tidak boleh dihapus (lihat aturan per menu di §4) dilewati. Notifikasi hasil menyebut "4 dipindahkan ke tempat sampah, 1 dilewati: <nama> (<alasan>)".
+- Modal konfirmasi menyebut jumlah baris yang relevan ("Hapus 5 badan usaha?") dan ringkasan keterkaitan ("2 di antaranya masih dipakai dokumen atau pengajuan"). Baris terpilih yang tidak relevan (misalnya Hapus terpilih pada baris yang sudah di tempat sampah) disebut di judul: "Hapus 3 badan usaha? (2 baris lain dilewati.)".
+- Bila tidak satu pun baris terpilih relevan, modal tidak dibuka; muncul peringatan "Tidak ada {jenis data} di pilihan ini yang bisa {dihapus|dipulihkan|dihapus permanen}." Hasil tanpa satu pun yang diproses selalu berupa peringatan, tidak pernah notifikasi sukses.
+- Baris yang tidak boleh dihapus (lihat aturan per menu di §4) dilewati. Notifikasi hasil menyebut "4 badan usaha dipindahkan ke tempat sampah, 1 dilewati: <nama> (<alasan>)".
 
 ### 3.3 Tempat sampah (super admin)
 
@@ -125,7 +127,7 @@ Tujuan:
 - **Saat di tempat sampah:**
   - hilang dari semua pilihan: form dokumen, form pengajuan internal, form publik `/pengajuan`, filter tabel, template dan validasi impor Excel, aturan validasi `exists`;
   - dokumen dan pengajuan lama tetap menampilkan namanya dengan tanda **"(dihapus)"**.
-- **Nama ganda:** nama badan usaha unik di database. Membuat badan usaha baru dengan nama yang sama dengan yang ada di tempat sampah akan ditolak dengan pesan "Nama ini dipakai badan usaha di tempat sampah. Minta super admin memulihkan atau menghapusnya permanen."
+- **Nama ganda:** nama badan usaha unik di database. Membuat badan usaha baru dengan nama yang sama dengan yang ada di tempat sampah akan ditolak dengan pesan "Nama ini dipakai badan usaha di tempat sampah. Pulihkan data itu (super admin) atau pakai nama lain."
   - **Keputusan pengembang:** indeks unik di database tidak diubah, supaya pemulihan tidak pernah bentrok.
 - **Data aktif yang masih memakai badan usaha di tempat sampah tetap bisa jalan.** **Keputusan pengembang:** mengikuti pola "pilih yang aktif, atau pertahankan yang sudah terpasang" (`activeOrKeep`) yang sudah dipakai untuk PIC.
   - Dokumen dan pengajuan yang **sudah** memakai badan usaha itu tetap bisa diubah dan disimpan tanpa menggantinya. Pilihan dropdown-nya tetap memuat nilai lama dengan tanda "(dihapus)".
@@ -159,7 +161,8 @@ Tujuan:
   - tidak menerima WhatsApp;
   - tidak muncul di pilihan PIC, pemeriksa, atau penerima;
   - nama di riwayat lama tetap tampil, dengan tanda "(dihapus)" di relasi yang ditampilkan.
-- **Pulihkan:** user kembali dalam keadaan **nonaktif**. Super admin mengaktifkannya kembali lewat tombol Aktifkan yang sudah ada. **Keputusan pengembang:** ini supaya tugas yang sudah dialihkan tidak kacau dan pemulihan tidak langsung memberi akses login.
+- **Pulihkan:** user kembali dalam keadaan **nonaktif**. Super admin mengaktifkannya kembali lewat tombol Aktifkan kembali yang sudah ada. Notifikasinya "User dipulihkan dalam keadaan nonaktif" dengan isi "Aktifkan kembali lewat tombol Aktifkan kembali di halaman user." dan tombol "Buka user". Modal hapus user menyebut "Peran dan izinnya tetap disimpan bila user dipulihkan."
+- Filter Status "Aktif" (bawaan) di daftar User memuat user di tempat sampah hanya bila filter Data dihapus "Hanya data dihapus"; pada "Dengan data dihapus", user di tempat sampah tidak ikut disebut aktif. **Keputusan pengembang:** ini supaya tugas yang sudah dialihkan tidak kacau dan pemulihan tidak langsung memberi akses login.
 - **Hapus massal user:** hanya untuk user yang tidak punya tugas yang perlu dialihkan. User yang punya tugas dilewati, dengan alasan "punya tugas yang harus dialihkan, hapus satu per satu". **Keputusan pengembang:** memilih pengganti untuk banyak user sekaligus terlalu rawan salah.
 - **Keputusan pengembang:** pengalihan tugas saat menghapus (dan menonaktifkan) juga mencakup pengajuan dan jenis dokumen **di tempat sampah**, sama seperti dokumen di tempat sampah sekarang. Dengan begitu, data yang kelak dipulihkan tidak menunjuk ke user yang sudah dihapus.
 - **Hapus permanen user tidak berantai.** **Keputusan pengembang:** user tidak memakai aturan "data terkait di tempat sampah ikut dihapus permanen" (§3.4), supaya super admin tidak kehilangan file dokumen tanpa sengaja.
@@ -175,12 +178,12 @@ Tujuan:
 - Referensi yang **tidak menghalangi** dan diurus otomatis saat hapus permanen:
   - di-null-kan otomatis oleh database (`nullOnDelete`): aktivitas dokumen, alasan terlambat, pengirim ulang, pesan uji WhatsApp, OTP, `deactivated_by`;
   - dibersihkan: sesi login, peran dan izin (tabel spatie).
-- **Email ganda:** aturannya sama seperti nama badan usaha (§4.2). Pesannya: "Email ini dipakai user di tempat sampah."
+- **Email ganda:** aturannya sama seperti nama badan usaha (§4.2). Pesannya: "Email ini dipakai user di tempat sampah. Pulihkan user itu (super admin) atau pakai email lain."
 
 ### 4.5 Pengajuan Dokumen
 
 - Boleh dihapus di **status apa pun**. **Keputusan pengembang:** termasuk pengajuan yang sedang berjalan, karena kasus utamanya pengajuan uji coba atau salah input.
-  - Modal memberi peringatan bila status masih berjalan: "Pengajuan ini masih berjalan (Menunggu Dokumen Fisik). Pengingat ke pengaju akan berhenti."
+  - Modal memberi peringatan bila status masih berjalan: "Pengajuan ini masih berjalan (Menunggu Dokumen Fisik). Pengingat terkait pengajuan ini akan berhenti." Di modal hapus massal: "{n} di antaranya masih berjalan; pengingat terkait pengajuan itu akan berhenti."
 - **Saat di tempat sampah:**
   - hilang dari daftar, tab "Perlu tindakan saya", dan kartu dasbor;
   - pengingat (pemeriksaan, scan, keterlambatan) berhenti, dan notifikasi yang antre dibatalkan;

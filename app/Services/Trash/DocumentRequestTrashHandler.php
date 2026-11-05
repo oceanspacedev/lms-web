@@ -36,7 +36,7 @@ class DocumentRequestTrashHandler implements TrashHandler
     public function usage(Model $record): TrashUsage
     {
         $notes = in_array($record->status, self::RUNNING_STATUSES, true)
-            ? ['Pengajuan ini masih berjalan ('.DocumentRequest::statusLabel($record->status).'). Pengingat ke pengaju akan berhenti.']
+            ? ['Pengajuan ini masih berjalan ('.DocumentRequest::statusLabel($record->status).'). Pengingat terkait pengajuan ini akan berhenti.']
             : [];
 
         return new TrashUsage(notes: $notes, subjectName: 'pengajuan');

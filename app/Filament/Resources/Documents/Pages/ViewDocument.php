@@ -40,7 +40,7 @@ class ViewDocument extends ViewRecord
     {
         return [
             $this->backToListAction(),
-            TrashActions::restore('dokumen')->icon('heroicon-o-arrow-uturn-left')->color('primary')
+            TrashActions::restore('dokumen')
                 ->after(fn () => $this->dispatch('document-version-updated')),
             TrashActions::forceDelete('dokumen'),
             $this->previewAction(),

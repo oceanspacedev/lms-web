@@ -11,6 +11,7 @@ use App\Services\Trash\TrashUsage;
 use App\Services\UserDeactivator;
 use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ForceDeleteAction;
@@ -34,26 +35,31 @@ use Illuminate\Validation\ValidationException;
  * Aksi tempat sampah yang sama untuk Dokumen, Badan Usaha, Jenis Dokumen, User, dan Pengajuan Dokumen (spec §3.1–§3.4).
  * Semua tindakan lewat TrashManager. Hak akses lewat policy: hapus = Delete / DeleteAny, pulihkan dan hapus permanen = super admin.
  * Penolakan dari TrashManager tampil sebagai notifikasi bahaya, tidak pernah sebagai galat 500.
- * `$noun` adalah sebutan jenis data dalam huruf kecil, misalnya "badan usaha", untuk judul modal.
+ * `$noun` adalah sebutan jenis data dalam huruf kecil, misalnya "badan usaha", untuk judul modal, tooltip, dan notifikasi.
+ * Warna dan ikon: Hapus abu-abu dengan ikon tempat sampah (masih bisa dipulihkan), Pulihkan abu-abu, Hapus permanen merah
+ * dengan ikon x-circle; tombol modalnya "Ya, hapus" (merah), "Ya, pulihkan" (utama), "Ya, hapus permanen" (merah).
  */
 class TrashActions
 {
-    public const EXPLANATION = 'Data dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.';
-
     public const IRREVERSIBLE = 'Tindakan ini tidak bisa dibatalkan.';
 
     /** Nilai filter `trashed` (TernaryFilter) untuk "Hanya data dihapus". */
     public const ONLY_TRASHED = '0';
 
+    /** Ikon Hapus permanen, sengaja berbeda dari ikon tempat sampah milik Hapus. */
+    public const FORCE_DELETE_ICON = 'heroicon-o-x-circle';
+
     /**
-     * Hapus satu data ke tempat sampah. Untuk user aktif, modal memakai alur Nonaktifkan: tugas dialihkan ke pengganti yang dipilih.
+     * Hapus satu data ke tempat sampah (abu-abu, karena masih bisa dipulihkan). Untuk user aktif, modal memakai alur
+     * Nonaktifkan: tugas dialihkan ke pengganti yang dipilih.
      */
     public static function delete(string $noun): DeleteAction
     {
-        return DeleteAction::make()->label('Hapus')->tooltip("Hapus {$noun}")
+        return DeleteAction::make()->label('Hapus')->tooltip("Hapus {$noun}")->color('gray')->icon('heroicon-o-trash')
             ->authorize('delete')
             ->modalHeading("Hapus {$noun} ini?")
-            ->modalDescription(fn (Model $record): HtmlString => self::deleteDescription($record))
+            ->modalDescription(fn (Model $record): HtmlString => self::deleteDescription($record, $noun))
+            ->modalSubmitAction(fn (Action $action): Action => $action->color('danger'))
             ->modalSubmitActionLabel('Ya, hapus')
             ->modalCancelActionLabel('Kembali')
             ->schema(fn (Model $record): array => self::isActiveUser($record) ? UserResource::replacementFields($record) : [])
@@ -69,22 +75,28 @@ class TrashActions
                 self::attempt($action, 'Belum bisa dihapus', fn () => app(TrashManager::class)->trash($record, auth()->user(), self::trashData($record, $data)));
                 $action->success();
             })
-            ->successNotificationTitle('Dipindahkan ke tempat sampah');
+            ->successNotificationTitle(ucfirst($noun).' dipindahkan ke tempat sampah');
     }
 
+    /** Pulihkan satu data. User kembali nonaktif, jadi notifikasinya menunjuk ke tombol Aktifkan kembali di halaman user. */
     public static function restore(string $noun): RestoreAction
     {
-        return RestoreAction::make()->label('Pulihkan')->tooltip("Pulihkan {$noun}")
+        return RestoreAction::make()->label('Pulihkan')->tooltip("Pulihkan {$noun}")->color('gray')->icon('heroicon-o-arrow-uturn-left')
             ->authorize('restore')
             ->modalHeading("Pulihkan {$noun} ini?")
-            ->modalDescription(fn (Model $record): string => self::restoreDescription($record::class))
+            ->modalDescription(fn (Model $record): string => self::restoreDescription($record::class, $noun))
+            ->modalSubmitAction(fn (Action $action): Action => $action->color('primary'))
             ->modalSubmitActionLabel('Ya, pulihkan')
             ->modalCancelActionLabel('Kembali')
             ->action(function (RestoreAction $action, Model $record): void {
                 self::attempt($action, 'Belum bisa dipulihkan', fn () => app(TrashManager::class)->restore($record, auth()->user()));
                 $action->success();
             })
-            ->successNotificationTitle('Data dipulihkan');
+            ->successNotificationTitle(ucfirst($noun).' dipulihkan')
+            ->successNotification(fn (Notification $notification, Model $record): Notification => $record instanceof User
+                ? $notification->title('User dipulihkan dalam keadaan nonaktif')->body('Aktifkan kembali lewat tombol Aktifkan kembali di halaman user.')
+                    ->actions([Action::make('openUser')->label('Buka user')->url(UserResource::getUrl('edit', ['record' => $record]))])
+                : $notification);
     }
 
     /**
@@ -93,7 +105,8 @@ class TrashActions
      */
     public static function forceDelete(string $noun): ForceDeleteAction
     {
-        return ForceDeleteAction::make()->label('Hapus permanen')->tooltip("Hapus permanen {$noun}")
+        return ForceDeleteAction::make()->label('Hapus permanen')->tooltip("Hapus permanen {$noun}")->color('danger')
+            ->icon(self::FORCE_DELETE_ICON)->modalIcon(self::FORCE_DELETE_ICON)
             ->authorize('forceDelete')
             ->modalHeading("Hapus permanen {$noun} ini?")
             ->modalDescription(function (Model $record) use ($noun): string {
@@ -101,50 +114,50 @@ class TrashActions
 
                 return $usage->blocksForceDelete() ? $usage->blockMessage() : self::forceDeleteDescription($record::class, $usage->trashed, "{$noun} ini");
             })
-            ->modalSubmitAction(fn (Action $action, Model $record): Action => $action->disabled(app(TrashManager::class)->usage($record)->blocksForceDelete()))
+            ->modalSubmitAction(fn (Action $action, Model $record): Action => $action->color('danger')
+                ->disabled(app(TrashManager::class)->usage($record)->blocksForceDelete()))
             ->modalSubmitActionLabel('Ya, hapus permanen')
             ->modalCancelActionLabel('Kembali')
             ->action(function (ForceDeleteAction $action, Model $record): void {
                 self::attempt($action, 'Hapus permanen ditolak', fn () => app(TrashManager::class)->forceDelete($record, auth()->user()));
                 $action->success();
             })
-            ->successNotificationTitle('Dihapus permanen');
+            ->successNotificationTitle(ucfirst($noun).' dihapus permanen');
     }
 
     /** Hapus massal ke tempat sampah; data yang tidak boleh dihapus dilewati beserta alasannya. */
     public static function bulkDelete(string $noun): DeleteBulkAction
     {
-        return DeleteBulkAction::make()->label('Hapus terpilih')
+        return self::configureBulk(DeleteBulkAction::make()->label('Hapus terpilih')->color('gray')->icon('heroicon-o-trash'), $noun, trashed: false, verb: 'dihapus')
             ->authorize('deleteAny')
             ->hidden(fn (HasTable $livewire): bool => self::trashedFilterValue($livewire) === false)
-            ->modalHeading(fn (Collection $records): string => 'Hapus '.self::selection($records, trashed: false)->count()." {$noun}?")
-            ->modalDescription(fn (DeleteBulkAction $action, Collection $records): string => self::bulkDeleteDescription($action->getModel(), self::selection($records, trashed: false)))
+            ->modalHeading(fn (Collection $records): string => self::bulkHeading('Hapus', $noun, $records, trashed: false))
+            ->modalDescription(fn (DeleteBulkAction $action, Collection $records): string => self::bulkDeleteDescription($action->getModel(), self::selection($records, trashed: false), $noun))
+            ->modalSubmitAction(fn (Action $action): Action => $action->color('danger'))
             ->modalSubmitActionLabel('Ya, hapus')
-            ->modalCancelActionLabel('Kembali')
-            ->action(fn (Collection $records) => self::runBulk('trash', self::selection($records, trashed: false), 'dipindahkan ke tempat sampah'))
-            ->successNotification(null);
+            ->action(fn (Collection $records) => self::runBulk('trash', self::selection($records, trashed: false), "{$noun} dipindahkan ke tempat sampah"));
     }
 
     public static function bulkRestore(string $noun): RestoreBulkAction
     {
-        return RestoreBulkAction::make()->label('Pulihkan terpilih')
+        return self::configureBulk(RestoreBulkAction::make()->label('Pulihkan terpilih')->color('gray')->icon('heroicon-o-arrow-uturn-left'), $noun, trashed: true, verb: 'dipulihkan')
             ->authorize('restoreAny')
             ->hidden(fn (HasTable $livewire): bool => self::trashedFilterValue($livewire) === null)
-            ->modalHeading(fn (Collection $records): string => 'Pulihkan '.self::selection($records, trashed: true)->count()." {$noun}?")
-            ->modalDescription(fn (RestoreBulkAction $action): string => self::restoreDescription($action->getModel()))
+            ->modalHeading(fn (Collection $records): string => self::bulkHeading('Pulihkan', $noun, $records, trashed: true))
+            ->modalDescription(fn (RestoreBulkAction $action): string => self::restoreDescription($action->getModel(), $noun))
+            ->modalSubmitAction(fn (Action $action): Action => $action->color('primary'))
             ->modalSubmitActionLabel('Ya, pulihkan')
-            ->modalCancelActionLabel('Kembali')
-            ->action(fn (Collection $records) => self::runBulk('restore', self::selection($records, trashed: true), 'dipulihkan'))
-            ->successNotification(null);
+            ->action(fn (Collection $records) => self::runBulk('restore', self::selection($records, trashed: true), "{$noun} dipulihkan"));
     }
 
     /** Hapus permanen massal: data yang masih dipakai dilewati, sisanya tetap diproses. */
     public static function bulkForceDelete(string $noun): ForceDeleteBulkAction
     {
-        return ForceDeleteBulkAction::make()->label('Hapus permanen terpilih')
+        return self::configureBulk(ForceDeleteBulkAction::make()->label('Hapus permanen terpilih')->color('danger')->icon(self::FORCE_DELETE_ICON)->modalIcon(self::FORCE_DELETE_ICON),
+            $noun, trashed: true, verb: 'dihapus permanen')
             ->authorize('forceDeleteAny')
             ->hidden(fn (HasTable $livewire): bool => self::trashedFilterValue($livewire) === null)
-            ->modalHeading(fn (Collection $records): string => 'Hapus permanen '.self::selection($records, trashed: true)->count()." {$noun}?")
+            ->modalHeading(fn (Collection $records): string => self::bulkHeading('Hapus permanen', $noun, $records, trashed: true))
             ->modalDescription(function (ForceDeleteBulkAction $action, Collection $records) use ($noun): string {
                 $trash = app(TrashManager::class);
                 $selected = self::selection($records, trashed: true);
@@ -153,10 +166,9 @@ class TrashActions
 
                 return $blocked->isEmpty() ? $description : "{$description} {$blocked->count()} dari {$selected->count()} akan ditolak karena masih dipakai.";
             })
+            ->modalSubmitAction(fn (Action $action): Action => $action->color('danger'))
             ->modalSubmitActionLabel('Ya, hapus permanen')
-            ->modalCancelActionLabel('Kembali')
-            ->action(fn (Collection $records) => self::runBulk('forceDelete', self::selection($records, trashed: true), 'dihapus permanen'))
-            ->successNotification(null);
+            ->action(fn (Collection $records) => self::runBulk('forceDelete', self::selection($records, trashed: true), "{$noun} dihapus permanen"));
     }
 
     /** @return list<DeleteBulkAction|RestoreBulkAction|ForceDeleteBulkAction> */
@@ -279,8 +291,44 @@ class TrashActions
     }
 
     /**
-     * Notifikasi hasil, misalnya "4 dipindahkan ke tempat sampah, 1 dilewati: PT A (alasan)".
+     * Bagian yang sama untuk ketiga aksi massal. Bila tidak satu pun baris terpilih relevan (misalnya Hapus terpilih pada
+     * baris yang sudah di tempat sampah), modal tidak dibuka dan muncul peringatan "Tidak ada {noun} di pilihan ini yang bisa {verb}."
+     *
+     * @template TAction of BulkAction
+     *
+     * @param  TAction  $action
+     * @param  bool  $trashed  Baris yang relevan: true = di tempat sampah (pulihkan, hapus permanen), false = aktif (hapus).
+     * @return TAction
+     */
+    private static function configureBulk(BulkAction $action, string $noun, bool $trashed, string $verb): BulkAction
+    {
+        return $action->modalCancelActionLabel('Kembali')->successNotification(null)
+            ->mountUsing(function (BulkAction $action, Collection $records, ?Schema $schema) use ($noun, $trashed, $verb): void {
+                if (self::selection($records, $trashed)->isEmpty()) {
+                    Notification::make()->warning()->title("Tidak ada {$noun} di pilihan ini yang bisa {$verb}.")->send();
+                    $action->cancel();
+                }
+                $schema?->fill();
+            });
+    }
+
+    /**
+     * Judul modal massal yang hanya menghitung baris relevan, misalnya "Hapus 3 badan usaha? (2 baris lain dilewati.)".
+     *
+     * @param  Collection<int, Model>  $records
+     */
+    private static function bulkHeading(string $verb, string $noun, Collection $records, bool $trashed): string
+    {
+        $relevant = self::selection($records, $trashed)->count();
+        $skipped = $records->count() - $relevant;
+
+        return "{$verb} {$relevant} {$noun}?".($skipped > 0 ? " ({$skipped} baris lain dilewati.)" : '');
+    }
+
+    /**
+     * Notifikasi hasil, misalnya "4 badan usaha dipindahkan ke tempat sampah, 1 dilewati: PT A (alasan)".
      * Satu-satunya notifikasi aksi massal; notifikasi sukses bawaan Filament dimatikan di tiap aksi.
+     * Sukses hanya bila semua diproses; ada yang dilewati atau tidak ada yang diproses menjadi peringatan.
      *
      * @param  'trash'|'restore'|'forceDelete'  $operation
      * @param  Collection<int, Model>  $records
@@ -295,11 +343,11 @@ class TrashActions
         }
 
         $notification = Notification::make()->title($title);
-        match (true) {
-            $result['skipped'] === [] => $notification->success(),
-            $result['done'] > 0 => $notification->warning()->persistent(),
-            default => $notification->danger()->persistent(),
-        };
+        if ($result['skipped'] === [] && $result['done'] > 0) {
+            $notification->success();
+        } else {
+            $notification->warning()->persistent();
+        }
         $notification->send();
     }
 
@@ -335,11 +383,33 @@ class TrashActions
         return [...array_fill_keys(app(UserDeactivator::class)->requiredGroups($record), null), ...$data];
     }
 
-    private static function deleteDescription(Model $record): HtmlString
+    /** Penjelasan modal hapus, misalnya "Badan usaha dipindahkan ke tempat sampah dan hilang dari daftar. ..." */
+    private static function explanation(string $noun): string
     {
-        $paragraphs = [e(self::EXPLANATION)];
+        return ucfirst($noun).' dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.';
+    }
+
+    /**
+     * Saran di modal hapus Pengajuan dan User: menghentikan pengajuan atau melepas staf punya tombol sendiri yang menjaga riwayat.
+     *
+     * @param  class-string<Model>  $model
+     */
+    private static function deleteAdvice(string $model): ?string
+    {
+        return match ($model) {
+            DocumentRequest::class => 'Untuk menghentikan pengajuan yang sah, pakai Batalkan — riwayatnya tetap tercatat. Hapus hanya untuk data uji atau salah input.',
+            User::class => 'Staf keluar atau pindah? Pakai Nonaktifkan. Hapus hanya untuk user yang salah dibuat.',
+            default => null,
+        };
+    }
+
+    private static function deleteDescription(Model $record, string $noun): HtmlString
+    {
+        $paragraphs = [e(self::explanation($noun))];
         if ($record instanceof User) {
-            return new HtmlString('<p>'.$paragraphs[0].'</p>'.($record->isActive() ? UserResource::workloadSummary($record)->toHtml() : ''));
+            $workload = $record->isActive() ? UserResource::workloadSummary($record, forDeletion: true)->toHtml() : '';
+
+            return new HtmlString('<p>'.$paragraphs[0].'</p>'.$workload.'<p>'.e(self::deleteAdvice(User::class)).'</p>');
         }
 
         $usage = app(TrashManager::class)->usage($record);
@@ -351,6 +421,10 @@ class TrashActions
         if ($record instanceof Document) {
             $paragraphs[] = 'Pengingat masa berlakunya berhenti dan file tidak ikut dihapus.';
         }
+        $advice = self::deleteAdvice($record::class);
+        if ($advice !== null) {
+            $paragraphs[] = e($advice);
+        }
 
         return new HtmlString(implode('', array_map(fn (string $paragraph): string => "<p>{$paragraph}</p>", $paragraphs)));
     }
@@ -359,7 +433,7 @@ class TrashActions
      * @param  class-string<Model>  $model
      * @param  Collection<int, Model>  $records
      */
-    private static function bulkDeleteDescription(string $model, Collection $records): string
+    private static function bulkDeleteDescription(string $model, Collection $records, string $noun): string
     {
         $trash = app(TrashManager::class);
         $sentence = match ($model) {
@@ -368,7 +442,7 @@ class TrashActions
                 'punya tugas yang harus dialihkan, jadi dilewati; hapus satu per satu.'),
             DocumentRequest::class => self::countSentence(
                 $records->filter(fn (DocumentRequest $request): bool => $trash->usage($request)->notes !== [])->count(),
-                'masih berjalan; pengingat ke pengaju akan berhenti.'),
+                'masih berjalan; pengingat terkait pengajuan itu akan berhenti.'),
             default => (function () use ($records, $trash): string {
                 $usages = $records->map(fn (Model $record): TrashUsage => $trash->usage($record))->filter(fn (TrashUsage $usage): bool => $usage->active !== []);
                 $labels = $usages->flatMap(fn (TrashUsage $usage): array => array_column($usage->active, 'label'))->unique()->values()->all();
@@ -377,7 +451,7 @@ class TrashActions
             })(),
         };
 
-        return trim(self::EXPLANATION.' '.$sentence);
+        return trim(implode(' ', array_filter([self::explanation($noun), $sentence, self::deleteAdvice($model)])));
     }
 
     private static function countSentence(int $count, string $predicate): string
@@ -386,13 +460,13 @@ class TrashActions
     }
 
     /** @param  class-string<Model>  $model */
-    private static function restoreDescription(string $model): string
+    private static function restoreDescription(string $model, string $noun): string
     {
         return match ($model) {
             Document::class => 'Dokumen muncul kembali di daftar, file bisa diunduh lagi, dan pengingat masa berlaku berjalan lagi.',
-            User::class => 'User kembali dalam keadaan nonaktif. Aktifkan kembali lewat tombol Aktifkan kembali bila user perlu masuk lagi.',
+            User::class => 'User kembali dalam keadaan nonaktif. Bila user perlu masuk lagi, klik tombol Aktifkan kembali di halaman user.',
             DocumentRequest::class => 'Pengajuan kembali ke status semula. Tahap pengingat yang terlewat selama di tempat sampah tidak dikirim.',
-            default => 'Data kembali ke daftar seperti semula.',
+            default => ucfirst($noun).' kembali ke daftar seperti semula.',
         };
     }
 
