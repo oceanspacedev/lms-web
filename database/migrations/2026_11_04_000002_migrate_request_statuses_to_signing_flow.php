@@ -10,7 +10,8 @@ return new class extends Migration
 {
     /**
      * Pindahkan data tahap persetujuan lama ke alur draf, tanda tangan, dan serah terima fisik.
-     * Aman dijalankan ulang.
+     * Aman dijalankan ulang. Query model tidak boleh bergantung pada global scope, karena kolom `deleted_at`
+     * baru ada setelah migrasi 2026_11_05_031901.
      */
     public function up(): void
     {
@@ -32,7 +33,7 @@ return new class extends Migration
         $viewAll = Permission::findOrCreate('ViewAll:DocumentRequest', 'web');
 
         if (Permission::where('name', 'Approve:DocumentRequest')->where('guard_name', 'web')->exists()) {
-            User::permission('Approve:DocumentRequest')->get()->each(fn (User $user) => $user->givePermissionTo($escalation, $viewAll));
+            User::withoutGlobalScopes()->permission('Approve:DocumentRequest')->get()->each(fn (User $user) => $user->givePermissionTo($escalation, $viewAll));
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();

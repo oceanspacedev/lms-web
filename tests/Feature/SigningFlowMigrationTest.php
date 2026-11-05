@@ -6,8 +6,10 @@ use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -74,5 +76,27 @@ class SigningFlowMigrationTest extends TestCase
         $this->migration()->up();
 
         $this->assertTrue(Permission::where('name', 'ReceiveEscalation:DocumentRequest')->exists());
+    }
+
+    /**
+     * Di database lama migrasi ini berjalan sebelum kolom `deleted_at` dibuat (2026_11_05_031901), jadi tidak boleh
+     * memakai scope SoftDeletes model.
+     */
+    public function test_migration_runs_before_the_soft_delete_columns_exist(): void
+    {
+        Permission::findOrCreate('Approve:DocumentRequest', 'web');
+        $role = Role::findOrCreate('penyetuju_lama', 'web');
+        $role->givePermissionTo('Approve:DocumentRequest');
+        $approver = User::factory()->create();
+        $approver->assignRole($role);
+        foreach (['users', 'document_requests'] as $table) {
+            Schema::table($table, fn (Blueprint $table) => $table->dropColumn('deleted_at'));
+        }
+        $this->assertFalse(Schema::hasColumn('users', 'deleted_at'));
+
+        $this->migration()->up();
+
+        $this->assertTrue(DB::table('model_has_permissions')->where('model_id', $approver->id)
+            ->where('permission_id', Permission::findByName('ReceiveEscalation:DocumentRequest', 'web')->id)->exists());
     }
 }
