@@ -64,6 +64,22 @@ class DocumentForceDeleteTest extends TestCase
         return $request;
     }
 
+    /**
+     * Lampiran, draft, dan scan pengajuan di disk `local`.
+     *
+     * @return list<string>
+     */
+    private function requestFiles(DocumentRequest $request): array
+    {
+        $paths = ["lms/requests/pengajuan{$request->id}-ktp.pdf", "lms/requests/pengajuan{$request->id}-draft.pdf", "lms/requests/pengajuan{$request->id}-ttd.pdf"];
+        foreach ($paths as $path) {
+            Storage::disk('local')->put($path, 'isi');
+        }
+        $request->forceFill(['attachments' => ['ktp' => $paths[0]], 'draft_path' => $paths[1], 'signed_path' => $paths[2]])->save();
+
+        return $paths;
+    }
+
     private function forceDeleteError(Document $document, User $actor): string
     {
         try {
@@ -203,5 +219,58 @@ class DocumentForceDeleteTest extends TestCase
         $this->assertSame(['pending', 0, null], [$log->fresh()->status, $log->fresh()->attempts, $log->fresh()->error_message]);
         $this->assertDatabaseHas('document_activities', ['document_id' => $document->id, 'event' => 'restored', 'user_id' => $actor->id]);
         $this->assertDatabaseHas('trash_logs', ['subject_type' => 'document', 'subject_id' => $document->id, 'action' => 'restored', 'user_id' => $actor->id]);
+    }
+
+    public function test_force_delete_cascades_trashed_request_that_points_to_document(): void
+    {
+        Storage::fake('local');
+        $actor = User::factory()->create();
+        $document = $this->documentWithTwoVersions(title: 'Kontrak Hasil Pengajuan');
+        $documentPaths = $this->filePaths($document);
+        $request = $this->completedRequestFor($document);
+        $requestPaths = $this->requestFiles($request);
+        $this->manager()->trash($request, $actor);
+        $this->manager()->trash($document, $actor);
+
+        $this->manager()->forceDelete($document, $actor);
+
+        $this->assertDatabaseMissing('documents', ['id' => $document->id]);
+        $this->assertDatabaseMissing('document_requests', ['id' => $request->id]);
+        Storage::disk('s3')->assertMissing($documentPaths);
+        Storage::disk('local')->assertMissing($requestPaths);
+        $logs = TrashLog::where('action', 'force_deleted')->orderBy('id')->get()
+            ->map(fn (TrashLog $log): array => [$log->subject_type, $log->subject_id, $log->details['via']['subject'] ?? null, $log->details['via']['id'] ?? null])->all();
+        $this->assertSame([['document_request', $request->id, 'document', $document->id], ['document', $document->id, null, null]], $logs);
+    }
+
+    public function test_company_force_delete_cascades_trashed_request_pointing_to_cascaded_trashed_document(): void
+    {
+        Storage::fake('local');
+        $actor = User::factory()->create();
+        $company = Company::factory()->create(['name' => 'PT Induk']);
+        $document = $this->documentWithTwoVersions($company, 'Kontrak Lama');
+        $documentPaths = $this->filePaths($document);
+        $request = $this->completedRequestFor($document);
+        $request->forceFill(['company_id' => $company->id])->save();
+        $requestPaths = $this->requestFiles($request);
+        $this->manager()->trash($request, $actor);
+        $this->manager()->trash($document, $actor);
+        $this->manager()->trash($company, $actor);
+
+        $this->manager()->forceDelete($company, $actor);
+
+        $this->assertDatabaseMissing('companies', ['id' => $company->id]);
+        $this->assertDatabaseMissing('documents', ['id' => $document->id]);
+        $this->assertDatabaseMissing('document_versions', ['document_id' => $document->id]);
+        $this->assertDatabaseMissing('document_requests', ['id' => $request->id]);
+        Storage::disk('s3')->assertMissing($documentPaths);
+        Storage::disk('local')->assertMissing($requestPaths);
+        $logs = TrashLog::where('action', 'force_deleted')->orderBy('id')->get()
+            ->map(fn (TrashLog $log): array => [$log->subject_type, $log->subject_id, $log->details['via']['subject'] ?? null, $log->details['via']['id'] ?? null])->all();
+        $this->assertSame([
+            ['document_request', $request->id, 'company', $company->id],
+            ['document', $document->id, 'company', $company->id],
+            ['company', $company->id, null, null],
+        ], $logs);
     }
 }

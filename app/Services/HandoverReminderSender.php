@@ -7,10 +7,14 @@ use App\Models\DocumentRequestNotification;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Generator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class HandoverReminderSender
 {
+    private const RELATIONS = ['company', 'documentType', 'pic', 'requester', 'reviewer'];
+
     public function __construct(private WaghubService $waghub) {}
 
     /**
@@ -24,13 +28,44 @@ class HandoverReminderSender
     {
         $created = 0;
         $setting = ReminderTemplate::globalSetting();
-        $relations = ['company', 'documentType', 'pic', 'requester', 'reviewer'];
-        DocumentRequest::with($relations)->handoverLate()->each(function (DocumentRequest $request) use ($today, $setting, &$created): void {
+        foreach ($this->dueReminders(DocumentRequest::query(), $today) as $reminder) {
+            $created += $this->queue($reminder, $setting);
+        }
+
+        return $created;
+    }
+
+    /**
+     * Dipanggil saat pengajuan pulih dari tempat sampah: tahap yang sudah jatuh tempo dicatat sebagai notifikasi `cancelled`
+     * dengan kunci yang sama seperti buatan run(), supaya run() berikutnya tidak mengirimnya. Tahap berikutnya tetap terkirim.
+     *
+     * @return int Jumlah notifikasi yang dicatat terlewat.
+     */
+    public function skipStagesAlreadyReached(DocumentRequest $request): int
+    {
+        $skipped = 0;
+        $setting = ReminderTemplate::globalSetting();
+        foreach ($this->dueReminders(DocumentRequest::query()->whereKey($request->getKey()), null) as $reminder) {
+            $skipped += $this->queue($reminder, $setting, ['status' => 'cancelled', 'error_message' => DocumentRequestNotification::SKIPPED_WHILE_TRASHED_MESSAGE]);
+        }
+
+        return $skipped;
+    }
+
+    /**
+     * Pengingat yang jatuh tempo untuk pengajuan di `$query`: tahap keterlambatan tertinggi yang sudah terlewati, dan pengingat unggah scan.
+     *
+     * @param  Builder<DocumentRequest>  $query
+     * @return Generator<int, array{request: DocumentRequest, keyPart: string, template: string, targets: list<array{kind: string, suffix: string, phone: ?string, link: string, template?: string}>}>
+     */
+    private function dueReminders(Builder $query, ?CarbonImmutable $today): Generator
+    {
+        foreach ((clone $query)->with(self::RELATIONS)->handoverLate()->lazyById() as $request) {
             $stage = $this->highestReachedStage($request->daysSinceSigned($today) ?? 0);
             if ($stage === null) {
-                return;
+                continue;
             }
-            $targets = [['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $this->applicantPhone($request), 'link' => $this->applicantLink($request)]];
+            $targets = [$this->applicantTarget($request)];
             $adminLink = route('filament.admin.resources.document-requests.edit', ['record' => $request->id]);
             if ($stage >= 14) {
                 $targets = [...$targets, ...$this->userTargets($request->legalStaffRecipients(), 'legal', $adminLink, 'late_staff')];
@@ -38,14 +73,12 @@ class HandoverReminderSender
             if ($stage >= 28) {
                 $targets = [...$targets, ...$this->userTargets($request->coordinatorRecipients(), 'coordinator', $adminLink, 'late_staff')];
             }
-            $created += $this->queue($request, "late{$stage}", "late_{$stage}", $targets, $setting);
-        });
-        DocumentRequest::with($relations)->scanOverdue()->each(function (DocumentRequest $request) use ($setting, &$created): void {
-            $targets = [['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $this->applicantPhone($request), 'link' => $this->applicantLink($request)]];
-            $created += $this->queue($request, 'scan'.DocumentRequest::SCAN_REMINDER_DAYS, 'scan_reminder', $targets, $setting);
-        });
 
-        return $created;
+            yield ['request' => $request, 'keyPart' => "late{$stage}", 'template' => "late_{$stage}", 'targets' => $targets];
+        }
+        foreach ((clone $query)->with(self::RELATIONS)->scanOverdue()->lazyById() as $request) {
+            yield ['request' => $request, 'keyPart' => 'scan'.DocumentRequest::SCAN_REMINDER_DAYS, 'template' => 'scan_reminder', 'targets' => [$this->applicantTarget($request)]];
+        }
     }
 
     /** Tahap tertinggi yang sudah terlewati: angka terbesar di LATE_REMINDER_DAYS yang lebih kecil dari jumlah hari. */
@@ -55,23 +88,28 @@ class HandoverReminderSender
     }
 
     /**
-     * @param  array<int, array{kind: string, suffix: string, phone: ?string, link: string, template?: string}>  $targets  `template` menggantikan `$template` untuk penerima itu.
+     * Masukkan pengingat ke antrean, sekali per kunci. `$attributes` menimpa isian baris baru, misalnya status `cancelled`.
+     *
+     * @param  array{request: DocumentRequest, keyPart: string, template: string, targets: list<array{kind: string, suffix: string, phone: ?string, link: string, template?: string}>}  $reminder  `template` pada target menggantikan template pengingat untuk penerima itu.
+     * @param  array<string, mixed>  $attributes
      */
-    private function queue(DocumentRequest $request, string $keyPart, string $template, array $targets, ?ReminderTemplate $setting): int
+    private function queue(array $reminder, ?ReminderTemplate $setting, array $attributes = []): int
     {
         $created = 0;
+        $request = $reminder['request'];
         $stageStart = $this->stageStart($request);
-        foreach ($targets as $target) {
-            $key = "lms-request-{$request->id}-{$stageStart}-{$keyPart}-{$target['suffix']}";
+        foreach ($reminder['targets'] as $target) {
+            $key = "lms-request-{$request->id}-{$stageStart}-{$reminder['keyPart']}-{$target['suffix']}";
             $phone = $this->waghub->normalizePhone($target['phone']);
             $notification = DocumentRequestNotification::firstOrCreate(['event_key' => $key], [
                 'document_request_id' => $request->id, 'recipient_kind' => $target['kind'], 'recipient_phone' => $phone,
                 'payload' => [
                     'recipient' => ['type' => 'phone', 'value' => $phone],
-                    'message' => ['type' => 'text', 'text' => DocumentRequestNotifier::renderTemplate($request, $target['template'] ?? $template, $target['link'], null, $setting)],
+                    'message' => ['type' => 'text', 'text' => DocumentRequestNotifier::renderTemplate($request, $target['template'] ?? $reminder['template'], $target['link'], null, $setting)],
                     'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'), 'route_key' => config('services.waghub.route_key'),
                     'expires_at' => now()->addDay()->toIso8601String(), 'client_reference' => $key,
                 ],
+                ...$attributes,
             ]);
             if ($notification->wasRecentlyCreated) {
                 $created++;
@@ -97,9 +135,10 @@ class HandoverReminderSender
         return $stageStart;
     }
 
-    private function applicantPhone(DocumentRequest $request): ?string
+    /** @return array{kind: string, suffix: string, phone: ?string, link: string} */
+    private function applicantTarget(DocumentRequest $request): array
     {
-        return $request->requester_phone ?? $request->requester?->phone;
+        return ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->requester_phone ?? $request->requester?->phone, 'link' => $this->applicantLink($request)];
     }
 
     private function applicantLink(DocumentRequest $request): string
