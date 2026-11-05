@@ -6,6 +6,10 @@ use App\Filament\Auth\Pages\EmailLogin;
 use App\Filament\Auth\Pages\PhoneLogin;
 use App\Http\Controllers\PublicDocumentRequestController;
 use App\Models\User;
+use App\Services\Trash\CompanyTrashHandler;
+use App\Services\Trash\DocumentTypeTrashHandler;
+use App\Services\Trash\TrashHandler;
+use App\Services\Trash\TrashManager;
 use App\Services\WaghubService;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
@@ -25,7 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->tag([CompanyTrashHandler::class, DocumentTypeTrashHandler::class], TrashHandler::class);
+        $this->app->when(TrashManager::class)->needs('$handlers')->giveTagged(TrashHandler::class);
     }
 
     /**
