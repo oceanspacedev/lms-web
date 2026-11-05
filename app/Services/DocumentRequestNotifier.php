@@ -118,6 +118,19 @@ class DocumentRequestNotifier
         };
     }
 
+    /**
+     * Nomor tersimpan yang hanya dimiliki user di tempat sampah tidak dikirimi lagi. Nomor pengaju publik tidak diperiksa,
+     * karena pengaju publik bukan user.
+     */
+    private function isForTrashedUser(DocumentRequestNotification $notification, DocumentRequest $request): bool
+    {
+        if ($notification->recipient_kind === 'applicant' && $request->requester_phone !== null) {
+            return false;
+        }
+
+        return User::phoneBelongsOnlyToTrashedUsers($notification->recipient_phone);
+    }
+
     private function currentPhone(DocumentRequestNotification $notification): ?string
     {
         $request = DocumentRequest::find($notification->document_request_id);
@@ -162,6 +175,11 @@ class DocumentRequestNotifier
                 $request = DocumentRequest::find($notification->document_request_id);
                 if (! $request || $this->isSuperseded($notification, $request)) {
                     $notification->update(['status' => 'cancelled']);
+
+                    return;
+                }
+                if ($this->isForTrashedUser($notification, $request)) {
+                    $notification->update(['status' => 'cancelled', 'error_message' => DocumentRequestNotification::RECIPIENT_TRASHED_MESSAGE]);
 
                     return;
                 }

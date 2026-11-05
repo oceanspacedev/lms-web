@@ -112,7 +112,12 @@ class DocumentReminderSender
                 return null;
             }
             try {
-                $payload = $log->request_payload ?? $this->payload($document, $log, $today);
+                // Payload tersimpan (antre, gagal, atau kirim ulang) yang menuju user di tempat sampah disusun ulang ke penerima yang sah.
+                $payload = $log->request_payload;
+                if ($payload !== null && User::phoneBelongsOnlyToTrashedUsers($payload['recipient']['value'] ?? null)) {
+                    $payload = null;
+                }
+                $payload ??= $this->payload($document, $log, $today);
                 $log->update(['request_payload' => $payload, 'recipient_phone' => $payload['recipient']['value']]);
                 $response = $this->waghub->send($payload, $key);
                 $log->update(['provider_response' => $response->json() ?? ['http_status' => $response->status()]]);

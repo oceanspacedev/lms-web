@@ -251,6 +251,48 @@ class UserTrashTest extends TestCase
         Livewire::test(CreateDocument::class)->fillForm(['pic_user_id' => $ghost->id])->call('create')->assertHasFormErrors(['pic_user_id']);
     }
 
+    public function test_stored_payload_for_a_trashed_user_is_never_sent_on_retry_or_resend(): void
+    {
+        $admin = $this->superAdmin();
+        $formerPic = User::factory()->deactivated()->create(['phone' => '081200000020']);
+        $backup = $this->staff('081255555555', ['receive_reminder'], 'Cadangan Lama');
+        $this->staff('081266666666', ['receive_reminder'], 'Cadangan Baru');
+        ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30], 'body' => ReminderTemplate::DEFAULT_BODY]);
+        // Pengiriman sebelumnya gagal; payload yang tersimpan menuju cadangan lama.
+        $failedLog = fn (Document $document): ReminderLog => ReminderLog::create([
+            'document_version_id' => $document->current_version_id, 'offset_days' => 30, 'status' => 'failed', 'attempts' => 1,
+            'last_attempt_at' => now()->subDay(), 'recipient_phone' => '6281255555555', 'error_message' => 'WagHub menolak permintaan (HTTP 500).',
+            'request_payload' => ['recipient' => ['type' => 'phone', 'value' => '6281255555555'], 'message' => ['type' => 'text', 'text' => 'Pengingat lama'], 'purpose' => 'test-purpose'],
+        ]);
+        $retried = $failedLog($this->documentWithPic($formerPic, 'Kontrak Dicoba Ulang', $admin));
+        $resent = $failedLog($this->documentWithPic($formerPic, 'Kontrak Dikirim Ulang', $admin));
+        $requestRecipient = $this->staff('081277777777', ['Review:DocumentRequest'], 'Pemeriksa Dibuang');
+        $request = $this->request('submitted');
+        $queued = DocumentRequestNotification::factory()->create(['document_request_id' => $request->id, 'recipient_kind' => 'legal', 'event_key' => "lms-request-{$request->id}-1-u{$requestRecipient->id}",
+            'recipient_phone' => '6281277777777', 'status' => 'failed', 'payload' => ['recipient' => ['type' => 'phone', 'value' => '6281277777777'], 'message' => ['type' => 'text', 'text' => 'Pesan lama']]]);
+
+        $this->manager()->trash($backup, $admin);
+        // Dibuang langsung, tanpa pembatalan antrean, supaya yang diuji penjagaan saat mengirim.
+        $requestRecipient->delete();
+
+        $this->assertSame('accepted', app(DocumentReminderSender::class)->resend($resent, $admin));
+        app(DocumentReminderSender::class)->run();
+        $this->assertSame('cancelled', app(DocumentRequestNotifier::class)->resend($queued, $admin));
+        app(DocumentRequestNotifier::class)->run();
+
+        foreach ([$retried, $resent] as $log) {
+            $this->assertSame(['accepted', '6281266666666'], [$log->fresh()->status, $log->fresh()->recipient_phone]);
+        }
+        $this->assertSame(['cancelled', DocumentRequestNotification::RECIPIENT_TRASHED_MESSAGE], [$queued->fresh()->status, $queued->fresh()->error_message]);
+        Http::assertNotSent(fn (Request $request): bool => in_array($request['recipient']['value'] ?? null, ['6281255555555', '6281277777777'], true));
+        Http::assertSentCount(2);
+        $this->assertFalse(User::phoneBelongsOnlyToTrashedUsers('6281266666666'));
+        $this->assertTrue(User::phoneBelongsOnlyToTrashedUsers('6281255555555'));
+        // Nomor yang juga dipakai user aktif tetap boleh dikirimi.
+        $this->staff('6281255555555', name: 'Staf Baru Nomor Lama');
+        $this->assertFalse(User::phoneBelongsOnlyToTrashedUsers('6281255555555'));
+    }
+
     public function test_trashed_requester_is_marked_in_request_list_and_detail_but_not_in_messages(): void
     {
         $admin = $this->superAdmin();

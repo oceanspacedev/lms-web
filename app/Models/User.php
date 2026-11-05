@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\Trashable;
+use App\Services\WaghubService;
 use App\Support\ActiveReference;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -68,6 +69,23 @@ class User extends Authenticatable implements FilamentUser
     public function whatsAppRecipientPhone(): ?string
     {
         return $this->trashed() ? null : $this->phone;
+    }
+
+    /**
+     * Nomor WhatsApp (sudah dinormalisasi) yang hanya dimiliki user di tempat sampah. Dipakai saat mengirim pesan yang
+     * penerimanya sudah tersimpan (payload antre atau gagal), supaya pesan itu tidak pernah sampai ke user di tempat sampah.
+     */
+    public static function phoneBelongsOnlyToTrashedUsers(?string $normalizedPhone): bool
+    {
+        if ($normalizedPhone === null || strlen($normalizedPhone) < 3) {
+            return false;
+        }
+
+        $waghub = app(WaghubService::class);
+        $owners = static::withTrashed()->where('phone', 'like', '%'.substr($normalizedPhone, 2))->get(['id', 'phone', 'deleted_at'])
+            ->filter(fn (User $user): bool => $waghub->normalizePhone($user->phone) === $normalizedPhone);
+
+        return $owners->isNotEmpty() && $owners->every(fn (User $user): bool => $user->trashed());
     }
 
     public function isSuperAdmin(): bool
