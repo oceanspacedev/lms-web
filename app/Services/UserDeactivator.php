@@ -128,19 +128,18 @@ class UserDeactivator
     }
 
     /**
-     * Alasan aksi Hapus tidak boleh dijalankan, atau null bila boleh.
-     * User aktif mengikuti aturan Nonaktifkan; user yang sudah nonaktif hanya tidak boleh dihapus oleh dirinya sendiri,
-     * atau (bila super admin) oleh non-super-admin.
+     * Alasan aksi Hapus tidak boleh dijalankan, atau null bila boleh, dengan kalimat "hapus".
+     * User aktif ikut dinonaktifkan, jadi mengikuti aturan Nonaktifkan (izin ubah user, super admin aktif terakhir);
+     * user yang sudah nonaktif hanya tidak boleh dihapus oleh dirinya sendiri, atau (bila super admin) oleh non-super-admin.
      */
     public function deletionDenialReason(User $actor, User $user): ?string
     {
-        if ($user->isActive()) {
-            return $this->deactivationDenialReason($actor, $user);
-        }
-
         return match (true) {
             $actor->is($user) => 'Anda tidak dapat menghapus akun sendiri.',
             $user->isSuperAdmin() && ! $actor->isSuperAdmin() => 'Hanya super admin yang dapat menghapus super admin.',
+            ! $user->isActive() => null,
+            ! Gate::forUser($actor)->allows('update', $user) => 'User aktif ikut dinonaktifkan saat dihapus, dan Anda tidak berhak mengubah user.',
+            $user->isSuperAdmin() && ! $this->hasOtherActiveSuperAdmin($user) => 'Super admin aktif terakhir tidak dapat dihapus.',
             default => null,
         };
     }
@@ -149,6 +148,7 @@ class UserDeactivator
     public function reactivationDenialReason(User $actor, User $user): ?string
     {
         return match (true) {
+            $user->trashed() => 'User ini ada di tempat sampah. Pulihkan terlebih dahulu.',
             $user->isActive() => 'User ini sudah aktif.',
             ! Gate::forUser($actor)->allows('update', $user) => 'Anda tidak berhak mengubah user.',
             $user->isSuperAdmin() && ! $actor->isSuperAdmin() => 'Hanya super admin yang dapat mengaktifkan kembali super admin.',

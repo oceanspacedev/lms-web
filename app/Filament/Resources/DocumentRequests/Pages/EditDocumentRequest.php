@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\DocumentRequests\Pages;
 
 use App\Filament\Concerns\HasBackToListAction;
+use App\Filament\Concerns\ShowsTrashedRecordReadOnly;
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Company;
@@ -28,6 +30,7 @@ use Throwable;
 class EditDocumentRequest extends EditRecord
 {
     use HasBackToListAction;
+    use ShowsTrashedRecordReadOnly;
 
     protected static string $resource = DocumentRequestResource::class;
 
@@ -61,8 +64,7 @@ class EditDocumentRequest extends EditRecord
     {
         $policy = new DocumentRequestPolicy;
 
-        return [
-            $this->backToListAction(),
+        $flowActions = [
             Action::make('submit')->label('Ajukan')->visible(fn (): bool => $this->record->editableBy(auth()->user()) && auth()->user()->can('update', $this->record))
                 ->action(function (): void {
                     $this->save(shouldRedirect: false, shouldSendSavedNotification: false);
@@ -127,7 +129,16 @@ class EditDocumentRequest extends EditRecord
                     fn () => $this->record->transition('cancelled', auth()->user(), $data['note']),
                     ['note'], 'Pengajuan dibatalkan', 'Pengajuan belum dibatalkan',
                 )),
+        ];
+
+        return [
+            $this->backToListAction(),
+            TrashActions::restore('pengajuan'),
+            TrashActions::forceDelete('pengajuan'),
+            // Pengajuan di tempat sampah hanya-baca: semua langkah alur disembunyikan sampai dipulihkan.
+            ...array_map(fn (Action $action): Action => $action->hidden(fn (): bool => $this->record->trashed()), $flowActions),
             Action::make('document')->label('Buka Dokumen')->color('gray')->visible(fn (): bool => $this->record->document_id && auth()->user()->can('View:Document'))->url(fn (): ?string => $this->record->document_id ? DocumentResource::getUrl('view', ['record' => $this->record->document_id]) : null),
+            TrashActions::delete('pengajuan'),
         ];
     }
 

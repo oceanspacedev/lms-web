@@ -165,7 +165,7 @@ class TrashFoundationTest extends TestCase
     {
         $superAdmin = $this->superAdmin();
         $this->assertFalse($superAdmin->can('delete', $superAdmin));
-        $this->assertSame('Anda tidak dapat menonaktifkan akun sendiri.', app(UserDeactivator::class)->deletionDenialReason($superAdmin, $superAdmin));
+        $this->assertSame('Anda tidak dapat menghapus akun sendiri.', app(UserDeactivator::class)->deletionDenialReason($superAdmin, $superAdmin));
 
         $other = User::factory()->create();
         $this->assertTrue($superAdmin->can('delete', $other));

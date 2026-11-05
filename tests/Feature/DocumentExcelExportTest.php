@@ -157,7 +157,8 @@ class DocumentExcelExportTest extends TestCase
 
     public function test_list_export_marks_deleted_documents_when_the_trashed_filter_includes_them(): void
     {
-        $this->signIn();
+        // Filter Data dihapus hanya untuk super admin.
+        $this->actingAs(User::factory()->create()->assignRole(config('filament-shield.super_admin.name')));
         $this->document('Kontrak Hidup', '2026-10-19');
         $this->document('Kontrak Dihapus', '2027-10-09')->delete();
 

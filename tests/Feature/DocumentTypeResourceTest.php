@@ -147,11 +147,16 @@ class DocumentTypeResourceTest extends TestCase
         $type = DocumentType::factory()->create();
         Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])
             ->fillForm(['has_expiry' => false, 'is_active' => false])
-            ->call('save')->assertHasNoFormErrors()->assertActionDoesNotExist('delete');
+            ->call('save')->assertHasNoFormErrors()->assertActionHidden('delete');
         $this->assertSame([], $type->fresh()->reminder_days);
         $this->assertDatabaseHas('document_types', ['id' => $type->id, 'is_active' => false, 'has_expiry' => false]);
         $this->assertFalse(DocumentTypeResource::canDelete($type));
         $this->assertFalse(DocumentTypeResource::canDeleteAny());
+
+        auth()->user()->givePermissionTo(['Delete:DocumentType', 'DeleteAny:DocumentType']);
+        $this->assertTrue(DocumentTypeResource::canDelete($type));
+        $this->assertTrue(DocumentTypeResource::canDeleteAny());
+        Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])->assertActionVisible('delete');
     }
 
     public function test_search_and_filters_match_document_types(): void

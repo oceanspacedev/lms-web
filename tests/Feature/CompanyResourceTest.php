@@ -174,17 +174,22 @@ class CompanyResourceTest extends TestCase
         $this->assertSame('Badan Hukum', $company->fresh()->legal_form);
     }
 
-    public function test_company_can_be_updated_and_deactivated_without_deletion(): void
+    public function test_company_can_be_updated_and_deactivated_and_deletion_needs_the_delete_permission(): void
     {
         $this->signInWithPermissions(['ViewAny:Company', 'Update:Company']);
         $company = Company::factory()->create();
         Livewire::test(EditCompany::class, ['record' => $company->getRouteKey()])
             ->fillForm(['name' => $company->name, 'npwp' => '12.345.678.9-012.000', 'address' => 'Jakarta', 'is_active' => false])
-            ->call('save')->assertHasNoFormErrors()->assertActionDoesNotExist('delete');
+            ->call('save')->assertHasNoFormErrors()->assertActionHidden('delete');
         $this->assertDatabaseHas('companies', ['id' => $company->id, 'address' => 'Jakarta', 'is_active' => false]);
         $this->assertFalse($company->fresh()->is_active);
         $this->assertFalse(CompanyResource::canDelete($company));
         $this->assertFalse(CompanyResource::canDeleteAny());
+
+        auth()->user()->givePermissionTo(['Delete:Company', 'DeleteAny:Company']);
+        $this->assertTrue(CompanyResource::canDelete($company));
+        $this->assertTrue(CompanyResource::canDeleteAny());
+        Livewire::test(EditCompany::class, ['record' => $company->getRouteKey()])->assertActionVisible('delete');
     }
 
     public function test_edit_cannot_take_another_company_name(): void

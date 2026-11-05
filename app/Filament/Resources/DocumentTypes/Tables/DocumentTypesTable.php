@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DocumentTypes\Tables;
 
+use App\Filament\Concerns\TrashActions;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
@@ -25,14 +26,20 @@ class DocumentTypesTable
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Aktif' : 'Nonaktif')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray')
                     ->sortable(),
+                TrashActions::deletedColumn(),
             ])
             ->filters([
                 TernaryFilter::make('is_active')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif'),
                 TernaryFilter::make('has_expiry')->label('Masa Berlaku')->placeholder('Semua jenis')->trueLabel('Memiliki Masa Berlaku')->falseLabel('Tanpa Masa Berlaku'),
+                TrashActions::filter(),
             ])
             ->recordActions([
                 EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
+                TrashActions::delete('jenis dokumen')->iconButton()->tooltip('Hapus'),
+                TrashActions::restore('jenis dokumen')->iconButton()->tooltip('Pulihkan'),
+                TrashActions::forceDelete('jenis dokumen')->iconButton()->tooltip('Hapus permanen'),
             ])
+            ->toolbarActions(TrashActions::bulkActions('jenis dokumen'))
             ->defaultSort('name')
             ->emptyStateHeading('Belum ada jenis dokumen')
             ->emptyStateDescription('Tambahkan jenis dokumen.');

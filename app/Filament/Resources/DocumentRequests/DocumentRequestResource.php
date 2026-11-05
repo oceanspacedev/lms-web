@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DocumentRequests;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\DocumentRequests\Pages\CreateDocumentRequest;
 use App\Filament\Resources\DocumentRequests\Pages\EditDocumentRequest;
 use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
@@ -53,6 +54,11 @@ class DocumentRequestResource extends Resource
                 $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull('reviewer_id')->orWhere('reviewer_id', $user->id)->orWhereIn('status', DocumentRequest::LEGAL_VISIBLE_STATUSES)));
             }
         });
+    }
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return TrashActions::routeBindingQuery(parent::getRecordRouteBindingEloquentQuery());
     }
 
     /**

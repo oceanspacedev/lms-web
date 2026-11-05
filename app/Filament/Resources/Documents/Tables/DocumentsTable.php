@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Tables;
 
-use App\Filament\Resources\Documents\DocumentResource;
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Models\Document;
 use App\Services\DocumentSpreadsheetExporter;
@@ -16,7 +16,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,6 +62,7 @@ class DocumentsTable
                     ->formatStateUsing(fn (string $state, Document $record): string => $record->trashed() ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state, Document $record): string => $record->trashed() ? 'gray' : Document::EXPIRY_STATUS_COLORS[$state])
                     ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null),
+                TrashActions::deletedColumn(),
                 TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
                 TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
                 TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)
@@ -110,8 +110,7 @@ class DocumentsTable
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->whereHas('currentVersion', fn (Builder $version): Builder => $version->where('mime_type', $data['value']))
                         : $query),
-                TrashedFilter::make()->label('Dokumen Dihapus')
-                    ->placeholder('Tanpa dokumen dihapus')->trueLabel('Dengan dokumen dihapus')->falseLabel('Hanya dokumen dihapus'),
+                TrashActions::filter(),
             ], layout: FiltersLayout::Hidden)
             ->filtersFormColumns(1)
             ->deferFilters(false)
@@ -122,8 +121,11 @@ class DocumentsTable
                     ->iconButton()->tooltip('Unduh file')
                     ->url(fn (Document $record): string => route('documents.download', $record))->openUrlInNewTab()
                     ->visible(fn (Document $record): bool => ! $record->trashed() && Gate::allows('view', $record)),
-                DocumentResource::restoreAction()->iconButton()->tooltip('Pulihkan dokumen'),
+                TrashActions::delete('dokumen')->iconButton()->tooltip('Hapus dokumen'),
+                TrashActions::restore('dokumen')->iconButton()->tooltip('Pulihkan dokumen'),
+                TrashActions::forceDelete('dokumen')->iconButton()->tooltip('Hapus permanen dokumen'),
             ])
+            ->toolbarActions(TrashActions::bulkActions('dokumen'))
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
                 ? 'Dokumen tidak ditemukan' : 'Belum ada dokumen')

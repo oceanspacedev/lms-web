@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Tables;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use Filament\Actions\EditAction;
@@ -27,21 +28,28 @@ class UsersTable
                     ->color(fn (User $record): string => $record->isActive() ? 'success' : 'gray')
                     ->description(fn (User $record): ?string => $record->isActive() ? null
                         : 'Dinonaktifkan oleh '.($record->deactivatedBy?->name ?? '-').' pada '.$record->deactivated_at->timezone(config('lms.reminder_timezone'))->format('d/m/Y H:i')),
+                TrashActions::deletedColumn(),
             ])
             ->filters([
+                // User di tempat sampah selalu nonaktif; "Aktif" (bawaan) tetap memuatnya supaya filter Data dihapus langsung menampilkannya.
                 TernaryFilter::make('status')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif')->default(true)
                     ->queries(
-                        true: fn (Builder $query): Builder => $query->whereNull('deactivated_at'),
+                        true: fn (Builder $query): Builder => $query->where(fn (Builder $query): Builder => $query->whereNull('deactivated_at')->orWhereNotNull('users.deleted_at')),
                         false: fn (Builder $query): Builder => $query->whereNotNull('deactivated_at'),
                         blank: fn (Builder $query): Builder => $query,
                     ),
                 SelectFilter::make('roles')->label('Peran')->relationship('roles', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('guard_name', 'web'))->searchable()->preload(),
+                TrashActions::filter(),
             ])
             ->recordActions([
                 EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
                 UserResource::deactivateAction()->iconButton()->tooltip('Nonaktifkan'),
                 UserResource::reactivateAction()->iconButton()->tooltip('Aktifkan kembali'),
+                TrashActions::delete('user')->iconButton()->tooltip('Hapus'),
+                TrashActions::restore('user')->iconButton()->tooltip('Pulihkan'),
+                TrashActions::forceDelete('user')->iconButton()->tooltip('Hapus permanen'),
             ])
+            ->toolbarActions(TrashActions::bulkActions('user'))
             ->defaultSort('name')
             ->emptyStateHeading('Belum ada user')
             ->emptyStateDescription('Tambahkan user dan pilih peran sesuai tanggung jawabnya.');

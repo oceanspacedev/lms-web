@@ -425,9 +425,9 @@ class UserTrashTest extends TestCase
         $trashedSuperAdmin->assignRole(config('filament-shield.super_admin.name'));
         $trashedSuperAdmin->delete();
 
-        $this->assertThrows(fn () => $this->manager()->trash($admin, $admin), ValidationException::class, 'Anda tidak dapat menonaktifkan akun sendiri.');
-        $this->assertThrows(fn () => $this->manager()->trash($admin, $staffAdmin), ValidationException::class, 'Hanya super admin yang dapat menonaktifkan super admin.');
-        $this->assertThrows(fn () => $this->manager()->trash($admin, $formerSuperAdmin), ValidationException::class, 'Super admin aktif terakhir tidak dapat dinonaktifkan.');
+        $this->assertThrows(fn () => $this->manager()->trash($admin, $admin), ValidationException::class, 'Anda tidak dapat menghapus akun sendiri.');
+        $this->assertThrows(fn () => $this->manager()->trash($admin, $staffAdmin), ValidationException::class, 'Hanya super admin yang dapat menghapus super admin.');
+        $this->assertThrows(fn () => $this->manager()->trash($admin, $formerSuperAdmin), ValidationException::class, 'Super admin aktif terakhir tidak dapat dihapus.');
         $this->assertThrows(fn () => $this->manager()->trash($formerSuperAdmin, $staffAdmin), ValidationException::class, 'Hanya super admin yang dapat menghapus super admin.');
         $this->assertFalse($staffAdmin->can('delete', $admin));
         $this->assertFalse($admin->fresh()->trashed());

@@ -285,9 +285,10 @@ class DocumentRequest extends Model
         return self::STATUSES[$status] ?? self::LEGACY_STATUS_LABELS[$status] ?? $status;
     }
 
+    /** Draf atau revisi milik pengaju sendiri; pengajuan di tempat sampah tidak bisa diubah sebelum dipulihkan. */
     public function editableBy(User $user): bool
     {
-        return $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
+        return ! $this->trashed() && $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
     }
 
     public function revisionNumber(): int

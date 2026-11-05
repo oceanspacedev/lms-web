@@ -69,9 +69,11 @@ final readonly class TrashUsage
     }
 
     /**
+     * Menggabungkan bagian kalimat: "A dan B" atau "A, B, dan C".
+     *
      * @param  list<string>  $parts
      */
-    private static function join(array $parts): string
+    public static function join(array $parts): string
     {
         if (count($parts) <= 2) {
             return implode(' dan ', $parts);

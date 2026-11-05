@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DocumentRequests\Tables;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
 use App\Models\DocumentRequest;
@@ -51,6 +52,7 @@ class DocumentRequestsTable
                 ->tooltip(fn (DocumentRequest $record): ?string => mb_strlen((string) self::handoverNote($record)) > self::HANDOVER_NOTE_LIMIT ? self::handoverNote($record) : null)
                 ->color(fn (DocumentRequest $record): ?string => $record->status === 'handover' && $record->isHandoverLate() ? 'danger' : ($record->status === 'signing' ? 'warning' : null)),
             TextColumn::make('updated_at')->label('Diperbarui')->dateTime('d M Y')->timezone(config('lms.reminder_timezone'))->sortable(),
+            TrashActions::deletedColumn(),
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
             SelectFilter::make('stage')->label('Tahap')->options([
@@ -72,8 +74,16 @@ class DocumentRequestsTable
                 ->label(fn (): string => 'Menunggu lebih dari '.ReminderTemplate::requestReminderSettings()['after_days'].' hari')
                 ->query(fn (Builder $query): Builder => $query->waitingLongerThan(ReminderTemplate::requestReminderSettings()['after_days']))
                 ->indicator('Menunggu lama'),
+            TrashActions::filter(),
         ])
-            ->recordActions([Action::make('open')->label('Buka')->icon('heroicon-o-eye')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record]))])->defaultSort('updated_at', 'desc')
+            ->recordActions([
+                Action::make('open')->label('Buka')->icon('heroicon-o-eye')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record])),
+                TrashActions::delete('pengajuan')->iconButton()->tooltip('Hapus'),
+                TrashActions::restore('pengajuan')->iconButton()->tooltip('Pulihkan'),
+                TrashActions::forceDelete('pengajuan')->iconButton()->tooltip('Hapus permanen'),
+            ])
+            ->toolbarActions(TrashActions::bulkActions('pengajuan'))
+            ->defaultSort('updated_at', 'desc')
             ->emptyStateHeading(fn (HasTable $livewire): string => match (self::emptyReason($livewire)) {
                 'search' => 'Pengajuan tidak ditemukan',
                 'actionable' => 'Tidak ada pengajuan yang perlu tindakan Anda',

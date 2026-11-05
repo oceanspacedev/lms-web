@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
@@ -17,7 +18,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
@@ -37,17 +38,12 @@ class UserResource extends Resource
 
     protected static bool $isGloballySearchable = false;
 
-    public static function canDelete(Model $record): bool
-    {
-        return false;
-    }
-
-    public static function canDeleteAny(): bool
-    {
-        return false;
-    }
-
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return TrashActions::routeBindingQuery(parent::getRecordRouteBindingEloquentQuery());
+    }
 
     /**
      * Aksi Nonaktifkan yang sama untuk daftar dan halaman ubah user. Semua tugas user wajib dialihkan ke pengganti
@@ -100,8 +96,8 @@ class UserResource extends Resource
             });
     }
 
-    /** Ringkasan tugas user yang dihitung dari database, untuk deskripsi modal Nonaktifkan. */
-    private static function workloadSummary(User $record): HtmlString
+    /** Ringkasan tugas user yang dihitung dari database, untuk deskripsi modal Nonaktifkan dan Hapus. */
+    public static function workloadSummary(User $record): HtmlString
     {
         $workload = app(UserDeactivator::class)->workload($record);
         $lines = array_filter([
@@ -122,10 +118,11 @@ class UserResource extends Resource
 
     /**
      * Satu Select wajib per kelompok tugas yang jumlahnya lebih dari nol; opsinya hanya kandidat yang sah.
+     * Dipakai modal Nonaktifkan dan modal Hapus; nama field sama dengan kunci kelompok UserDeactivator.
      *
      * @return list<Select>
      */
-    private static function replacementFields(User $record): array
+    public static function replacementFields(User $record): array
     {
         $deactivator = app(UserDeactivator::class);
         $fields = [

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Documents\Pages;
 
 use App\Filament\Concerns\HasBackToListAction;
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Schemas\DocumentVersionForm;
 use App\Models\Document;
@@ -39,7 +40,9 @@ class ViewDocument extends ViewRecord
     {
         return [
             $this->backToListAction(),
-            DocumentResource::restoreAction()->icon('heroicon-o-arrow-uturn-left')->color('primary'),
+            TrashActions::restore('dokumen')->icon('heroicon-o-arrow-uturn-left')->color('primary')
+                ->after(fn () => $this->dispatch('document-version-updated')),
+            TrashActions::forceDelete('dokumen'),
             $this->previewAction(),
             Action::make('download')->label('Unduh File')->icon('heroicon-o-arrow-down-tray')
                 ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab()
@@ -53,6 +56,7 @@ class ViewDocument extends ViewRecord
                 ->fillForm(fn (): array => $this->getRecord()->renewalSuggestion()),
             $this->versionAction('updateVersion')->label('Unggah Versi Baru')->icon('heroicon-o-arrow-up-tray')->color('gray')
                 ->modalHeading('Perbarui Dokumen'),
+            TrashActions::delete('dokumen')->label('Hapus Dokumen'),
         ];
     }
 

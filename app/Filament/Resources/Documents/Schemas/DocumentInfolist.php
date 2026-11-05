@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Documents\Schemas;
 
-use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Document;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
@@ -19,7 +18,7 @@ class DocumentInfolist
             ->components([
                 Callout::make('Dokumen ini sudah dihapus')->warning()->columnSpanFull()
                     ->description(fn (Document $record): string => $record->deletedAtLabel().'. Dokumen tidak tampil di daftar, file tidak bisa diunduh atau dipratinjau, dan pengingat masa berlaku berhenti. '
-                        .(DocumentResource::canRestore($record) ? 'Pulihkan dokumen untuk memakainya kembali.' : 'Minta pengguna yang berhak memulihkan dokumen untuk mengaktifkannya kembali.'))
+                        .'Pulihkan dokumen untuk memakainya kembali, atau hapus permanen bila tidak diperlukan.')
                     ->visible(fn (Document $record): bool => $record->trashed()),
                 Section::make('Informasi Dokumen')
                     ->columnSpan(['default' => 1, 'xl' => 2])

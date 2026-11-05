@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Companies\Tables;
 
+use App\Filament\Concerns\TrashActions;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
@@ -22,14 +23,20 @@ class CompaniesTable
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Aktif' : 'Nonaktif')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray')
                     ->sortable(),
+                TrashActions::deletedColumn(),
                 TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d/m/Y H:i')->timezone(config('lms.reminder_timezone'))->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 TernaryFilter::make('is_active')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif'),
+                TrashActions::filter(),
             ])
             ->recordActions([
                 EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
+                TrashActions::delete('badan usaha')->iconButton()->tooltip('Hapus'),
+                TrashActions::restore('badan usaha')->iconButton()->tooltip('Pulihkan'),
+                TrashActions::forceDelete('badan usaha')->iconButton()->tooltip('Hapus permanen'),
             ])
+            ->toolbarActions(TrashActions::bulkActions('badan usaha'))
             ->defaultSort('name')
             ->emptyStateHeading('Belum ada badan usaha')
             ->emptyStateDescription(null);
