@@ -2,12 +2,14 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Pages\ImportDocuments;
 use App\Filament\Resources\DocumentTypes\DocumentTypeResource;
 use App\Filament\Resources\ReminderLogs\ReminderLogResource;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
+use App\Filament\Resources\TrashLogs\TrashLogResource;
 use App\Filament\Resources\Users\UserResource;
 use BackedEnum;
 use Filament\Pages\Dashboard;
@@ -45,9 +47,9 @@ class Panduan extends Page
      *     title: string,
      *     summary: string,
      *     audience: string,
-     *     video: string,
-     *     poster: string,
-     *     steps: list<array{text: string, at: float, description: string}>,
+     *     video: string|null,
+     *     poster: string|null,
+     *     steps: list<array{text: string, at: float|null, description: string}>,
      *     impacts: list<array{area: string, text: string, url: string|null}>,
      *     action: array{label: string, url: string, newTab: bool}|null,
      *     canUse: bool,
@@ -62,6 +64,7 @@ class Panduan extends Page
         $logs = ReminderLogResource::canViewAny() ? ReminderLogResource::getUrl() : null;
         $users = UserResource::canViewAny() ? UserResource::getUrl() : null;
         $documentTypes = DocumentTypeResource::canViewAny() ? DocumentTypeResource::getUrl() : null;
+        $trashLogs = TrashLogResource::canViewAny() ? TrashLogResource::getUrl() : null;
 
         $guides = [
             $this->guide('alur-pengajuan', '10', 'Alur lengkap pengajuan',
@@ -225,6 +228,30 @@ class Panduan extends Page
             );
         }
 
+        // Menghapus data dikerjakan super admin dan pemegang izin hapus, jadi panduan teks ini tidak ditampilkan ke peran lain.
+        $deleteAction = $this->deleteAction();
+        if ($deleteAction !== null) {
+            $guides[] = $this->guide('hapus-tempat-sampah', '11', 'Hapus & tempat sampah',
+                summary: 'Data yang dihapus masuk tempat sampah dulu, bukan hilang. Super admin bisa memulihkannya atau menghapusnya permanen.',
+                audience: 'Super admin dan pemegang izin hapus',
+                steps: [
+                    ['Hapus dari daftar atau halaman ubah', null, 'Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman ubah. Setiap penghapusan selalu meminta konfirmasi.'],
+                    ['Data masuk tempat sampah', null, 'Data hilang dari daftar, tetapi belum terhapus. Dokumen yang dihapus menghentikan pengingat masa berlakunya.'],
+                    ['Super admin buka filter Data dihapus', null, 'Ada di tabel tiap menu. Pilih "Hanya data dihapus" untuk melihat isi tempat sampah, atau klik kartu Tempat sampah di dasbor.'],
+                    ['Pulihkan atau Hapus permanen', null, 'Pulihkan mengembalikan data seperti semula. Hapus permanen tidak bisa dibatalkan dan ikut menghapus file-nya. Keduanya hanya bisa dilakukan super admin.'],
+                    ['Hapus permanen ditolak bila masih dipakai', null, 'Pesan penolakan menyebut data yang masih memakainya. Hapus atau pindahkan data itu dulu. Data pemakai yang sudah di tempat sampah ikut terhapus permanen.'],
+                    ['Cek Riwayat Penghapusan', null, 'Setiap hapus, pulihkan, dan hapus permanen tercatat: jenis data, nama, tindakan, siapa, dan kapan. Hanya terlihat oleh super admin.'],
+                ],
+                impacts: [
+                    ['area' => 'Daftar tiap menu', 'text' => 'Data yang dihapus hilang dari daftar, tetapi namanya tetap tampil dengan tanda (dihapus) di data yang memakainya.', 'url' => $documents],
+                    ['area' => 'Dashboard', 'text' => 'Super admin melihat kartu Tempat sampah selama masih ada data yang menunggu keputusan.', 'url' => $dashboard],
+                    ['area' => 'Riwayat Penghapusan', 'text' => 'Semua tindakan tercatat, termasuk data yang sudah dihapus permanen.', 'url' => $trashLogs],
+                ],
+                action: $deleteAction,
+                video: false,
+            );
+        }
+
         $guides[] = $this->guide('serahkan-dokumen', '09', 'Tanda tangan & serahkan dokumen',
             summary: 'Pengaju mengunduh draft, menandatanganinya, mengunggah scan, lalu menyerahkan dokumen asli ke tim legal dalam 7 hari.',
             audience: 'Pengaju (lewat tautan status dari WhatsApp)',
@@ -251,12 +278,37 @@ class Panduan extends Page
     }
 
     /**
-     * @param  list<array{0: string, 1: float|int, 2: string}>  $steps
+     * Tombol panduan "Hapus & tempat sampah": Riwayat Penghapusan untuk super admin, atau menu pertama yang boleh dihapus datanya oleh
+     * pemegang izin hapus. Null bila user bukan keduanya, sehingga panduan itu tidak ditampilkan.
+     *
+     * @return array{label: string, url: string}|null
+     */
+    private function deleteAction(): ?array
+    {
+        $user = auth()->user();
+        if ($user?->isSuperAdmin()) {
+            return ['label' => 'Buka Riwayat Penghapusan', 'url' => TrashLogResource::getUrl()];
+        }
+
+        $menus = ['Document' => DocumentResource::class, 'Company' => CompanyResource::class, 'DocumentType' => DocumentTypeResource::class, 'User' => UserResource::class, 'DocumentRequest' => DocumentRequestResource::class];
+        foreach ($menus as $subject => $resource) {
+            if ($user?->can("Delete:{$subject}") || $user?->can("DeleteAny:{$subject}")) {
+                return $resource::canViewAny() ? ['label' => 'Buka '.$resource::getPluralModelLabel(), 'url' => $resource::getUrl()] : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Panduan tanpa video (`video: false`) hanya memuat langkah bertulis: `video` dan `poster` bernilai null dan langkahnya tanpa detik.
+     *
+     * @param  list<array{0: string, 1: float|int|null, 2: string}>  $steps
      * @param  list<array{area: string, text: string, url: string|null}>  $impacts
      * @param  array{label: string, url: string, newTab?: bool}|null  $action
-     * @return array{id: string, number: string, title: string, summary: string, audience: string, video: string, poster: string, steps: list<array{text: string, at: float, description: string}>, impacts: list<array{area: string, text: string, url: string|null}>, action: array{label: string, url: string, newTab: bool}|null, canUse: bool}
+     * @return array{id: string, number: string, title: string, summary: string, audience: string, video: string|null, poster: string|null, steps: list<array{text: string, at: float|null, description: string}>, impacts: list<array{area: string, text: string, url: string|null}>, action: array{label: string, url: string, newTab: bool}|null, canUse: bool}
      */
-    private function guide(string $id, string $number, string $title, string $summary, string $audience, array $steps, array $impacts, ?array $action): array
+    private function guide(string $id, string $number, string $title, string $summary, string $audience, array $steps, array $impacts, ?array $action, bool $video = true): array
     {
         $file = "{$number}-{$id}";
 
@@ -266,9 +318,9 @@ class Panduan extends Page
             'title' => $title,
             'summary' => $summary,
             'audience' => $audience,
-            'video' => route('panduan.video', ['file' => "{$file}.mp4"]),
-            'poster' => route('panduan.video', ['file' => "{$file}.jpg"]),
-            'steps' => array_map(fn (array $step): array => ['text' => $step[0], 'at' => (float) $step[1], 'description' => $step[2]], $steps),
+            'video' => $video ? route('panduan.video', ['file' => "{$file}.mp4"]) : null,
+            'poster' => $video ? route('panduan.video', ['file' => "{$file}.jpg"]) : null,
+            'steps' => array_map(fn (array $step): array => ['text' => $step[0], 'at' => $step[1] === null ? null : (float) $step[1], 'description' => $step[2]], $steps),
             'impacts' => $impacts,
             'action' => $action === null ? null : $action + ['newTab' => false],
             'canUse' => $action !== null,

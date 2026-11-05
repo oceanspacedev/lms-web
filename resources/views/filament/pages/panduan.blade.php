@@ -63,6 +63,12 @@
             .doc-guide__player { grid-template-columns: minmax(0, 1fr) 20rem; container-type: inline-size; }
             .doc-guide__steps { max-height: calc((100cqw - 21rem) * 9 / 16); overflow-y: auto; align-content: start; scrollbar-width: thin; }
         }
+        /* Panduan teks tanpa video: langkah satu kolom penuh dan tidak interaktif. */
+        .doc-guide__player.doc-guide__player--text { grid-template-columns: minmax(0, 1fr); }
+        .doc-guide__player--text .doc-guide__steps { grid-template-columns: minmax(0, 1fr); max-height: none; overflow: visible; }
+        .doc-guide__step--text { cursor: default; }
+        .doc-guide__step--text:hover { background: none; color: var(--gray-600); }
+        .dark .doc-guide__step--text:hover { background: none; color: var(--gray-400); }
         .dark .doc-guide__nav-item { color: var(--gray-100); }
         .dark .doc-guide__nav-item:hover { background: rgba(255, 255, 255, .06); }
         .dark .doc-guide__nav-item.is-active { background: rgba(245, 158, 11, .14); }
@@ -123,6 +129,9 @@
                     aria-labelledby="panduan-{{ $guide['id'] }}-judul"
                     x-cloak
                     x-show="active === @js($guide['id'])"
+                    @if (! $guide['video'])
+                    x-data="{ step: -1 }"
+                    @else
                     x-data="{
                         step: 0,
                         failed: false,
@@ -155,13 +164,15 @@
                             this.$watch('active', () => this.sync());
                         },
                     }"
+                    @endif
                 >
                     <header>
                         <h2 class="doc-guide__title" id="panduan-{{ $guide['id'] }}-judul">{{ $guide['title'] }}</h2>
                         <p class="doc-guide__summary">{{ $guide['summary'] }}</p>
                     </header>
 
-                    <div class="doc-guide__player">
+                    <div @class(['doc-guide__player', 'doc-guide__player--text' => ! $guide['video']])>
+                        @if ($guide['video'])
                         <div class="doc-guide__stage">
                         <video
                             x-ref="video"
@@ -183,22 +194,34 @@
                             <button type="button" class="doc-guide__error-retry" x-on:click="retry()">Coba lagi</button>
                         </div>
                         </div>
+                        @endif
 
                         <ol class="doc-guide__steps" aria-label="Langkah">
                             @foreach ($guide['steps'] as $index => $step)
                                 <li>
-                                    <button
-                                        type="button"
-                                        class="doc-guide__step"
-                                        x-bind:class="{ 'is-active': step === {{ $index }} }"
-                                        x-on:click="seek({{ $index }})"
-                                    >
-                                        <span class="doc-guide__step-number">{{ $index + 1 }}</span>
-                                        <span>
-                                            <span class="doc-guide__step-title">{{ $step['text'] }}</span>
-                                            <span class="doc-guide__step-description">{{ $step['description'] }}</span>
-                                        </span>
-                                    </button>
+                                    @if ($guide['video'])
+                                        <button
+                                            type="button"
+                                            class="doc-guide__step"
+                                            x-bind:class="{ 'is-active': step === {{ $index }} }"
+                                            x-on:click="seek({{ $index }})"
+                                        >
+                                            <span class="doc-guide__step-number">{{ $index + 1 }}</span>
+                                            <span>
+                                                <span class="doc-guide__step-title">{{ $step['text'] }}</span>
+                                                <span class="doc-guide__step-description">{{ $step['description'] }}</span>
+                                            </span>
+                                        </button>
+                                    @else
+                                        {{-- Panduan teks tanpa video: langkah hanya dibaca, tidak ada yang bisa diklik atau disorot. --}}
+                                        <div class="doc-guide__step doc-guide__step--text">
+                                            <span class="doc-guide__step-number">{{ $index + 1 }}</span>
+                                            <span>
+                                                <span class="doc-guide__step-title">{{ $step['text'] }}</span>
+                                                <span class="doc-guide__step-description">{{ $step['description'] }}</span>
+                                            </span>
+                                        </div>
+                                    @endif
                                 </li>
                             @endforeach
                         </ol>

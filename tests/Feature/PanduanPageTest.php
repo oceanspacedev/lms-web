@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\Panduan;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
+use App\Filament\Resources\TrashLogs\TrashLogResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Http\Controllers\PanduanVideoController;
 use App\Models\User;
@@ -70,16 +71,43 @@ class PanduanPageTest extends TestCase
         $page = Livewire::test(Panduan::class);
         $guides = $page->instance()->guides();
 
-        $this->assertCount(10, $guides);
+        $this->assertCount(11, $guides);
         foreach ($guides as $guide) {
             $page->assertSee($guide['title'])
                 ->assertSeeHtml('id="panduan-'.$guide['id'].'"')
-                ->assertSeeHtml('src="'.$guide['video'].'"')
                 ->assertSee($guide['steps'][0]['text'])
                 ->assertSee($guide['steps'][0]['description'])
                 ->assertSee($guide['impacts'][0]['area']);
             $this->assertNotEmpty($guide['impacts']);
+            if ($guide['video'] !== null) {
+                $page->assertSeeHtml('src="'.$guide['video'].'"');
+            }
         }
+    }
+
+    public function test_trash_guide_is_text_only_and_for_super_admins_and_delete_permission_holders(): void
+    {
+        $this->signIn(['ViewAny:Document', 'ViewAny:User', 'Update:User']);
+        $page = Livewire::test(Panduan::class)->assertDontSeeHtml('id="panduan-hapus-tempat-sampah"');
+        $this->assertNotContains('hapus-tempat-sampah', array_column($page->instance()->guides(), 'id'));
+
+        $this->signIn(['ViewAny:Document', 'Delete:Document']);
+        $page = Livewire::test(Panduan::class)->assertSeeHtml('id="panduan-hapus-tempat-sampah"');
+        $this->assertTrue(collect($page->instance()->guides())->firstWhere('id', 'hapus-tempat-sampah')['canUse']);
+
+        $this->signInAsSuperAdmin();
+        $page = Livewire::test(Panduan::class);
+        $guide = collect($page->instance()->guides())->firstWhere('id', 'hapus-tempat-sampah');
+        $this->assertSame('Hapus & tempat sampah', $guide['title']);
+        $this->assertSame('Super admin dan pemegang izin hapus', $guide['audience']);
+        $this->assertNull($guide['video']);
+        $this->assertNull($guide['poster']);
+        $this->assertCount(6, $guide['steps']);
+        $this->assertSame(TrashLogResource::getUrl(), $guide['action']['url']);
+        $page->assertSeeHtml('id="panduan-hapus-tempat-sampah"')
+            ->assertSee('Hapus dari daftar atau halaman ubah')
+            ->assertSee('Cek Riwayat Penghapusan')
+            ->assertDontSeeHtml('Video panduan: Hapus');
     }
 
     public function test_features_the_user_can_use_come_first_and_the_rest_are_grouped(): void
@@ -117,6 +145,9 @@ class PanduanPageTest extends TestCase
         $this->signInAsSuperAdmin();
 
         foreach (Livewire::test(Panduan::class)->instance()->guides() as $guide) {
+            if ($guide['video'] === null) {
+                continue;
+            }
             foreach ([$guide['video'], $guide['poster']] as $url) {
                 $this->assertFileExists(resource_path(PanduanVideoController::DIRECTORY.'/'.basename((string) parse_url($url, PHP_URL_PATH))), "File panduan {$guide['id']} tidak ada.");
                 $this->get($url)->assertOk();
@@ -150,6 +181,9 @@ class PanduanPageTest extends TestCase
         $this->signInAsSuperAdmin();
 
         foreach (Livewire::test(Panduan::class)->instance()->guides() as $guide) {
+            if ($guide['video'] === null) {
+                continue;
+            }
             $times = array_column($guide['steps'], 'at');
             $this->assertSame(0.0, $times[0], "Langkah pertama {$guide['id']} harus mulai di detik 0.");
             $sorted = $times;
