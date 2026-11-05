@@ -167,7 +167,7 @@ class DocumentRequestForm
                         : 'Menunggu dokumen asli diserahkan ke tim legal paling lambat '.self::formatDate($record->handoverDueDate()).' ('.mb_strtolower($record->handoverRemainingLabel()).').'),
             ]),
             Section::make('Pengaju')->key('applicant_summary')->compact()->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
-                TextEntry::make('applicant_name')->label('Nama')->state(fn (DocumentRequest $record): ?string => $record->requester_name ?? $record->requester?->name)->wrap(),
+                TextEntry::make('applicant_name')->label('Nama')->state(fn (DocumentRequest $record): string => $record->applicantDisplayName())->wrap(),
                 TextEntry::make('requester_phone')->label('WhatsApp')->visible(fn (DocumentRequest $record): bool => filled($record->requester_phone)),
                 TextEntry::make('requester_division')->label('Divisi')->visible(fn (DocumentRequest $record): bool => filled($record->requester_division))->wrap(),
             ]),

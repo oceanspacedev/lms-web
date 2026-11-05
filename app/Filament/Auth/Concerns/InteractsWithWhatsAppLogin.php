@@ -36,7 +36,7 @@ trait InteractsWithWhatsAppLogin
 
     protected function userMatchesWhatsAppNumber(User $user, string $number): bool
     {
-        return $user->isActive() && $user->phone === $number;
+        return $user->isActive() && ! $user->trashed() && $user->phone === $number;
     }
 
     protected function unavailableWhatsAppMessage(): string

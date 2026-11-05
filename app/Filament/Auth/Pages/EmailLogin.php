@@ -68,7 +68,7 @@ class EmailLogin extends OtpLoginPage
 
         $user = $otpService->consumeMagicLink($token, EmailOtp::PURPOSE_LOGIN);
 
-        if (! $user || ! $user->isActive() || ! $this->canLoginToPanel($user)) {
+        if (! $user || ! $user->isActive() || $user->trashed() || ! $this->canLoginToPanel($user)) {
             throw ValidationException::withMessages([
                 'data.email' => 'Link masuk tidak valid atau sudah kedaluwarsa. Minta kode baru di bawah.',
             ]);

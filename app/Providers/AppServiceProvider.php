@@ -12,6 +12,7 @@ use App\Services\Trash\DocumentTrashHandler;
 use App\Services\Trash\DocumentTypeTrashHandler;
 use App\Services\Trash\TrashHandler;
 use App\Services\Trash\TrashManager;
+use App\Services\Trash\UserTrashHandler;
 use App\Services\WaghubService;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
@@ -31,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->tag([CompanyTrashHandler::class, DocumentTypeTrashHandler::class, DocumentTrashHandler::class, DocumentRequestTrashHandler::class], TrashHandler::class);
+        $this->app->tag([CompanyTrashHandler::class, DocumentTypeTrashHandler::class, DocumentTrashHandler::class, DocumentRequestTrashHandler::class, UserTrashHandler::class], TrashHandler::class);
         $this->app->when(TrashManager::class)->needs('$handlers')->giveTagged(TrashHandler::class);
         $this->app->singleton(TrashManager::class);
     }

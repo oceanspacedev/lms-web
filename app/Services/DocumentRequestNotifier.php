@@ -37,16 +37,17 @@ class DocumentRequestNotifier
         $applicantLink = $request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : $adminLink;
         $setting = ReminderTemplate::globalSetting();
         $applicantEvent = ($last['event'] ?? null) === 'draft_replaced' ? 'draft_replaced' : $request->status;
+        // User di tempat sampah (pengaju internal, PIC, staf legal) tidak pernah dijadikan penerima.
         $targets = [];
-        if ($request->status === 'handover') {
-            $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->requester_phone ?? $request->requester?->phone, 'template' => 'handover', 'link' => $applicantLink];
-            foreach ($request->legalStaffRecipients() as $user) {
-                $targets[] = ['kind' => 'legal', 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'template' => 'handover_staff', 'link' => $adminLink];
-            }
-        } else {
-            $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->requester_phone ?? $request->requester?->phone, 'template' => $applicantEvent, 'link' => $applicantLink];
+        if ($request->applicantReceivesWhatsApp()) {
+            $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->applicantPhone(), 'template' => $request->status === 'handover' ? 'handover' : $applicantEvent, 'link' => $applicantLink];
         }
-        if ($request->status === 'submitted') {
+        if ($request->status === 'handover') {
+            foreach ($request->legalStaffRecipients() as $user) {
+                $targets[] = ['kind' => 'legal', 'suffix' => "u{$user->id}", 'phone' => $user->whatsAppRecipientPhone(), 'template' => 'handover_staff', 'link' => $adminLink];
+            }
+        }
+        if ($request->status === 'submitted' && ! $request->pic?->trashed()) {
             $targets[] = ['kind' => 'pic', 'suffix' => 'pic', 'phone' => $request->pic?->phone, 'template' => 'pic', 'link' => $adminLink];
         }
         $note = $last['note'] ?? null;
@@ -121,8 +122,8 @@ class DocumentRequestNotifier
     {
         $request = DocumentRequest::find($notification->document_request_id);
         $number = match ($notification->recipient_kind) {
-            'applicant' => $request?->requester_phone ?? $request?->requester?->phone,
-            'pic' => $request?->pic?->phone,
+            'applicant' => $request?->applicantPhone(),
+            'pic' => $request?->pic?->whatsAppRecipientPhone(),
             default => preg_match('/-u(\d+)$/', $notification->event_key, $matches) === 1 ? User::find((int) $matches[1])?->phone : null,
         };
 

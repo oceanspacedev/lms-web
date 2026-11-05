@@ -65,7 +65,7 @@ class HandoverReminderSender
             if ($stage === null) {
                 continue;
             }
-            $targets = [$this->applicantTarget($request)];
+            $targets = $this->applicantTargets($request);
             $adminLink = route('filament.admin.resources.document-requests.edit', ['record' => $request->id]);
             if ($stage >= 14) {
                 $targets = [...$targets, ...$this->userTargets($request->legalStaffRecipients(), 'legal', $adminLink, 'late_staff')];
@@ -77,7 +77,7 @@ class HandoverReminderSender
             yield ['request' => $request, 'keyPart' => "late{$stage}", 'template' => "late_{$stage}", 'targets' => $targets];
         }
         foreach ((clone $query)->with(self::RELATIONS)->scanOverdue()->lazyById() as $request) {
-            yield ['request' => $request, 'keyPart' => 'scan'.DocumentRequest::SCAN_REMINDER_DAYS, 'template' => 'scan_reminder', 'targets' => [$this->applicantTarget($request)]];
+            yield ['request' => $request, 'keyPart' => 'scan'.DocumentRequest::SCAN_REMINDER_DAYS, 'template' => 'scan_reminder', 'targets' => $this->applicantTargets($request)];
         }
     }
 
@@ -135,10 +135,18 @@ class HandoverReminderSender
         return $stageStart;
     }
 
-    /** @return array{kind: string, suffix: string, phone: ?string, link: string} */
-    private function applicantTarget(DocumentRequest $request): array
+    /**
+     * Pengaju sebagai penerima; kosong bila pengaju internal ada di tempat sampah.
+     *
+     * @return list<array{kind: string, suffix: string, phone: ?string, link: string}>
+     */
+    private function applicantTargets(DocumentRequest $request): array
     {
-        return ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->requester_phone ?? $request->requester?->phone, 'link' => $this->applicantLink($request)];
+        if (! $request->applicantReceivesWhatsApp()) {
+            return [];
+        }
+
+        return [['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->applicantPhone(), 'link' => $this->applicantLink($request)]];
     }
 
     private function applicantLink(DocumentRequest $request): string
@@ -149,11 +157,14 @@ class HandoverReminderSender
     }
 
     /**
+     * User di tempat sampah tidak dijadikan penerima.
+     *
      * @param  Collection<int, User>  $users
      * @return list<array{kind: string, suffix: string, phone: ?string, link: string, template: string}>
      */
     private function userTargets(Collection $users, string $kind, string $link, string $template): array
     {
-        return $users->map(fn ($user): array => ['kind' => $kind, 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'link' => $link, 'template' => $template])->all();
+        return $users->reject(fn (User $user): bool => $user->trashed())
+            ->map(fn (User $user): array => ['kind' => $kind, 'suffix' => "u{$user->id}", 'phone' => $user->phone, 'link' => $link, 'template' => $template])->values()->all();
     }
 }

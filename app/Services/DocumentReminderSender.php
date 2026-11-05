@@ -168,7 +168,8 @@ class DocumentReminderSender
     /** @return array<string, mixed> */
     private function payload(Document $document, ReminderLog $log, CarbonImmutable $today): array
     {
-        $phone = $document->pic?->isActive() ? $this->waghub->normalizePhone($document->pic->phone) : null;
+        // PIC nonaktif atau di tempat sampah tidak menerima WhatsApp; pesan beralih ke penerima cadangan.
+        $phone = $document->pic?->isActive() && ! $document->pic->trashed() ? $this->waghub->normalizePhone($document->pic->phone) : null;
         if ($phone === null) {
             foreach (User::permission('receive_reminder')->active()->orderBy('id')->cursor() as $user) {
                 $phone = $this->waghub->normalizePhone($user->phone);

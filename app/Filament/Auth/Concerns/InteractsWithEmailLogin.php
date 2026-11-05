@@ -36,6 +36,7 @@ trait InteractsWithEmailLogin
     protected function userMatchesEmail(User $user, string $email): bool
     {
         return $user->isActive()
+            && ! $user->trashed()
             && filled($user->email)
             && Str::lower(trim((string) $user->email)) === $email;
     }

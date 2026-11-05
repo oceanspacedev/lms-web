@@ -50,17 +50,24 @@ class User extends Authenticatable implements FilamentUser
         });
     }
 
-    /** User nonaktif tidak bisa masuk (password maupun OTP) dan sesi yang masih terbuka ditolak oleh middleware panel. */
+    /** User nonaktif atau di tempat sampah tidak bisa masuk (password maupun OTP) dan sesi yang masih terbuka ditolak oleh middleware panel. */
     public function canAccessPanel(Panel $panel): bool
     {
         return $panel->getId() === 'admin'
             && $this->isActive()
+            && ! $this->trashed()
             && ($this->roles()->exists() || $this->getAllPermissions()->isNotEmpty());
     }
 
     public function isActive(): bool
     {
         return $this->deactivated_at === null;
+    }
+
+    /** Nomor WhatsApp untuk pesan ke user ini, atau null bila user di tempat sampah: user di tempat sampah tidak pernah menerima WhatsApp. */
+    public function whatsAppRecipientPhone(): ?string
+    {
+        return $this->trashed() ? null : $this->phone;
     }
 
     public function isSuperAdmin(): bool

@@ -102,10 +102,14 @@ class DocumentRequestReminderSender
         return $created;
     }
 
-    /** @return Collection<int, User> */
+    /**
+     * Pemeriksa, atau PIC bila belum ada pemeriksa. User di tempat sampah tidak dijadikan penerima.
+     *
+     * @return Collection<int, User>
+     */
     private function recipients(DocumentRequest $request): Collection
     {
-        return collect([$request->reviewer ?? $request->pic])->filter();
+        return collect([$request->reviewer ?? $request->pic])->filter(fn (?User $user): bool => $user !== null && ! $user->trashed());
     }
 
     private function message(DocumentRequest $request, string $body, int $waitingDays): string

@@ -115,7 +115,7 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Staf legal penerima notifikasi: pemeriksa pengajuan bila masih aktif, punya izin Review, dan nomornya valid;
+     * Staf legal penerima notifikasi: pemeriksa pengajuan bila masih aktif (tidak di tempat sampah), punya izin Review, dan nomornya valid;
      * kalau tidak, semua user aktif pemegang `Review:DocumentRequest` dengan nomor valid.
      *
      * @return Collection<int, User>
@@ -123,7 +123,7 @@ class DocumentRequest extends Model
     public function legalStaffRecipients(): Collection
     {
         $reviewer = $this->reviewer;
-        if ($reviewer !== null && $reviewer->isActive() && $this->hasValidPhone($reviewer) && $this->canReview($reviewer)) {
+        if ($reviewer !== null && $reviewer->isActive() && ! $reviewer->trashed() && $this->hasValidPhone($reviewer) && $this->canReview($reviewer)) {
             return collect([$reviewer]);
         }
 
@@ -435,6 +435,24 @@ class DocumentRequest extends Model
     public function applicantName(): string
     {
         return $this->requester_name ?? $this->requester?->name ?? 'Pengaju';
+    }
+
+    /** Nama pengaju untuk tampilan admin: pengaju internal di tempat sampah diberi tanda "(dihapus)". Pesan dan riwayat memakai applicantName(). */
+    public function applicantDisplayName(): string
+    {
+        return $this->requester_name ?? $this->requester?->displayName() ?? 'Pengaju';
+    }
+
+    /** Pengaju internal di tempat sampah tidak menerima WhatsApp; pengaju publik memakai nomor yang tersimpan di pengajuan. */
+    public function applicantReceivesWhatsApp(): bool
+    {
+        return $this->requester_phone !== null || ! $this->requester?->trashed();
+    }
+
+    /** Nomor WhatsApp pengaju: nomor pengajuan publik, atau nomor user pengaju (null bila user itu di tempat sampah). */
+    public function applicantPhone(): ?string
+    {
+        return $this->requester_phone ?? $this->requester?->whatsAppRecipientPhone();
     }
 
     /**

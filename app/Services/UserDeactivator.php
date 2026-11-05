@@ -35,7 +35,7 @@ class UserDeactivator
     public function __construct(private WaghubService $waghub) {}
 
     /**
-     * Jumlah tugas user per data, untuk ringkasan di modal Nonaktifkan.
+     * Jumlah tugas user per data, untuk ringkasan di modal Nonaktifkan. Data di tempat sampah ikut dihitung karena ikut dialihkan.
      *
      * @return array{documents: int, requests: int, document_types: int, drafts: int}
      */
@@ -45,7 +45,7 @@ class UserDeactivator
             'documents' => Document::withTrashed()->where('pic_user_id', $user->id)->count(),
             'requests' => $this->openRequests()->where(fn (Builder $query): Builder => $query->where('pic_user_id', $user->id)
                 ->orWhere('reviewer_id', $user->id))->count(),
-            'document_types' => DocumentType::where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)
+            'document_types' => DocumentType::withTrashed()->where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)
                 ->orWhere('request_reviewer_id', $user->id))->count(),
             'drafts' => DocumentRequest::where('status', 'draft')->where('requester_id', $user->id)->count(),
         ];
@@ -63,7 +63,7 @@ class UserDeactivator
             $groups[] = self::GROUP_DOCUMENT_PIC;
         }
         if ($this->openRequests()->where(fn (Builder $query): Builder => $query->where('pic_user_id', $user->id)->orWhere('reviewer_id', $user->id))->exists()
-            || DocumentType::where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)->orWhere('request_reviewer_id', $user->id))->exists()) {
+            || DocumentType::withTrashed()->where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)->orWhere('request_reviewer_id', $user->id))->exists()) {
             $groups[] = self::GROUP_REVIEWER;
         }
 
@@ -184,16 +184,16 @@ class UserDeactivator
                     ->update(['request_payload' => null]);
             }
 
-            $picRequestIds = DocumentRequest::where('pic_user_id', $user->id)->pluck('id');
+            $picRequestIds = DocumentRequest::withTrashed()->where('pic_user_id', $user->id)->pluck('id');
             if (array_key_exists(self::GROUP_REVIEWER, $resolved)) {
                 $this->openRequests()->where('pic_user_id', $user->id)->update(['pic_user_id' => $resolved[self::GROUP_REVIEWER]]);
                 $this->openRequests()->where('reviewer_id', $user->id)->update(['reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
-                DocumentType::where('request_pic_id', $user->id)->update(['request_pic_id' => $resolved[self::GROUP_REVIEWER]]);
-                DocumentType::where('request_reviewer_id', $user->id)->update(['request_reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
+                DocumentType::withTrashed()->where('request_pic_id', $user->id)->update(['request_pic_id' => $resolved[self::GROUP_REVIEWER]]);
+                DocumentType::withTrashed()->where('request_reviewer_id', $user->id)->update(['request_reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
             }
             // Tahap persetujuan sudah dihapus dari alur; kolom penyetuju tidak lagi dipakai, cukup dikosongkan agar tidak menggantung.
             $this->openRequests()->where('approver_id', $user->id)->update(['approver_id' => null]);
-            DocumentType::where('request_approver_id', $user->id)->update(['request_approver_id' => null]);
+            DocumentType::withTrashed()->where('request_approver_id', $user->id)->update(['request_approver_id' => null]);
 
             DocumentRequestNotification::whereIn('status', ['pending', 'failed'])
                 ->where(fn (Builder $query): Builder => $query
@@ -254,7 +254,7 @@ class UserDeactivator
 
     private function replacesRequestPicOfDocumentType(User $user): bool
     {
-        return DocumentType::where('request_pic_id', $user->id)->exists();
+        return DocumentType::withTrashed()->where('request_pic_id', $user->id)->exists();
     }
 
     private function hasOtherActiveSuperAdmin(User $user): bool
@@ -262,9 +262,13 @@ class UserDeactivator
         return User::active()->role(config('filament-shield.super_admin.name'))->whereKeyNot($user->id)->exists();
     }
 
-    /** @return Builder<DocumentRequest> */
+    /**
+     * Pengajuan yang belum ditutup, termasuk yang di tempat sampah, supaya pengajuan yang kelak dipulihkan tidak menunjuk user yang sudah dihapus.
+     *
+     * @return Builder<DocumentRequest>
+     */
     private function openRequests(): Builder
     {
-        return DocumentRequest::whereNotIn('status', self::CLOSED_REQUEST_STATUSES);
+        return DocumentRequest::withTrashed()->whereNotIn('status', self::CLOSED_REQUEST_STATUSES);
     }
 }

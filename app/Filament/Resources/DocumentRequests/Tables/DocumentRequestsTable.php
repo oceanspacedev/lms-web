@@ -37,7 +37,7 @@ class DocumentRequestsTable
             TextColumn::make('title')->label('Pengajuan')->searchable()->weight('medium')->limit(45)->wrap()->tooltip(fn (DocumentRequest $record): string => $record->title)
                 ->description(fn (DocumentRequest $record): string => $record->documentType->displayName().($record->revisionNumber() ? ' · Revisi ke-'.$record->revisionNumber() : '')),
             TextColumn::make('partner_name')->label('Pihak Lawan / Mitra')->searchable()->state(fn (DocumentRequest $record): ?string => $record->counterpartyName())->placeholder('—')->limit(30)->wrap(),
-            TextColumn::make('requester_name')->label('Pengaju')->limit(30)->wrap()->state(fn (DocumentRequest $record): string => $record->applicantName())
+            TextColumn::make('requester_name')->label('Pengaju')->limit(30)->wrap()->state(fn (DocumentRequest $record): string => $record->applicantDisplayName())
                 ->searchable(query: fn (Builder $query, string $search): Builder => $query
                     ->orWhere(fn (Builder $query): Builder => $query->whereNotNull('document_requests.requester_name')
                         ->whereRaw("lower(document_requests.requester_name) like ? escape '!'", [self::likePattern($search)]))
