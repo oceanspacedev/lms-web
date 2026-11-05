@@ -13,6 +13,7 @@ use App\Filament\Resources\Documents\Schemas\DocumentForm;
 use App\Filament\Resources\Documents\Schemas\DocumentInfolist;
 use App\Filament\Resources\Documents\Tables\DocumentsTable;
 use App\Models\Document;
+use App\Services\Trash\TrashManager;
 use BackedEnum;
 use Filament\Actions\RestoreAction;
 use Filament\Resources\Resource;
@@ -23,7 +24,6 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class DocumentResource extends Resource
@@ -74,28 +74,23 @@ class DocumentResource extends Resource
             ->successNotificationTitle('Dokumen berhasil dipulihkan');
     }
 
-    /** Hapus (soft delete) atau pulihkan dokumen sekaligus mencatat aktivitasnya ("deleted" / "restored") dalam satu transaksi. */
+    /**
+     * Pindahkan dokumen ke tempat sampah atau pulihkan lewat TrashManager. Aktivitas "deleted" / "restored"
+     * dan riwayat penghapusan dicatat oleh DocumentTrashHandler dalam transaksi yang sama.
+     *
+     * @param  'deleted'|'restored'  $event
+     */
     public static function changeTrashedState(Document $record, string $event): bool
     {
-        return DB::transaction(function () use ($record, $event): bool {
-            $changed = $event === 'restored' ? $record->restore() : $record->delete();
-            if (! $changed) {
-                return false;
-            }
-            $record->activities()->create(['document_version_id' => $record->current_version_id, 'user_id' => auth()->id(), 'event' => $event]);
+        $trash = app(TrashManager::class);
+        $actor = auth()->user();
+        if ($event === 'restored') {
+            $trash->restore($record, $actor);
+        } else {
+            $trash->trash($record, $actor);
+        }
 
-            return true;
-        });
-    }
-
-    public static function canForceDelete(Model $record): bool
-    {
-        return false;
-    }
-
-    public static function canForceDeleteAny(): bool
-    {
-        return false;
+        return true;
     }
 
     protected static ?string $recordTitleAttribute = 'title';

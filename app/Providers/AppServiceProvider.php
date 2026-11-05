@@ -7,6 +7,7 @@ use App\Filament\Auth\Pages\PhoneLogin;
 use App\Http\Controllers\PublicDocumentRequestController;
 use App\Models\User;
 use App\Services\Trash\CompanyTrashHandler;
+use App\Services\Trash\DocumentTrashHandler;
 use App\Services\Trash\DocumentTypeTrashHandler;
 use App\Services\Trash\TrashHandler;
 use App\Services\Trash\TrashManager;
@@ -29,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->tag([CompanyTrashHandler::class, DocumentTypeTrashHandler::class], TrashHandler::class);
+        $this->app->tag([CompanyTrashHandler::class, DocumentTypeTrashHandler::class, DocumentTrashHandler::class], TrashHandler::class);
         $this->app->when(TrashManager::class)->needs('$handlers')->giveTagged(TrashHandler::class);
         $this->app->singleton(TrashManager::class);
     }

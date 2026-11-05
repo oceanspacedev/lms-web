@@ -11,6 +11,7 @@ use App\Filament\Resources\Documents\RelationManagers\VersionsRelationManager;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
+use App\Models\TrashLog;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
@@ -136,7 +137,7 @@ class DocumentTrashTest extends TestCase
             ->assertTableActionVisible('view', $active)->assertTableActionVisible('edit', $active)
             ->assertTableActionVisible('download', $active)->assertTableActionHidden('restore', $active)
             ->assertTableActionDoesNotExist('forceDelete');
-        $this->assertFalse(DocumentResource::canForceDelete($trashed));
+        $this->assertTrue(DocumentResource::canForceDelete($trashed));
     }
 
     public function test_grid_marks_trashed_documents_as_deleted(): void
@@ -235,6 +236,7 @@ class DocumentTrashTest extends TestCase
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->callAction('delete');
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])->callAction('restore')->assertHasNoActionErrors();
         $this->assertSame(['uploaded', 'deleted', 'restored', 'deleted', 'restored'], $document->activities()->orderBy('id')->pluck('event')->all());
+        $this->assertSame(['deleted', 'restored', 'deleted', 'restored'], TrashLog::where('subject_type', 'document')->where('subject_id', $document->id)->where('user_id', $user->id)->orderBy('id')->pluck('action')->all());
 
         Livewire::test(ActivitiesRelationManager::class, ['ownerRecord' => $document->fresh(), 'pageClass' => ViewDocument::class])
             ->assertSee('Dokumen dihapus')->assertSee('Dokumen dipulihkan');
