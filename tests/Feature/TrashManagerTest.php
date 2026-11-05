@@ -351,7 +351,7 @@ class TrashManagerTest extends TestCase
         $logs = TrashLog::where('action', 'force_deleted')->orderBy('id')->get()
             ->map(fn (TrashLog $log): array => [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details['via'] ?? null])->all();
         $this->assertSame([
-            ['document_request', $request->id, 'Pengajuan Uji', $actor->id, $via],
+            ['document_request', $request->id, "#{$request->id} · Pengajuan Uji", $actor->id, $via],
             ['document', $document->id, 'Kontrak Lama', $actor->id, $via],
             ['company', $company->id, 'PT Induk', $actor->id, null],
         ], $logs);

@@ -330,7 +330,7 @@ class DocumentRequestTrashTest extends TestCase
         $this->assertNotNull($document->fresh());
         $this->assertFalse($document->fresh()->trashed());
         $log = TrashLog::where('action', 'force_deleted')->sole();
-        $this->assertSame(['document_request', $request->id, 'Pengajuan Uji', $actor->id, ['actor_name' => $actor->name]], [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details]);
+        $this->assertSame(['document_request', $request->id, "#{$request->id} · Pengajuan Uji", $actor->id, ['actor_name' => $actor->name]], [$log->subject_type, $log->subject_id, $log->subject_label, $log->user_id, $log->details]);
     }
 
     public function test_files_of_trashed_request_download_for_super_admin_only(): void

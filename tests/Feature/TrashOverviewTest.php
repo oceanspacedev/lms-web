@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\TrashLogs\Pages\ListTrashLogs;
 use App\Filament\Resources\TrashLogs\TrashLogResource;
@@ -11,6 +12,7 @@ use App\Filament\Widgets\DocumentStatusOverview;
 use App\Filament\Widgets\TrashOverview;
 use App\Models\Company;
 use App\Models\Document;
+use App\Models\DocumentRequest;
 use App\Models\TrashLog;
 use App\Models\User;
 use App\Services\Trash\TrashManager;
@@ -79,14 +81,13 @@ class TrashOverviewTest extends TestCase
         $this->assertContains(DocumentStatusOverview::class, $visible);
         $this->assertLessThan(array_search(DocumentStatusOverview::class, $visible, true), array_search(TrashOverview::class, $visible, true));
 
+        // Satu kartu per menu yang punya isi tempat sampah, masing-masing tersaring "hanya data dihapus" (nilai 0 pada TrashedFilter).
         $stats = $this->stats();
-        $this->assertCount(1, $stats);
-        $this->assertSame('Tempat sampah', (string) $stats[0]->getLabel());
-        $this->assertSame(3, $stats[0]->getValue());
-        $this->assertSame('data menunggu keputusan · 2 dokumen, 1 badan usaha', (string) $stats[0]->getDescription());
-        // Menu dengan jumlah terbanyak adalah Dokumen, tersaring "hanya data dihapus" (nilai 0 pada TrashedFilter).
-        $this->assertSame(DocumentResource::getUrl('index', ['filters' => ['trashed' => ['value' => '0']]]), $stats[0]->getUrl());
-        Livewire::test(TrashOverview::class)->assertSee('data menunggu keputusan · 2 dokumen, 1 badan usaha');
+        $this->assertSame([
+            ['Dokumen', 2, 'menunggu keputusan', DocumentResource::getUrl('index', ['filters' => ['trashed' => ['value' => '0']]])],
+            ['Badan Usaha', 1, 'menunggu keputusan', CompanyResource::getUrl('index', ['filters' => ['trashed' => ['value' => '0']]])],
+        ], array_map(fn (Stat $stat): array => [(string) $stat->getLabel(), $stat->getValue(), (string) $stat->getDescription(), $stat->getUrl()], $stats));
+        Livewire::test(TrashOverview::class)->assertSee(['Tempat sampah', 'Dokumen', 'Badan Usaha', 'menunggu keputusan'])->assertDontSee('Jenis Dokumen');
 
         $this->signInAsDeleter();
         $this->assertFalse(TrashOverview::canView());
@@ -140,6 +141,29 @@ class TrashOverviewTest extends TestCase
             ->assertTableColumnStateSet('user.name', $admin->name, TrashLog::where('action', 'force_deleted')->sole());
     }
 
+    public function test_trash_log_explains_cascades_and_marks_trashed_actors(): void
+    {
+        $admin = $this->signInAsSuperAdmin();
+        $trash = app(TrashManager::class);
+        $company = Company::factory()->create(['name' => 'PT Berantai']);
+        foreach (range(1, 3) as $number) {
+            $trash->trash(Document::factory()->for($company)->create(['title' => "Kontrak {$number}"]), $admin);
+        }
+        $trash->trash(DocumentRequest::factory()->for($company)->create(), $admin);
+        $trash->trash($company, $admin);
+        $trash->forceDelete($company->fresh(), $admin);
+        $leaver = User::factory()->create(['name' => 'Petugas Lama', 'deactivated_at' => now(), 'deactivated_by' => $admin->id]);
+        $trash->trash(Company::factory()->create(['name' => 'PT Jejak']), $leaver);
+        $trash->trash($leaver, $admin);
+
+        $root = TrashLog::where(['subject_type' => 'company', 'action' => 'force_deleted'])->sole();
+        $child = TrashLog::where(['subject_type' => 'document', 'action' => 'force_deleted'])->orderBy('id')->first();
+        Livewire::test(ListTrashLogs::class)
+            ->assertTableColumnStateSet('details', 'Ikut menghapus permanen: 3 dokumen, 1 pengajuan.', $root)
+            ->assertTableColumnStateSet('details', 'Ikut terhapus bersama Badan Usaha "PT Berantai".', $child)
+            ->assertTableColumnStateSet('user.name', 'Petugas Lama (dihapus)', TrashLog::where('subject_label', 'PT Jejak')->sole());
+    }
+
     public function test_trash_log_page_lists_actions_for_super_admin_and_forbidden_for_others(): void
     {
         $admin = $this->signInAsSuperAdmin();
@@ -160,7 +184,9 @@ class TrashOverviewTest extends TestCase
         $logs = TrashLog::query()->orderBy('id')->get();
         $page = Livewire::test(ListTrashLogs::class)
             ->assertCanSeeTableRecords($logs)
-            ->assertSee(['PT Contoh Riwayat', 'Kontrak Riwayat', 'Dihapus', 'Dipulihkan', 'Dihapus permanen', 'dokumen/sisa.pdf', $admin->name]);
+            ->assertSee(['PT Contoh Riwayat', 'Kontrak Riwayat', 'Dihapus', 'Dipulihkan', 'Dihapus permanen', $admin->name])
+            ->assertTableColumnStateSet('details', 'File tertinggal di penyimpanan: sisa.pdf; hubungi admin IT.', TrashLog::where('subject_label', 'Dokumen Bermasalah')->sole())
+            ->assertDontSee('dokumen/sisa.pdf');
 
         $page->searchTable('Kontrak Riwayat')->assertCanSeeTableRecords($logs->where('subject_label', 'Kontrak Riwayat'))
             ->assertCanNotSeeTableRecords($logs->where('subject_label', 'PT Contoh Riwayat'));

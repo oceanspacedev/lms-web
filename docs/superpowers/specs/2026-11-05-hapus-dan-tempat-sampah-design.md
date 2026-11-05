@@ -76,7 +76,7 @@ Tujuan:
 - Baris di tempat sampah tidak punya aksi Ubah (pensil); gantinya ikon mata "Lihat {jenis data}" ke halaman detail yang hanya-baca.
 - Bila filter "Hanya data dihapus" tidak menemukan apa pun: judul "Tempat sampah kosong", keterangan "Tidak ada {jenis data} di tempat sampah."
 - Di layar sempit (di bawah `md`) kolom sekunder disembunyikan; yang tetap tampil hanya nama/judul, status, dan aksi.
-- **Keputusan pengembang:** di dasbor super admin ada kartu kecil **"Tempat sampah"**, misalnya "7 data menunggu keputusan" dengan rincian per menu. Kartu ini tautan ke tabel yang sudah tersaring "hanya data dihapus". Kartu disembunyikan bila tempat sampah kosong.
+- **Keputusan pengembang:** di dasbor super admin ada bagian **"Tempat sampah"** berisi satu kartu per menu yang punya isi tempat sampah: label nama menu (misalnya "Dokumen"), angka jumlahnya, dan keterangan "menunggu keputusan". Tiap kartu tautan ke tabel menu itu yang sudah tersaring "hanya data dihapus". Bagian ini disembunyikan bila tempat sampah kosong.
 - Aksi untuk baris yang dihapus, satu per satu atau massal:
   - **Pulihkan**: modal konfirmasi, lalu data kembali seperti semula.
   - **Hapus permanen**: modal konfirmasi berwarna merah dengan teks "Tindakan ini tidak bisa dibatalkan."
@@ -97,7 +97,8 @@ Tujuan:
 
 ### 3.5 Riwayat penghapusan
 
-- Setiap **hapus, pulihkan, dan hapus permanen** tercatat: jenis data, nama/judul saat itu, tindakan, siapa, dan kapan.
+- Setiap **hapus, pulihkan, dan hapus permanen** tercatat: jenis data, nama/judul saat itu, tindakan, siapa, dan kapan. Pengajuan dicatat sebagai "#{nomor} · {judul}" (juga di notifikasi dan pesan penolakan). Kolom "Oleh" memakai nama tampilan user, jadi pelaku yang ada di tempat sampah bertanda "(dihapus)"; bila user itu sudah dihapus permanen, nama yang tersimpan di log yang tampil.
+- Kolom Keterangan: induk yang dihapus permanen beserta anaknya menyebut "Ikut menghapus permanen: 3 dokumen, 1 pengajuan."; anak yang ikut terhapus menyebut "Ikut terhapus bersama {jenis data} "{nama}"."; file yang gagal dihapus menyebut "File tertinggal di penyimpanan: {nama file}; hubungi admin IT." (nama file saja, tanpa path).
 - Untuk Dokumen, catatan ini tetap juga masuk ke riwayat aktivitas dokumen (`deleted` / `restored`), seperti sekarang.
 - **Keputusan pengembang:** karena data yang dihapus permanen sudah tidak ada, riwayat disimpan di tabel baru tersendiri (misalnya `trash_logs`). Riwayat ini tampil di halaman baca-saja **Riwayat Penghapusan** di grup Administrasi, khusus super admin. Isinya bisa dicari dan disaring per menu dan per tindakan.
 
@@ -207,7 +208,7 @@ Tujuan:
 - Impor Excel memakai `Company::all()` / `DocumentType::all()` / semua user. Setelah soft delete aktif, data di tempat sampah otomatis tidak terbaca, dan pesan galatnya harus tetap jelas ("badan usaha tidak ditemukan").
 - `UserDeactivator` dan beberapa tempat lain sudah memakai `withTrashed()` untuk dokumen. Perilaku itu dipertahankan.
 - Tes yang saat ini memastikan "tidak bisa dihapus" (Badan Usaha, Jenis Dokumen, hapus permanen Dokumen) diubah mengikuti aturan baru.
-- Panduan: tambah satu panduan baru **"Hapus & tempat sampah"**, cukup teks dan langkah. **Keputusan pengembang:** videonya menyusul bila diminta.
+- Panduan: tambah satu panduan baru **"Hapus & tempat sampah"**, cukup teks dan langkah (paling banyak 8): hapus dari daftar atau halaman detail, hapus beberapa sekaligus, menghapus user (dinonaktifkan dan tugasnya dialihkan; dilewati pada hapus massal bila punya tugas; untuk staf keluar pakai Nonaktifkan), masuk tempat sampah, filter Data dihapus, pulihkan atau hapus permanen, hapus permanen ditolak (dengan saran "Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi."), dan Riwayat Penghapusan. **Keputusan pengembang:** videonya menyusul bila diminta.
 
 ## 6. Yang diserahkan ke pembangun
 

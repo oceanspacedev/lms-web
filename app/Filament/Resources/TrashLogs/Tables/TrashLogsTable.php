@@ -7,6 +7,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class TrashLogsTable
 {
@@ -22,9 +23,9 @@ class TrashLogsTable
                     ->color(fn (string $state): string => match ($state) {
                         'deleted' => 'warning', 'restored' => 'success', 'force_deleted' => 'danger', default => 'gray'
                     }),
-                // User yang sudah dihapus permanen tidak ada lagi; namanya tersimpan di log saat tindakan dilakukan.
+                // Pelaku di tempat sampah diberi tanda "(dihapus)". User yang sudah dihapus permanen tidak ada lagi; namanya tersimpan di log saat tindakan dilakukan.
                 TextColumn::make('user.name')->label('Oleh')->placeholder('-')
-                    ->state(fn (TrashLog $record): ?string => $record->user?->name ?? $record->details['actor_name'] ?? null),
+                    ->state(fn (TrashLog $record): ?string => $record->user?->displayName() ?? $record->details['actor_name'] ?? null),
                 TextColumn::make('details')->label('Keterangan')->wrap()->placeholder('-')
                     ->state(fn (TrashLog $record): ?string => self::remarks($record)),
             ])
@@ -36,7 +37,8 @@ class TrashLogsTable
     }
 
     /**
-     * Keterangan satu baris: data yang ikut terhapus permanen bersama induknya, dan file yang gagal dihapus dari penyimpanan.
+     * Keterangan satu baris: data yang ikut terhapus permanen bersama induknya ("Ikut menghapus permanen: 3 dokumen, 1 pengajuan."
+     * pada induknya, dari `details.cascaded`), dan nama file yang gagal dihapus dari penyimpanan, tanpa path lengkapnya.
      */
     private static function remarks(TrashLog $log): ?string
     {
@@ -45,9 +47,13 @@ class TrashLogsTable
         if (isset($details['via']['subject'])) {
             $remarks[] = 'Ikut terhapus bersama '.(TrashLog::SUBJECTS[$details['via']['subject']] ?? $details['via']['subject']).' "'.($details['via']['label'] ?? '').'".';
         }
+        if (! empty($details['cascaded'])) {
+            $counts = collect($details['cascaded'])->groupBy('label')->map(fn (Collection $entries, string $label): string => $entries->sum('count').' '.$label)->implode(', ');
+            $remarks[] = "Ikut menghapus permanen: {$counts}.";
+        }
         if (! empty($details['left_files'])) {
-            $paths = collect($details['left_files'])->map(fn (array $file): string => $file['path'])->implode(', ');
-            $remarks[] = 'File tertinggal, gagal dihapus dari penyimpanan: '.$paths.'.';
+            $names = collect($details['left_files'])->map(fn (array $file): string => basename($file['path']))->implode(', ');
+            $remarks[] = "File tertinggal di penyimpanan: {$names}; hubungi admin IT.";
         }
 
         return $remarks === [] ? null : implode(' ', $remarks);

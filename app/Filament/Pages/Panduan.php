@@ -235,11 +235,13 @@ class Panduan extends Page
                 summary: 'Data yang dihapus masuk tempat sampah dulu, bukan hilang. Super admin bisa memulihkannya atau menghapusnya permanen.',
                 audience: 'Super admin dan pemegang izin hapus',
                 steps: [
-                    ['Hapus dari daftar atau halaman ubah', null, 'Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman ubah. Setiap penghapusan selalu meminta konfirmasi.'],
+                    ['Hapus dari daftar atau halaman detail', null, 'Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman detail. Setiap penghapusan selalu meminta konfirmasi.'],
+                    ['Hapus beberapa sekaligus', null, 'Centang baris di tabel, lalu klik Hapus terpilih. Baris yang tidak bisa dihapus dilewati dan disebut di notifikasi hasilnya.'],
+                    ['Menghapus user', null, 'User dinonaktifkan dulu dan tugasnya dialihkan ke pengganti yang Anda pilih. Pada Hapus terpilih, user yang punya tugas dilewati; hapus satu per satu. Untuk staf yang keluar atau pindah, pakai Nonaktifkan, bukan Hapus.'],
                     ['Data masuk tempat sampah', null, 'Data hilang dari daftar, tetapi belum terhapus. Dokumen yang dihapus menghentikan pengingat masa berlakunya.'],
-                    ['Super admin buka filter Data dihapus', null, 'Ada di tabel tiap menu. Pilih "Hanya data dihapus" untuk melihat isi tempat sampah, atau klik kartu Tempat sampah di dasbor.'],
-                    ['Pulihkan atau Hapus permanen', null, 'Pulihkan mengembalikan data seperti semula. User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali. Hapus permanen tidak bisa dibatalkan dan ikut menghapus file-nya. Keduanya hanya bisa dilakukan super admin.'],
-                    ['Hapus permanen ditolak bila masih dipakai', null, 'Pesan penolakan menyebut data yang masih memakainya. Hapus atau pindahkan data itu dulu. Data pemakai yang sudah di tempat sampah ikut terhapus permanen. Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.'],
+                    ['Super admin buka filter Data dihapus', null, 'Ada di tabel tiap menu. Pilih "Hanya data dihapus" untuk melihat isi tempat sampah, atau klik kartu menu di bagian Tempat sampah pada dasbor.'],
+                    ['Pulihkan atau Hapus permanen', null, 'Pulihkan mengembalikan data seperti semula. User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali di halaman user. Hapus permanen tidak bisa dibatalkan dan ikut menghapus filenya. Keduanya hanya bisa dilakukan super admin.'],
+                    ['Hapus permanen ditolak bila masih dipakai', null, 'Modal hapus permanen langsung menyebut data yang masih memakainya, dan tombolnya tidak bisa diklik. Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi. Data pemakai yang sudah di tempat sampah ikut terhapus permanen beserta semua versi dan filenya. Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah. User seperti itu cukup dibiarkan di tempat sampah; ia tetap tidak bisa masuk dan tidak menerima WhatsApp.'],
                     ['Cek Riwayat Penghapusan', null, 'Setiap hapus, pulihkan, dan hapus permanen tercatat: jenis data, nama, tindakan, siapa, dan kapan. Hanya terlihat oleh super admin.'],
                 ],
                 impacts: [

@@ -39,9 +39,10 @@ class DocumentRequest extends Model
         return 'document_request';
     }
 
+    /** Nomor dan judul, misalnya "#14 · PKS Sewa Gudang": judul pengajuan sering mirip, nomornya yang membedakan. */
     public function trashLabel(): string
     {
-        return (string) $this->title;
+        return '#'.$this->getKey().' · '.$this->title;
     }
 
     public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];

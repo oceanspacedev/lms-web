@@ -89,7 +89,8 @@ class TrashFoundationTest extends TestCase
         $this->assertSame('PT B', Company::factory()->create(['name' => 'PT B'])->trashLabel());
         $this->assertSame('Jenis X', DocumentType::factory()->create(['name' => 'Jenis X'])->trashLabel());
         $this->assertSame('Budi', User::factory()->create(['name' => 'Budi'])->trashLabel());
-        $this->assertSame('Judul Pengajuan', DocumentRequest::factory()->create(['title' => 'Judul Pengajuan'])->trashLabel());
+        $request = DocumentRequest::factory()->create(['title' => 'Judul Pengajuan']);
+        $this->assertSame("#{$request->id} · Judul Pengajuan", $request->trashLabel());
         $this->assertSame('Judul Dokumen', Document::factory()->create(['title' => 'Judul Dokumen'])->trashLabel());
     }
 

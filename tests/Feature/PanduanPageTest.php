@@ -102,15 +102,26 @@ class PanduanPageTest extends TestCase
         $this->assertSame('Super admin dan pemegang izin hapus', $guide['audience']);
         $this->assertNull($guide['video']);
         $this->assertNull($guide['poster']);
-        $this->assertCount(6, $guide['steps']);
+        $this->assertCount(8, $guide['steps']);
         $this->assertSame(TrashLogResource::getUrl(), $guide['action']['url']);
         $page->assertSeeHtml('id="panduan-hapus-tempat-sampah"')
-            ->assertSee('Hapus dari daftar atau halaman ubah')
+            ->assertSee('Hapus dari daftar atau halaman detail')
             ->assertSee('Cek Riwayat Penghapusan')
-            ->assertDontSeeHtml('Video panduan: Hapus');
-        // Pengecualian User: pulih dalam keadaan nonaktif, dan hapus permanennya ditolak selama namanya masih tercatat.
+            ->assertDontSeeHtml('Video panduan: Hapus')
+            ->assertDontSee('file-nya');
         $steps = collect($guide['steps'])->pluck('description', 'text');
-        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali.', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertSame([
+            'Hapus dari daftar atau halaman detail', 'Hapus beberapa sekaligus', 'Menghapus user', 'Data masuk tempat sampah',
+            'Super admin buka filter Data dihapus', 'Pulihkan atau Hapus permanen', 'Hapus permanen ditolak bila masih dipakai', 'Cek Riwayat Penghapusan',
+        ], $steps->keys()->all());
+        $this->assertStringStartsWith('Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman detail.', $steps['Hapus dari daftar atau halaman detail']);
+        $this->assertStringContainsString('Hapus terpilih', $steps['Hapus beberapa sekaligus']);
+        $this->assertStringContainsString('pakai Nonaktifkan', $steps['Menghapus user']);
+        $this->assertStringContainsString('user yang punya tugas dilewati', $steps['Menghapus user']);
+        // Pengecualian User: pulih dalam keadaan nonaktif, dan hapus permanennya ditolak selama namanya masih tercatat.
+        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali di halaman user.', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertStringContainsString('ikut menghapus filenya', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertStringContainsString('Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.', $steps['Hapus permanen ditolak bila masih dipakai']);
         $this->assertStringContainsString('Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.', $steps['Hapus permanen ditolak bila masih dipakai']);
     }
 
