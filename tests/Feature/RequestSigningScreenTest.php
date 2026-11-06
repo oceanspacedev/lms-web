@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\DocumentRequests\Pages\EditDocumentRequest;
+use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
 use App\Http\Controllers\DocumentRequestFileController;
 use App\Models\Company;
+use App\Models\Document;
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
 use App\Models\User;
@@ -13,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -171,7 +174,7 @@ class RequestSigningScreenTest extends TestCase
         Livewire::test(EditDocumentRequest::class, ['record' => $onTime->getRouteKey()])->assertActionHidden('addLateReason');
     }
 
-    public function test_mark_received_without_scan_requires_file(): void
+    public function test_mark_received_waits_for_the_signed_scan(): void
     {
         $legal = $this->legal();
         $request = $this->request($this->requester(), $legal, 'signing', ['signed_path' => null]);
@@ -179,28 +182,81 @@ class RequestSigningScreenTest extends TestCase
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
             ->assertActionVisible('markReceived')
-            ->callAction('markReceived', ['number' => 'PKS/001'])
-            ->assertHasActionErrors(['file' => 'required']);
-        $this->assertSame('signing', $request->fresh()->status);
+            ->assertActionDisabled('markReceived')
+            ->assertActionVisible('uploadSigned');
 
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->callAction('markReceived', ['number' => 'PKS/001', 'file' => $this->pdf('final.pdf')])->assertHasNoActionErrors();
-        $request->refresh();
-        $this->assertSame('archived', $request->status);
-        $this->assertNotNull($request->physical_received_at);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.');
+        $request->markReceived(null, null, null, $legal);
     }
 
-    public function test_mark_received_with_existing_scan_does_not_require_file(): void
+    public function test_mark_received_is_one_click_without_fields(): void
     {
         $legal = $this->legal();
-        $request = $this->request($this->requester(), $legal, 'handover');
+        $request = $this->request($this->requester(), $legal, 'handover', ['start_date' => '2026-10-01', 'expiry_date' => null]);
         Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
 
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
-            ->callAction('markReceived', ['number' => 'PKS/002'])
+            ->assertActionEnabled('markReceived')
+            ->mountAction('markReceived')
+            ->assertMountedActionModalSee('Tandai fisik diterima?')
+            ->assertMountedActionModalDontSee(['Nomor Dokumen', 'Badan Usaha arsip', 'Tanggal berakhir'])
+            ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertSame('archived', $request->fresh()->status);
+        $request->refresh();
+        $this->assertSame('archived', $request->status);
+        $this->assertNotNull($request->physical_received_at);
+        $document = Document::findOrFail($request->document_id);
+        $this->assertNull($document->document_number);
+        $this->assertSame('2026-10-01', $document->currentVersion->issued_date->toDateString());
+        $this->assertSame('%PDF-1.4 scan', $document->currentVersion->storage()->get($document->currentVersion->file_path));
+    }
+
+    public function test_mark_received_asks_only_for_data_the_request_does_not_have(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, 'handover', [
+            'company_id' => null, 'other_business_name' => 'PT Usaha Lain',
+            'document_type_id' => DocumentType::factory()->create(['has_expiry' => true])->id, 'expiry_date' => null,
+        ]);
+        Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
+        $company = Company::factory()->create();
+
+        $this->actingAs($legal);
+        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
+            ->mountAction('markReceived')
+            ->assertMountedActionModalSee(['Badan Usaha arsip', 'Tanggal berakhir'])
+            ->callMountedAction()
+            ->assertHasActionErrors(['company_id' => 'required', 'expiry_date' => 'required'])
+            ->fillForm(['company_id' => $company->id, 'expiry_date' => '2027-12-31'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $request->refresh();
+        $this->assertSame('archived', $request->status);
+        $archived = Document::findOrFail($request->document_id);
+        $this->assertSame($company->id, $archived->company_id);
+        $this->assertSame('2027-12-31', $archived->currentVersion->expiry_date->toDateString());
+    }
+
+    public function test_request_list_and_summary_show_what_is_still_missing(): void
+    {
+        $legal = $this->legal();
+        $requester = $this->requester();
+        $signing = $this->request($requester, $legal, 'signing', ['signed_path' => null]);
+        $handover = $this->request($requester, $legal, 'handover');
+        $archived = $this->request($requester, $legal, 'handover', ['status' => 'archived', 'physical_received_at' => now()]);
+
+        $this->actingAs($legal);
+        Livewire::test(ListDocumentRequests::class)
+            ->assertTableColumnStateSet('status', ['Menunggu Tanda Tangan', 'Belum scan'], $signing)
+            ->assertTableColumnStateSet('status', ['Menunggu Dokumen Fisik', 'Fisik belum diterima'], $handover)
+            ->assertTableColumnStateSet('status', ['Selesai'], $archived);
+
+        Livewire::test(EditDocumentRequest::class, ['record' => $signing->getRouteKey()])->assertSee('Belum scan');
+        Livewire::test(EditDocumentRequest::class, ['record' => $handover->getRouteKey()])->assertSee('Fisik belum diterima');
     }
 
     public function test_cancel_action_requires_note(): void

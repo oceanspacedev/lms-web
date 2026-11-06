@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -140,7 +141,7 @@ class FinalReviewFixesTest extends TestCase
             ->assertSee('Diterima terlambat 3 hari');
     }
 
-    public function test_received_from_signing_without_scan_has_no_lateness(): void
+    public function test_received_from_signing_without_scan_is_refused_even_long_after_the_draft(): void
     {
         $legal = $this->legal();
         $request = DocumentRequest::factory()->signing(30)->create([
@@ -148,9 +149,9 @@ class FinalReviewFixesTest extends TestCase
             'document_type_id' => DocumentType::factory()->withoutExpiry()->create()->id,
         ]);
 
-        $request->markReceived('PKS/011', null, null, $legal, null, $this->pdf('final.pdf'));
-
-        $this->assertNull(collect($request->fresh()->history)->last()['note']);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.');
+        $request->markReceived('PKS/011', null, null, $legal);
     }
 
     public function test_cancelled_requests_do_not_block_deactivation_or_get_reassigned(): void
@@ -243,13 +244,12 @@ class FinalReviewFixesTest extends TestCase
 
     public function test_status_badge_colours_make_cancelled_look_final(): void
     {
-        $this->actingAs($this->legal());
-        $column = Livewire::test(ListDocumentRequests::class)->instance()->getTable()->getColumn('status');
+        $color = fn (string $status): string => (new DocumentRequest)->forceFill(['status' => $status])->statusBadgeColor(DocumentRequest::statusLabel($status));
 
-        $this->assertSame('danger', $column->getColor('cancelled'));
-        $this->assertSame($column->getColor('rejected'), $column->getColor('cancelled'));
-        $this->assertSame('info', $column->getColor('signing'));
-        $this->assertSame('info', $column->getColor('handover'));
+        $this->assertSame('danger', $color('cancelled'));
+        $this->assertSame($color('rejected'), $color('cancelled'));
+        $this->assertSame('info', $color('signing'));
+        $this->assertSame('info', $color('handover'));
     }
 
     public function test_legal_records_a_late_reason_on_behalf_of_the_applicant(): void

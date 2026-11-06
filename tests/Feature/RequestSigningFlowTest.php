@@ -266,7 +266,7 @@ class RequestSigningFlowTest extends TestCase
         $this->assertSame('archived', collect($request->history)->last()['status']);
     }
 
-    public function test_mark_received_from_signing_requires_file(): void
+    public function test_mark_received_needs_the_signed_scan_first(): void
     {
         $legal = $this->legal();
         $request = $this->request($this->requester(), $legal);
@@ -274,18 +274,20 @@ class RequestSigningFlowTest extends TestCase
 
         try {
             $request->markReceived('001/PKS/2026', null, null, $legal);
-            $this->fail('Tanpa scan dan tanpa file, fisik diterima harus ditolak.');
+            $this->fail('Sebelum scan bertanda tangan masuk, fisik diterima harus ditolak.');
         } catch (ValidationException $exception) {
-            $this->assertSame(['file' => ['Unggah dokumen yang sudah ditandatangani.']], $exception->errors());
+            $this->assertSame(['status' => ['Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.']], $exception->errors());
         }
         $this->assertSame('signing', $request->fresh()->status);
         $this->assertSame(0, Document::count());
 
-        $document = $request->markReceived('001/PKS/2026', null, null, $legal, null, $this->pdf('asli-diserahkan.pdf'));
+        $request->uploadSigned($this->pdf('scan-ttd.pdf'), $legal);
+        $document = $request->markReceived(null, null, null, $legal);
 
         $this->assertSame('archived', $request->status);
         $this->assertNotNull($request->physical_received_at);
-        $this->assertSame('asli-diserahkan.pdf', $document->currentVersion->file_name);
+        $this->assertNull($document->document_number);
+        $this->assertSame('scan-ttd.pdf', $document->currentVersion->file_name);
     }
 
     public function test_mark_received_twice_creates_one_document(): void

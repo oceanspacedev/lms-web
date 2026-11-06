@@ -16,13 +16,11 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
@@ -106,20 +104,27 @@ class EditDocumentRequest extends EditRecord
                     fn () => $this->record->addLateReason($data['reason'], auth()->user()),
                     ['reason'], 'Alasan dicatat', 'Alasan belum dicatat',
                 )),
-            Action::make('markReceived')->label('Fisik Diterima')->modalWidth('lg')->modalSubmitActionLabel('Simpan & Arsipkan')
-                ->modalDescription('Dokumen diarsipkan ke menu Dokumen dan pengajuan ditandai Selesai.')
+            // Fisik Diterima baru bisa diklik setelah scan bertanda tangan masuk; cukup konfirmasi, data arsip diambil dari pengajuan.
+            // Isian hanya muncul untuk data yang memang tidak ada di pengajuan (badan usaha, atau tanggal berakhir jenis yang punya masa berlaku).
+            Action::make('markReceived')->label('Fisik Diterima')->modalWidth('lg')->requiresConfirmation()
+                ->modalHeading('Tandai fisik diterima?')
+                ->modalDescription('Dokumen asli sudah ada di tim legal. Pengajuan ditandai Selesai dan scan bertanda tangan diarsipkan ke menu Dokumen. Nomor dokumen bisa dilengkapi nanti di menu Dokumen.')
+                ->modalSubmitActionLabel('Ya, fisik diterima')
                 ->visible(fn (): bool => in_array($this->record->status, ['signing', 'handover'], true) && auth()->user()->can('markReceived', $this->record))
+                ->disabled(fn (): bool => ! $this->record->hasSignedScan())
+                ->tooltip(fn (): ?string => $this->record->hasSignedScan() ? null : 'Unggah scan bertanda tangan dulu.')
                 ->schema([
-                    TextInput::make('number')->label('Nomor Dokumen')->required()->maxLength(255),
-                    Select::make('company_id')->label('Badan Usaha arsip')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()->visible(fn (): bool => $this->record->company_id === null),
-                    DatePicker::make('issued_date')->label('Tanggal terbit')->default(fn (): ?string => $this->record->start_date?->toDateString()),
-                    DatePicker::make('expiry_date')->label('Tanggal berakhir')->default(fn (): ?string => $this->record->expiry_date?->toDateString())->required(fn (): bool => $this->record->documentType->has_expiry)->visible(fn (): bool => $this->record->documentType->has_expiry)->afterOrEqual('issued_date'),
-                    $this->flowFileUpload('Dokumen bertanda tangan', required: fn (): bool => blank($this->record->signed_path))
-                        ->helperText(fn (): ?string => filled($this->record->signed_path) ? 'Opsional. Kosongkan untuk memakai scan yang sudah diunggah.' : null),
+                    Select::make('company_id')->label('Badan Usaha arsip')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()
+                        ->helperText('Pengajuan ini belum memakai badan usaha yang terdaftar.')
+                        ->visible(fn (): bool => $this->record->company_id === null),
+                    DatePicker::make('expiry_date')->label('Tanggal berakhir')->required()
+                        ->helperText('Jenis dokumen ini punya masa berlaku, tetapi pengajuan belum mencantumkan tanggal berakhir.')
+                        ->visible(fn (): bool => $this->record->documentType->has_expiry && $this->record->expiry_date === null),
                 ])
                 ->action(fn (array $data) => $this->runFlowAction(
-                    fn () => $this->record->markReceived($data['number'], $data['issued_date'] ?? null, $data['expiry_date'] ?? null, auth()->user(), isset($data['company_id']) ? (int) $data['company_id'] : null, ($data['file'] ?? null) instanceof UploadedFile ? $data['file'] : null),
-                    ['number', 'company_id', 'expiry_date', 'file'], 'Dokumen diarsipkan', 'Dokumen belum diarsipkan',
+                    fn () => $this->record->markReceived(null, null, $data['expiry_date'] ?? null, auth()->user(), isset($data['company_id']) ? (int) $data['company_id'] : null),
+                    ['company_id', 'expiry_date'], 'Fisik diterima', 'Fisik belum ditandai diterima',
+                    fn (): string => 'Pengajuan selesai dan dokumen sudah masuk menu Dokumen.',
                 )),
             Action::make('cancel')->label('Batalkan')->color('danger')->modalWidth('lg')
                 ->modalHeading('Batalkan pengajuan?')->modalSubmitActionLabel('Ya, batalkan')->modalCancelActionLabel('Kembali')

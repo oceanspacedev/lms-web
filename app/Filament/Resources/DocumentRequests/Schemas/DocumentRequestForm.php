@@ -147,7 +147,8 @@ class DocumentRequestForm
     {
         return $schema->columns(['default' => 1, 'lg' => 3])->components([
             Section::make('Ringkasan')->compact()->columns(2)->columnSpan(['default' => 1, 'lg' => 2])->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
-                TextEntry::make('status_label')->label('Status')->state(fn (DocumentRequest $record): string => DocumentRequest::statusLabel($record->status))->badge(),
+                TextEntry::make('status_label')->label('Status')->state(fn (DocumentRequest $record): array => $record->statusBadges())->badge()
+                    ->color(fn (string $state, DocumentRequest $record): string => $record->statusBadgeColor($state)),
                 TextEntry::make('submitted_date')->label('Diajukan')->state(fn (DocumentRequest $record): ?string => collect($record->history)->firstWhere('status', 'submitted')['at'] ?? null)
                     ->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->placeholder('Belum diajukan'),
                 TextEntry::make('documentType.name')->label('Jenis dokumen')->state(fn (DocumentRequest $record): ?string => $record->documentType?->displayName())->wrap(),

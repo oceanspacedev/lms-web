@@ -44,9 +44,11 @@ class DocumentRequestsTable
                         ->whereRaw("lower(document_requests.requester_name) like ? escape '!'", [self::likePattern($search)]))
                     ->orWhere(fn (Builder $query): Builder => $query->whereNull('document_requests.requester_name')
                         ->whereHas('requester', fn (Builder $requester): Builder => $requester->whereRaw("lower(users.name) like ? escape '!'", [self::likePattern($search)])))),
-            TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::statusLabel($state))->color(fn (string $state): string => match ($state) {
-                'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
-            })->visibleFrom(TrashActions::statusVisibleFrom()),
+            // Status ditambah badge "Belum scan" / "Fisik belum diterima" agar langkah yang belum beres terlihat tanpa membuka detail.
+            TextColumn::make('status')->label('Status')->badge()
+                ->state(fn (DocumentRequest $record): array => $record->statusBadges())
+                ->color(fn (string $state, DocumentRequest $record): string => $record->statusBadgeColor($state))
+                ->visibleFrom(TrashActions::statusVisibleFrom()),
             TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->visibleFrom('md')
                 ->limit(self::HANDOVER_NOTE_LIMIT)->wrap()
                 ->tooltip(fn (DocumentRequest $record): ?string => mb_strlen((string) self::handoverNote($record)) > self::HANDOVER_NOTE_LIMIT ? self::handoverNote($record) : null)

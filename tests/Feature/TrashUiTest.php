@@ -550,7 +550,7 @@ class TrashUiTest extends TestCase
                 ->assertTableColumnFormattedStateSet('is_active', 'Aktif', $active),
             'user' => $list->assertTableColumnStateSet('status', 'Dihapus', $trashed)->assertTableColumnStateSet('status', 'Aktif', $active),
             'document' => $list->assertTableColumnFormattedStateSet('expiry_status', 'Dihapus', $trashed),
-            'document_request' => $list->assertTableColumnFormattedStateSet('status', 'Menunggu Dokumen Fisik', $trashed)
+            'document_request' => $list->assertTableColumnStateSet('status', ['Menunggu Dokumen Fisik'], $trashed)
                 ->assertTableColumnStateSet('handover_note', null, $trashed),
         };
     }

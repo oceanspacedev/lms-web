@@ -78,7 +78,7 @@ class Panduan extends Page
                     ['Batas penyerahan fisik 7 hari', 27, 'Dihitung sejak scan pertama diunggah. Mengganti scan tidak mengulang hitungan.'],
                     ['Terlambat? Pengaju tulis alasan', 31.8, 'Pengingat WhatsApp dikirim sehari setelah batas lewat, lalu 14 dan 28 hari setelah scan masuk. Alasan hanya dicatat, tidak memperpanjang batas.'],
                     ['Legal pantau lewat filter Tahap', 39.6, 'Yang terlambat tampil merah lengkap dengan alasan terakhirnya.'],
-                    ['Dokumen asli sampai, klik Fisik Diterima', 47.3, 'Isi nomor dokumen. Scan bertanda tangan menjadi file arsip.'],
+                    ['Dokumen asli sampai, klik Fisik Diterima', 47.3, 'Bisa diklik setelah scan masuk. Cukup konfirmasi, scan bertanda tangan menjadi file arsip; nomor dokumen dilengkapi nanti di menu Dokumen.'],
                     ['Selesai, dokumen masuk arsip', 54.1, 'Keterlambatan, bila ada, ikut tercatat dan pengaju dikabari.'],
                 ],
                 impacts: [
@@ -179,7 +179,7 @@ class Panduan extends Page
                     ['Periksa, lalu klik Keluarkan Draft', 5.2, 'Unggah file draft. Kurang lengkap? Pilih Revisi atau Tolak beserta catatannya. Draft masih bisa diganti sebelum scan masuk.'],
                     ['Pengaju tanda tangan, scan masuk', 10.8, 'Status menjadi Menunggu Dokumen Fisik. Dokumen asli wajib diserahkan ke legal dalam 7 hari sejak scan diunggah.'],
                     ['Pantau lewat filter Tahap', 16.6, 'Pilih Menunggu fisik atau Terlambat. Kolom Keterangan menunjukkan sisa hari, atau hari keterlambatan beserta alasan dari pengaju.'],
-                    ['Dokumen asli sampai, klik Fisik Diterima', 24, 'Isi nomor dokumen. Scan bertanda tangan otomatis menjadi file arsip.'],
+                    ['Dokumen asli sampai, klik Fisik Diterima', 24, 'Bisa diklik setelah scan masuk. Cukup konfirmasi, scan bertanda tangan otomatis menjadi file arsip; nomor dokumen dilengkapi nanti di menu Dokumen.'],
                     ['Selesai, dokumen masuk arsip', 30.5, 'Keterlambatan, bila ada, ikut tercatat. Pengajuan batal, saat revisi atau setelah draft keluar? Klik Batalkan beserta alasannya.'],
                 ],
                 impacts: [

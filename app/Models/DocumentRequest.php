@@ -65,6 +65,11 @@ class DocumentRequest extends Model
     /** Status yang boleh dibatalkan tim legal: revisi yang ditinggal pengaju, atau setelah draft keluar. */
     public const CANCELLABLE_STATUSES = ['revision', 'signing', 'handover'];
 
+    /** Badge langkah yang belum beres, tampil di samping status (lihat pendingBadges()). */
+    public const BADGE_NO_SCAN = 'Belum scan';
+
+    public const BADGE_NOT_RECEIVED = 'Fisik belum diterima';
+
     /** Status saat pengajuan menunggu tindakan staf. */
     public const WAITING_STATUSES = ['submitted'];
 
@@ -779,15 +784,15 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Fisik diterima: arsipkan dokumen lalu tandai pengajuan Selesai. File arsip memakai `$file` bila diunggah,
-     * kalau tidak memakai scan bertanda tangan yang sudah ada.
+     * Fisik diterima: arsipkan scan bertanda tangan sebagai dokumen lalu tandai pengajuan Selesai. Hanya setelah scan masuk.
+     * Nomor dokumen boleh kosong (dilengkapi nanti di menu Dokumen); tanggal terbit dan berakhir diambil dari pengajuan bila tidak diberikan.
      */
-    public function markReceived(string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null, ?UploadedFile $file = null): Document
+    public function markReceived(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null): Document
     {
         $storedFile = null;
 
         try {
-            return $this->markReceivedInTransaction($number, $issuedDate, $expiryDate, $user, $companyId, $file, $storedFile);
+            return $this->markReceivedInTransaction($number, $issuedDate, $expiryDate, $user, $companyId, $storedFile);
         } catch (Throwable $exception) {
             // Document::archive sudah menyimpan file; bila langkah di luarnya gagal, DB di-rollback tetapi file tertinggal.
             if ($storedFile !== null) {
@@ -803,25 +808,28 @@ class DocumentRequest extends Model
     }
 
     /** @param array{0: string, 1: string}|null $storedFile */
-    private function markReceivedInTransaction(string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?UploadedFile $file, ?array &$storedFile): Document
+    private function markReceivedInTransaction(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?array &$storedFile): Document
     {
-        return DB::transaction(function () use ($number, $issuedDate, $expiryDate, $user, $companyId, $file, &$storedFile): Document {
+        return DB::transaction(function () use ($number, $issuedDate, $expiryDate, $user, $companyId, &$storedFile): Document {
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             if (! in_array($request->status, ['signing', 'handover'], true)) {
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
             }
             Gate::forUser($user)->authorize('markReceived', $request);
-            $file ??= $request->signedScanFile();
+            $file = $request->status === 'handover' ? $request->signedScanFile() : null;
             if ($file === null) {
-                throw ValidationException::withMessages(['file' => 'Unggah dokumen yang sudah ditandatangani.']);
+                throw ValidationException::withMessages(['status' => 'Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.']);
             }
-            Validator::make(['number' => $number], ['number' => ['required', 'string', 'max:255']])->validate();
+            $number = filled($number) ? $number : null;
+            Validator::make(['number' => $number], ['number' => ['nullable', 'string', 'max:255']])->validate();
+            $issuedDate ??= $request->start_date?->toDateString();
+            $expiryDate ??= $request->expiry_date?->toDateString();
             $ownCompanyId = $request->company_id;
             $companyId = $ownCompanyId ?? $companyId;
             Validator::make(['company_id' => $companyId], ['company_id' => ['required', ActiveReference::rule('companies', $ownCompanyId, ['is_active' => true])]])->validate();
             $request->company_id = $companyId;
             // Badan usaha dan jenis dokumen yang sudah terpasang pada pengajuan tetap sah walau kini nonaktif atau di tempat sampah.
-            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
+            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id ?? $request->reviewer_id ?? $user->id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
             $storedFile = [$document->currentVersion->disk, $document->currentVersion->file_path];
             $request->document_id = $document->id;
             $request->physical_received_at = now();
@@ -845,6 +853,53 @@ class DocumentRequest extends Model
         }
 
         return new UploadedFile($disk->path($this->signed_path), $this->signed_name ?? basename($this->signed_path), null, null, true);
+    }
+
+    /** Scan bertanda tangan sudah masuk, syarat tombol Fisik Diterima bisa diklik. */
+    public function hasSignedScan(): bool
+    {
+        return $this->status === 'handover' && filled($this->signed_path);
+    }
+
+    /**
+     * Badge tambahan di samping status agar langkah yang belum beres terlihat dari daftar: "Belum scan" saat menunggu tanda tangan,
+     * "Fisik belum diterima" saat menunggu dokumen fisik. Kosong untuk status lain dan untuk pengajuan di tempat sampah.
+     *
+     * @return list<string>
+     */
+    public function pendingBadges(): array
+    {
+        if ($this->trashed()) {
+            return [];
+        }
+
+        return match ($this->status) {
+            'signing' => blank($this->signed_path) ? [self::BADGE_NO_SCAN] : [],
+            'handover' => [self::BADGE_NOT_RECEIVED],
+            default => [],
+        };
+    }
+
+    /**
+     * Status ditambah badge langkah yang belum beres, untuk kolom Status di daftar dan Ringkasan di halaman detail.
+     *
+     * @return list<string>
+     */
+    public function statusBadges(): array
+    {
+        return [self::statusLabel($this->status), ...$this->pendingBadges()];
+    }
+
+    /** Warna satu badge dari statusBadges(): status mengikuti warnanya, badge langkah kuning, dan merah bila fisik sudah terlambat. */
+    public function statusBadgeColor(string $badge): string
+    {
+        return match ($badge) {
+            self::BADGE_NO_SCAN => 'warning',
+            self::BADGE_NOT_RECEIVED => $this->isHandoverLate() ? 'danger' : 'warning',
+            default => match ($this->status) {
+                'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info',
+            },
+        };
     }
 
     /**
