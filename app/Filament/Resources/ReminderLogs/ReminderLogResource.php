@@ -34,7 +34,7 @@ class ReminderLogResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Log Pengingat';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administrasi';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp';
 
     protected static ?int $navigationSort = 1;
 

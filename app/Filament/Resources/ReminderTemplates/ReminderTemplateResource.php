@@ -46,7 +46,7 @@ class ReminderTemplateResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Pengaturan WhatsApp';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administrasi';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp';
 
     /** Tepat di atas Log Pengingat (sort 1); Horizon dan Log Laravel di panel memakai 2 dan 3. */
     protected static ?int $navigationSort = 0;

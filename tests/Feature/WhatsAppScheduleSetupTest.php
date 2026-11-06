@@ -269,9 +269,9 @@ class WhatsAppScheduleSetupTest extends TestCase
             ->assertMountedActionModalSee('Pengingat dikirim pada: 14 hari sebelum, 3 hari sebelum, Tanggal berakhir');
     }
 
-    public function test_whatsapp_settings_live_next_to_the_reminder_log_in_the_administration_group(): void
+    public function test_whatsapp_settings_live_next_to_the_reminder_log_in_the_whatsapp_group(): void
     {
-        $this->assertSame('Administrasi', ReminderTemplateResource::getNavigationGroup());
+        $this->assertSame('WhatsApp', ReminderTemplateResource::getNavigationGroup());
         $this->assertSame(ReminderLogResource::getNavigationGroup(), ReminderTemplateResource::getNavigationGroup());
         $this->assertSame(0, ReminderTemplateResource::getNavigationSort());
         $this->assertLessThan(ReminderLogResource::getNavigationSort(), ReminderTemplateResource::getNavigationSort());
@@ -279,6 +279,6 @@ class WhatsAppScheduleSetupTest extends TestCase
         $this->authorizeSettings(['ViewAny:ReminderTemplate', 'ViewAny:ReminderLog', 'View:ReminderLog']);
         $groups = collect(Filament::getNavigation())->keyBy(fn ($group): string => (string) $group->getLabel());
         $this->assertNull($groups->get('Data Master')?->getItems()->first(fn ($item): bool => $item->getLabel() === 'Pengaturan WhatsApp'));
-        $this->assertSame(['Pengaturan WhatsApp', 'Log Pengingat'], $groups->get('Administrasi')->getItems()->map(fn ($item): string => $item->getLabel())->values()->all());
+        $this->assertSame(['Pengaturan WhatsApp', 'Log Pengingat'], $groups->get('WhatsApp')->getItems()->map(fn ($item): string => $item->getLabel())->values()->all());
     }
 }

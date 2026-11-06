@@ -69,19 +69,23 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
+            // Menu kerja harian (Dasbor, Dokumen, Pengajuan) tanpa grup di atas; pengaturan dan bantuan di bawahnya.
             ->navigationGroups([
                 'Data Master',
-                'Administrasi',
+                'Pengguna & Akses',
+                'WhatsApp',
+                'Sistem',
+                'Bantuan',
             ])
             ->navigationItems([
                 NavigationItem::make('Horizon')
-                    ->group('Administrasi')
+                    ->group('Sistem')
                     ->sort(2)
                     ->icon(Heroicon::OutlinedQueueList)
                     ->url(fn (): string => route('horizon.index'), shouldOpenInNewTab: true)
                     ->visible(fn (): bool => Gate::allows('viewHorizon')),
                 NavigationItem::make('Log Laravel')
-                    ->group('Administrasi')
+                    ->group('Sistem')
                     ->sort(3)
                     ->icon(Heroicon::OutlinedDocumentText)
                     ->url(fn (): string => route('log-viewer.index'), shouldOpenInNewTab: true)
@@ -101,9 +105,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentShieldPlugin::make()
-                    ->navigationGroup('Data Master')
+                    ->navigationGroup('Pengguna & Akses')
                     ->navigationLabel('Hak Akses')
-                    ->navigationSort(4),
+                    ->navigationSort(2),
             ])
             ->authMiddleware([
                 Authenticate::class,

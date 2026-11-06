@@ -24,9 +24,9 @@ class TrashLogResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Riwayat Penghapusan';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administrasi';
+    protected static string|\UnitEnum|null $navigationGroup = 'Sistem';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     public static function canCreate(): bool
     {
