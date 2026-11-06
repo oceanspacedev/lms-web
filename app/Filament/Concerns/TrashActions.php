@@ -19,7 +19,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Notifications\Notification;
-use Filament\Resources\Resource;
+use Filament\Resources\Resource as FilamentResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
@@ -94,28 +94,36 @@ class TrashActions
             })
             ->successNotificationTitle(ucfirst($noun).' dipulihkan')
             ->successNotification(fn (Notification $notification, Model $record): Notification => $record instanceof User
-                ? $notification->title('User dipulihkan dalam keadaan nonaktif')->body('Aktifkan kembali lewat tombol Aktifkan kembali di halaman user.')
+                ? $notification->title('User dipulihkan dalam keadaan nonaktif')->body('Klik tombol Aktifkan kembali di halaman user.')
                     ->actions([Action::make('openUser')->label('Buka user')->url(UserResource::getUrl('edit', ['record' => $record]))])
                 : $notification);
     }
 
     /**
-     * Hapus permanen satu data di tempat sampah. Keterkaitannya dihitung saat modal dibuka: bila masih dipakai data aktif,
-     * modal menyebut alasannya dan tombol hapus permanen dinonaktifkan. TrashManager tetap memeriksa ulang saat dijalankan.
+     * Hapus permanen satu data di tempat sampah. Keterkaitannya dihitung saat modal dibuka, sekali per render untuk deskripsi
+     * dan tombolnya: bila data ini atau anaknya yang ikut terhapus masih dipakai data aktif, modal menyebut alasannya dan
+     * tombol hapus permanen dinonaktifkan. TrashManager tetap memeriksa ulang saat dijalankan.
      */
     public static function forceDelete(string $noun): ForceDeleteAction
     {
+        // Satu pemeriksaan per data untuk deskripsi dan tombol modal; aksi dibuat ulang tiap permintaan Livewire, jadi tidak basi.
+        /** @var array<string, array{usage: TrashUsage, blockMessage: ?string}> $checks */
+        $checks = [];
+        $check = function (Model $record) use (&$checks): array {
+            return $checks[$record::class.':'.$record->getKey()] ??= self::forceDeleteCheck($record);
+        };
+
         return ForceDeleteAction::make()->label('Hapus permanen')->tooltip("Hapus permanen {$noun}")->color('danger')
             ->icon(self::FORCE_DELETE_ICON)->modalIcon(self::FORCE_DELETE_ICON)
             ->authorize('forceDelete')
             ->modalHeading("Hapus permanen {$noun} ini?")
-            ->modalDescription(function (Model $record) use ($noun): string {
-                $usage = app(TrashManager::class)->usage($record);
+            ->modalDescription(function (Model $record) use ($check, $noun): string {
+                ['usage' => $usage, 'blockMessage' => $blockMessage] = $check($record);
 
-                return $usage->blocksForceDelete() ? $usage->blockMessage() : self::forceDeleteDescription($record::class, $usage->trashed, "{$noun} ini");
+                return $blockMessage ?? self::forceDeleteDescription($record::class, $usage->trashed, "{$noun} ini");
             })
             ->modalSubmitAction(fn (Action $action, Model $record): Action => $action->color('danger')
-                ->disabled(app(TrashManager::class)->usage($record)->blocksForceDelete()))
+                ->disabled($check($record)['blockMessage'] !== null))
             ->modalSubmitActionLabel('Ya, hapus permanen')
             ->modalCancelActionLabel('Kembali')
             ->action(function (ForceDeleteAction $action, Model $record): void {
@@ -159,10 +167,11 @@ class TrashActions
             ->hidden(fn (HasTable $livewire): bool => self::trashedFilterValue($livewire) === null)
             ->modalHeading(fn (Collection $records): string => self::bulkHeading('Hapus permanen', $noun, $records, trashed: true))
             ->modalDescription(function (ForceDeleteBulkAction $action, Collection $records) use ($noun): string {
-                $trash = app(TrashManager::class);
                 $selected = self::selection($records, trashed: true);
-                [$blocked, $allowed] = $selected->map(fn (Model $record): TrashUsage => $trash->usage($record))->partition(fn (TrashUsage $usage): bool => $usage->blocksForceDelete());
-                $description = self::forceDeleteDescription($action->getModel(), $allowed->flatMap(fn (TrashUsage $usage): array => $usage->trashed)->all(), "{$noun} terpilih");
+                // Ditolak bila data itu sendiri atau anaknya yang ikut terhapus masih dipakai: sama dengan pemeriksaan saat dijalankan.
+                [$blocked, $allowed] = $selected->map(fn (Model $record): array => self::forceDeleteCheck($record))
+                    ->partition(fn (array $check): bool => $check['blockMessage'] !== null);
+                $description = self::forceDeleteDescription($action->getModel(), $allowed->flatMap(fn (array $check): array => $check['usage']->trashed)->all(), "{$noun} terpilih");
 
                 return $blocked->isEmpty() ? $description : "{$description} {$blocked->count()} dari {$selected->count()} akan ditolak karena masih dipakai.";
             })
@@ -207,31 +216,31 @@ class TrashActions
     }
 
     /**
-     * Judul tabel kosong: "Tempat sampah kosong" saat filter "Hanya data dihapus" aktif, selain itu `$otherwise`.
+     * Judul tabel kosong: "Tempat sampah kosong" saat tempat sampah memang kosong (lihat isTrashEmptyView()), selain itu `$otherwise`.
      *
      * @param  string|(Closure(HasTable): string)  $otherwise
      * @return Closure(HasTable): string
      */
     public static function emptyStateHeading(string|Closure $otherwise): Closure
     {
-        return fn (HasTable $livewire): string => self::isShowingOnlyTrashed($livewire) ? 'Tempat sampah kosong' : value($otherwise, $livewire);
+        return fn (HasTable $livewire): string => self::isTrashEmptyView($livewire) ? 'Tempat sampah kosong' : value($otherwise, $livewire);
     }
 
     /**
-     * Keterangan tabel kosong: "Tidak ada {noun} di tempat sampah." saat filter "Hanya data dihapus" aktif, selain itu `$otherwise`.
+     * Keterangan tabel kosong: "Tidak ada {noun} di tempat sampah." saat tempat sampah memang kosong, selain itu `$otherwise`.
      *
      * @param  string|(Closure(HasTable): ?string)|null  $otherwise
      * @return Closure(HasTable): ?string
      */
     public static function emptyStateDescription(string $noun, string|Closure|null $otherwise): Closure
     {
-        return fn (HasTable $livewire): ?string => self::isShowingOnlyTrashed($livewire) ? "Tidak ada {$noun} di tempat sampah." : value($otherwise, $livewire);
+        return fn (HasTable $livewire): ?string => self::isTrashEmptyView($livewire) ? "Tidak ada {$noun} di tempat sampah." : value($otherwise, $livewire);
     }
 
     /**
      * Daftar resource tersaring "Hanya data dihapus": tujuan kartu dasbor, tombol Kembali, dan hapus permanen dari halaman detail.
      *
-     * @param  class-string<\Filament\Resources\Resource>  $resource
+     * @param  class-string<FilamentResource>  $resource
      */
     public static function trashIndexUrl(string $resource): string
     {
@@ -242,6 +251,15 @@ class TrashActions
     public static function trashedNotice(Model $record): string
     {
         return 'Data ini ada di tempat sampah — dihapus '.self::deletedDescription($record).'. Pulihkan untuk mengubahnya.';
+    }
+
+    /**
+     * Tabel kosong karena tempat sampah memang kosong: filter "Hanya data dihapus" aktif tanpa pencarian (umum maupun per kolom).
+     * Bila ada pencarian, keadaan kosong biasa milik tabel itu yang tampil.
+     */
+    private static function isTrashEmptyView(HasTable $livewire): bool
+    {
+        return self::isShowingOnlyTrashed($livewire) && ! $livewire->hasTableSearch() && array_filter($livewire->getTableColumnSearches(), filled(...)) === [];
     }
 
     /** Super admin sedang melihat isi tempat sampah saja (filter "Hanya data dihapus"). */
@@ -381,6 +399,20 @@ class TrashActions
         }
 
         return [...array_fill_keys(app(UserDeactivator::class)->requiredGroups($record), null), ...$data];
+    }
+
+    /**
+     * Keterkaitan data untuk modal hapus permanen beserta alasan penolakannya (null bila boleh), dengan pemeriksaan yang sama
+     * seperti TrashManager::forceDelete(), termasuk anak di tempat sampah yang ikut terhapus.
+     *
+     * @return array{usage: TrashUsage, blockMessage: ?string}
+     */
+    private static function forceDeleteCheck(Model $record): array
+    {
+        $trash = app(TrashManager::class);
+        $usage = $trash->usage($record);
+
+        return ['usage' => $usage, 'blockMessage' => $trash->forceDeleteBlockMessage($record, $usage)];
     }
 
     /** Penjelasan modal hapus, misalnya "Badan usaha dipindahkan ke tempat sampah dan hilang dari daftar. ..." */

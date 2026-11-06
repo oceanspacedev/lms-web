@@ -321,6 +321,11 @@ class TrashManagerTest extends TestCase
 
             public function afterRestore(Model $record, User $actor): void {}
 
+            public function trashedDependents(Model $record): array
+            {
+                return [];
+            }
+
             public function purge(Model $record, User $actor): array
             {
                 $record->forceDelete();

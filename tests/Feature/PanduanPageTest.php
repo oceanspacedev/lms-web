@@ -119,7 +119,7 @@ class PanduanPageTest extends TestCase
         $this->assertStringContainsString('pakai Nonaktifkan', $steps['Menghapus user']);
         $this->assertStringContainsString('user yang punya tugas dilewati', $steps['Menghapus user']);
         // Pengecualian User: pulih dalam keadaan nonaktif, dan hapus permanennya ditolak selama namanya masih tercatat.
-        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; aktifkan lewat tombol Aktifkan kembali di halaman user.', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; klik tombol Aktifkan kembali di halaman user.', $steps['Pulihkan atau Hapus permanen']);
         $this->assertStringContainsString('ikut menghapus filenya', $steps['Pulihkan atau Hapus permanen']);
         $this->assertStringContainsString('Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.', $steps['Hapus permanen ditolak bila masih dipakai']);
         $this->assertStringContainsString('Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.', $steps['Hapus permanen ditolak bila masih dipakai']);

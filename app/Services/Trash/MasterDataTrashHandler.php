@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\UserDeactivator;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -51,17 +52,21 @@ abstract class MasterDataTrashHandler implements TrashHandler
     public function afterRestore(Model $record, User $actor): void {}
 
     /**
-     * Pengajuan di tempat sampah dihapus lebih dulu, karena pengajuan Selesai menunjuk dokumen arsipnya.
+     * Pengajuan di tempat sampah lebih dulu, karena pengajuan Selesai menunjuk dokumen arsipnya.
      */
+    public function trashedDependents(Model $record): array
+    {
+        return collect([DocumentRequest::class, Document::class])
+            ->flatMap(fn (string $dependentClass): Collection => $dependentClass::onlyTrashed()->where($this->foreignKey(), $record->getKey())->orderBy('id')->get())
+            ->values()->all();
+    }
+
     public function purge(Model $record, User $actor): array
     {
         $trash = app(TrashManager::class);
         $files = [];
-        foreach ([DocumentRequest::class, Document::class] as $dependentClass) {
-            $dependents = $dependentClass::onlyTrashed()->where($this->foreignKey(), $record->getKey())->orderBy('id')->get();
-            foreach ($dependents as $dependent) {
-                array_push($files, ...$trash->purge($dependent, $actor));
-            }
+        foreach ($this->trashedDependents($record) as $dependent) {
+            array_push($files, ...$trash->purge($dependent, $actor));
         }
         $record->forceDelete();
 

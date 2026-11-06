@@ -13,7 +13,7 @@ use App\Models\Document;
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
 use App\Models\User;
-use Filament\Resources\Resource;
+use Filament\Resources\Resource as FilamentResource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -30,7 +30,7 @@ class TrashOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Tempat sampah';
 
-    /** @var Collection<int, array{count: int, resource: class-string<\Filament\Resources\Resource>}>|null */
+    /** @var Collection<int, array{count: int, resource: class-string<FilamentResource>}>|null */
     private ?Collection $nonEmptyMenus = null;
 
     public static function canView(): bool
@@ -72,7 +72,7 @@ class TrashOverview extends StatsOverviewWidget
     /**
      * Menu yang punya isi tempat sampah, dihitung sekali per render untuk kartu dan jumlah kolomnya.
      *
-     * @return Collection<int, array{count: int, resource: class-string<\Filament\Resources\Resource>}>
+     * @return Collection<int, array{count: int, resource: class-string<FilamentResource>}>
      */
     private function nonEmptyMenus(): Collection
     {
@@ -87,7 +87,7 @@ class TrashOverview extends StatsOverviewWidget
     /**
      * Jumlah data di tempat sampah per menu, dalam urutan menu.
      *
-     * @return Collection<int, array{count: int, resource: class-string<\Filament\Resources\Resource>}>
+     * @return Collection<int, array{count: int, resource: class-string<FilamentResource>}>
      */
     private static function trashedCounts(): Collection
     {

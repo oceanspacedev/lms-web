@@ -91,6 +91,12 @@ class UserTrashHandler implements TrashHandler
     /** User kembali dalam keadaan nonaktif; super admin mengaktifkannya lewat tombol Aktifkan. */
     public function afterRestore(Model $record, User $actor): void {}
 
+    /** Hapus permanen user tidak berantai: data yang mencatat user ini menghalangi, bukan ikut terhapus. */
+    public function trashedDependents(Model $record): array
+    {
+        return [];
+    }
+
     /**
      * @param  User  $record
      */

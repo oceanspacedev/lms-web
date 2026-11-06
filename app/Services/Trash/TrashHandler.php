@@ -27,6 +27,14 @@ interface TrashHandler
     public function afterRestore(Model $record, User $actor): void;
 
     /**
+     * Anak di tempat sampah yang ikut dihapus permanen bersama data ini, dalam urutan penghapusannya. purge() menghapus
+     * tepat daftar ini, dan TrashManager::forceDeleteBlockMessage() memeriksanya sebelum hapus permanen dijalankan.
+     *
+     * @return list<Model>
+     */
+    public function trashedDependents(Model $record): array;
+
+    /**
      * Menghapus permanen data beserta anaknya yang di tempat sampah, di dalam transaksi yang dibuka TrashManager.
      * Anak dihapus lewat TrashManager::purge($child, $actor) supaya memakai handler-nya sendiri dan tercatat di log.
      * File tidak disentuh di sini.

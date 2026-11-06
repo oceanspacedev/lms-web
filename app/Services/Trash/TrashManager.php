@@ -103,8 +103,9 @@ class TrashManager
                     throw self::invalid('Data ini belum ada di tempat sampah.');
                 }
                 $usage = $handler->usage($record);
-                if ($usage->blocksForceDelete()) {
-                    throw self::invalid($usage->blockMessage());
+                $blockMessage = $this->forceDeleteBlockMessage($record, $usage);
+                if ($blockMessage !== null) {
+                    throw self::invalid($blockMessage);
                 }
 
                 $files = $handler->purge($record, $actor);
@@ -139,11 +140,9 @@ class TrashManager
         $subject = $record->trashSubject();
         $key = $record->getKey();
         $label = $record->trashLabel();
-        $usage = $handler->usage($record);
-        if ($usage->blocksForceDelete()) {
-            $holder = Str::lower(TrashLog::SUBJECTS[$subject]).' "'.$label.'" di tempat sampah';
-
-            throw self::invalid($usage->blockMessage($holder));
+        $blockMessage = $this->forceDeleteBlockMessage($record, holder: self::holder($record));
+        if ($blockMessage !== null) {
+            throw self::invalid($blockMessage);
         }
 
         $files = $handler->purge($record, $actor);
@@ -155,6 +154,32 @@ class TrashManager
     public function usage(Model $record): TrashUsage
     {
         return $this->handlerFor($record)->usage($record);
+    }
+
+    /**
+     * Alasan hapus permanen ditolak, atau null bila boleh. Ditolak bila data ini masih dipakai data aktif, atau bila salah satu
+     * anaknya di tempat sampah (TrashHandler::trashedDependents(), yang akan ikut terhapus) masih dipakai, diperiksa berantai.
+     * Dipakai modal sebelum dijalankan dan oleh forceDelete()/purge() saat dijalankan, jadi perkiraan dan penolakan selalu sama.
+     *
+     * @param  TrashUsage|null  $usage  Keterkaitan `$record` yang sudah dihitung, supaya tidak dihitung dua kali.
+     * @param  string|null  $holder  Penyebut `$record` bila ia anak dari data yang dihapus permanen, misalnya 'dokumen "X" di tempat sampah'.
+     */
+    public function forceDeleteBlockMessage(Model $record, ?TrashUsage $usage = null, ?string $holder = null): ?string
+    {
+        $handler = $this->handlerFor($record);
+        $usage ??= $handler->usage($record);
+        if ($usage->blocksForceDelete()) {
+            return $usage->blockMessage($holder);
+        }
+
+        foreach ($handler->trashedDependents($record) as $dependent) {
+            $blockMessage = $this->forceDeleteBlockMessage($dependent, holder: self::holder($dependent));
+            if ($blockMessage !== null) {
+                return $blockMessage;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -271,6 +296,12 @@ class TrashManager
         $record->syncOriginalAttributes($columns);
 
         $dispatcher?->dispatch('eloquent.restored: '.$record::class, $record);
+    }
+
+    /** Penyebut anak di tempat sampah dalam pesan penolakan, misalnya 'dokumen "Kontrak Lama" di tempat sampah'. */
+    private static function holder(Model $record): string
+    {
+        return Str::lower(TrashLog::SUBJECTS[$record->trashSubject()]).' "'.$record->trashLabel().'" di tempat sampah';
     }
 
     private static function invalid(string $message): ValidationException

@@ -477,6 +477,34 @@ class TrashUiTest extends TestCase
             ->assertMountedActionModalDontSee('beserta semua versi dan filenya');
     }
 
+    /** Anak di tempat sampah yang ikut terhapus permanen tetapi masih dipakai data aktif juga menghalangi, sejak modal dibuka. */
+    public function test_force_delete_modal_and_bulk_count_a_blocked_trashed_child(): void
+    {
+        $superAdmin = $this->signInAsSuperAdmin();
+        $company = Company::factory()->create(['name' => 'PT Induk Berantai']);
+        $document = Document::factory()->create(['company_id' => $company->id, 'title' => 'Kontrak Anak']);
+        $request = DocumentRequest::factory()->create(['status' => 'archived', 'document_id' => $document->id]);
+        $this->trash($document, $superAdmin);
+        $this->trash($company, $superAdmin);
+        $free = $this->trashed(fn (): Company => Company::factory()->create(), $superAdmin);
+        $message = "Tidak bisa dihapus permanen: dokumen \"Kontrak Anak\" di tempat sampah masih dipakai pengajuan #{$request->id}. Hapus dulu pengajuan itu, lalu coba lagi.";
+        $this->assertSame($message, app(TrashManager::class)->forceDeleteBlockMessage($company));
+
+        $list = Livewire::test(ListCompanies::class)->filterTable('trashed', false)
+            ->mountTableAction('forceDelete', $company)
+            ->assertMountedActionModalSee($message)->assertMountedActionModalDontSee(TrashActions::IRREVERSIBLE);
+        $this->assertTrue($list->instance()->getMountedAction()->getModalSubmitAction()->isDisabled());
+        $list->callMountedTableAction();
+        $this->assertNotifiedWithBody('Hapus permanen ditolak', $message);
+        $this->assertSoftDeleted($company);
+        $this->assertSoftDeleted($document);
+
+        Livewire::test(ListCompanies::class)->filterTable('trashed', false)
+            ->mountTableBulkAction('forceDelete', [$company, $free])
+            ->assertMountedActionModalSee('1 dari 2 akan ditolak karena masih dipakai.')
+            ->assertMountedActionModalDontSee('beserta semua versi dan filenya');
+    }
+
     /** @return array<string, array{string}> */
     public static function blockingResources(): array
     {
@@ -595,6 +623,12 @@ class TrashUiTest extends TestCase
         Livewire::test($scenario['list'])->filterTable('trashed', false)
             ->assertSee('Tempat sampah kosong')->assertSee("Tidak ada {$scenario['noun']} di tempat sampah.");
         Livewire::test($scenario['list'])->assertDontSee('Tempat sampah kosong');
+
+        // Tempat sampah berisi, tetapi pencarian tidak cocok: keadaan kosong biasa, bukan "Tempat sampah kosong".
+        $this->trashed($scenario['free'], auth()->user());
+        Livewire::test($scenario['list'])->filterTable('trashed', false)->searchTable('zzz-tidak-ada-yang-cocok')
+            ->assertCountTableRecords(0)
+            ->assertDontSee('Tempat sampah kosong')->assertDontSee("Tidak ada {$scenario['noun']} di tempat sampah.");
     }
 
     /** Hapus (bisa dipulihkan) abu-abu, Pulihkan abu-abu, Hapus permanen merah dengan ikon berbeda; tombol modal sesuai tingkat bahayanya. */
@@ -641,7 +675,7 @@ class TrashUiTest extends TestCase
             ->assertMountedActionModalSee('User kembali dalam keadaan nonaktif. Bila user perlu masuk lagi, klik tombol Aktifkan kembali di halaman user.')
             ->callMountedTableAction()->assertHasNoTableActionErrors();
 
-        $this->assertNotifiedWithBody('User dipulihkan dalam keadaan nonaktif', 'Aktifkan kembali lewat tombol Aktifkan kembali di halaman user.');
+        $this->assertNotifiedWithBody('User dipulihkan dalam keadaan nonaktif', 'Klik tombol Aktifkan kembali di halaman user.');
         $notification = collect([...session('filament.claimed_notifications', []), ...session('filament.notifications', [])])->firstWhere('title', 'User dipulihkan dalam keadaan nonaktif');
         $this->assertSame([['Buka user', UserResource::getUrl('edit', ['record' => $user])]], array_map(fn (array $action): array => [$action['label'], $action['url']], $notification['actions']));
     }

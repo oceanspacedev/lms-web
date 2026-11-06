@@ -62,6 +62,12 @@ class DocumentRequestTrashHandler implements TrashHandler
         $this->waitingReminders->skipDueReminders($record);
     }
 
+    /** Pengajuan tidak pernah dipakai data lain, jadi tidak ada anak yang ikut terhapus. */
+    public function trashedDependents(Model $record): array
+    {
+        return [];
+    }
+
     /**
      * Notifikasi dan alasan terlambat ikut terhapus lewat foreign key `cascade`.
      *

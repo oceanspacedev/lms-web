@@ -74,7 +74,7 @@ Tujuan:
   - Filter ini hanya terlihat oleh super admin.
 - Baris yang dihapus ditandai jelas: kolom status berisi badge abu-abu "Dihapus" (Badan Usaha, Jenis Dokumen, User, Dokumen), dan kolom "Dihapus" berisi teks "{d/m/Y H:i} WIB oleh {nama}" tanpa badge kedua. Pengajuan tetap menampilkan status alurnya, tetapi kolom Keterangan kosong ("—").
 - Baris di tempat sampah tidak punya aksi Ubah (pensil); gantinya ikon mata "Lihat {jenis data}" ke halaman detail yang hanya-baca.
-- Bila filter "Hanya data dihapus" tidak menemukan apa pun: judul "Tempat sampah kosong", keterangan "Tidak ada {jenis data} di tempat sampah."
+- Bila filter "Hanya data dihapus" tidak menemukan apa pun dan tidak ada pencarian: judul "Tempat sampah kosong", keterangan "Tidak ada {jenis data} di tempat sampah." Dengan pencarian, keadaan kosong biasa milik tabel itu yang tampil.
 - Di layar sempit (di bawah `md`) kolom sekunder disembunyikan; yang tetap tampil hanya nama/judul, status, dan aksi.
 - **Keputusan pengembang:** di dasbor super admin ada bagian **"Tempat sampah"** berisi satu kartu per menu yang punya isi tempat sampah: label nama menu (misalnya "Dokumen"), angka jumlahnya, dan keterangan "menunggu keputusan". Tiap kartu tautan ke tabel menu itu yang sudah tersaring "hanya data dihapus". Bagian ini disembunyikan bila tempat sampah kosong.
 - Aksi untuk baris yang dihapus, satu per satu atau massal:
@@ -88,7 +88,7 @@ Tujuan:
 
 - **Keputusan pengguna:** hapus permanen **ditolak** selama data masih dipakai data lain yang **tidak** ada di tempat sampah. Pesannya menyebut dipakai di mana. Contoh: "Tidak bisa dihapus permanen: masih dipakai 2 dokumen (PKS Sewa Gudang, Kontrak Vendor) dan 1 pengajuan (#14). Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi."
   - Pesan per jenis data: Badan Usaha dan Jenis Dokumen memakai contoh di atas. Dokumen: "Tidak bisa dihapus permanen: masih dipakai pengajuan #14, #15. Hapus dulu pengajuan itu, lalu coba lagi." User: "Tidak bisa dihapus permanen: user ini masih tercatat di {daftar}. User yang punya riwayat cukup dibiarkan di tempat sampah — ia tetap tidak bisa masuk dan tidak menerima WhatsApp."
-  - Keterkaitan dihitung saat modal hapus permanen dibuka. Bila ditolak, modal langsung menampilkan pesan penolakan dan tombol "Ya, hapus permanen" dinonaktifkan; pemeriksaan di server tetap berlaku.
+  - Keterkaitan dihitung saat modal hapus permanen dibuka, termasuk anak di tempat sampah yang akan ikut terhapus (misalnya dokumen di tempat sampah yang masih dipakai pengajuan aktif; pesannya menyebut anak itu). Bila ditolak, modal langsung menampilkan pesan penolakan dan tombol "Ya, hapus permanen" dinonaktifkan, dan modal massal menghitungnya sebagai "akan ditolak". Pemeriksaan di server memakai logika yang sama.
   - Daftar contoh dibatasi sekitar 5 nama, ditambah "dan N lainnya".
 - **Keputusan pengguna:** data terkait yang **ikut ada di tempat sampah** tidak dihitung sebagai "dipakai". Pengecualiannya User (§4.4).
   - **Keputusan pengembang:** data terkait yang di tempat sampah itu **ikut dihapus permanen**. Ini tidak terhindarkan: foreign key database bersifat `restrict`, sehingga induk tidak bisa hilang selama anak (meskipun ada di tempat sampah) masih menunjuknya.
@@ -162,8 +162,8 @@ Tujuan:
   - tidak menerima WhatsApp;
   - tidak muncul di pilihan PIC, pemeriksa, atau penerima;
   - nama di riwayat lama tetap tampil, dengan tanda "(dihapus)" di relasi yang ditampilkan.
-- **Pulihkan:** user kembali dalam keadaan **nonaktif**. Super admin mengaktifkannya kembali lewat tombol Aktifkan kembali yang sudah ada. Notifikasinya "User dipulihkan dalam keadaan nonaktif" dengan isi "Aktifkan kembali lewat tombol Aktifkan kembali di halaman user." dan tombol "Buka user". Modal hapus user menyebut "Peran dan izinnya tetap disimpan bila user dipulihkan."
-- Filter Status "Aktif" (bawaan) di daftar User memuat user di tempat sampah hanya bila filter Data dihapus "Hanya data dihapus"; pada "Dengan data dihapus", user di tempat sampah tidak ikut disebut aktif. **Keputusan pengembang:** ini supaya tugas yang sudah dialihkan tidak kacau dan pemulihan tidak langsung memberi akses login.
+- **Pulihkan:** user kembali dalam keadaan **nonaktif**. Super admin mengaktifkannya kembali lewat tombol Aktifkan kembali yang sudah ada. **Keputusan pengembang:** ini supaya tugas yang sudah dialihkan tidak kacau dan pemulihan tidak langsung memberi akses login. Notifikasinya "User dipulihkan dalam keadaan nonaktif" dengan isi "Klik tombol Aktifkan kembali di halaman user." dan tombol "Buka user". Modal hapus user menyebut "Peran dan izinnya tetap disimpan bila user dipulihkan."
+- Filter Status "Aktif" (bawaan) di daftar User memuat user di tempat sampah hanya bila filter Data dihapus "Hanya data dihapus"; pada "Dengan data dihapus", user di tempat sampah tidak ikut disebut aktif.
 - **Hapus massal user:** hanya untuk user yang tidak punya tugas yang perlu dialihkan. User yang punya tugas dilewati, dengan alasan "punya tugas yang harus dialihkan, hapus satu per satu". **Keputusan pengembang:** memilih pengganti untuk banyak user sekaligus terlalu rawan salah.
 - **Keputusan pengembang:** pengalihan tugas saat menghapus (dan menonaktifkan) juga mencakup pengajuan dan jenis dokumen **di tempat sampah**, sama seperti dokumen di tempat sampah sekarang. Dengan begitu, data yang kelak dipulihkan tidak menunjuk ke user yang sudah dihapus.
 - **Hapus permanen user tidak berantai.** **Keputusan pengembang:** user tidak memakai aturan "data terkait di tempat sampah ikut dihapus permanen" (§3.4), supaya super admin tidak kehilangan file dokumen tanpa sengaja.

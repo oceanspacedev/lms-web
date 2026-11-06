@@ -58,6 +58,16 @@ class DocumentTrashHandler implements TrashHandler
     }
 
     /**
+     * Pengajuan di tempat sampah yang menunjuk dokumen ini.
+     *
+     * @param  Document  $record
+     */
+    public function trashedDependents(Model $record): array
+    {
+        return DocumentRequest::onlyTrashed()->where('document_id', $record->getKey())->orderBy('id')->get()->all();
+    }
+
+    /**
      * Urutan mengikuti foreign key `restrict`: pengajuan di tempat sampah, log pengingat, aktivitas, `current_version_id`, versi, lalu dokumen.
      * Hook `deleting` DocumentVersion dan DocumentActivity sengaja melarang penghapusan; hanya di sini dilewati lewat query builder.
      *
@@ -67,8 +77,7 @@ class DocumentTrashHandler implements TrashHandler
     {
         $trash = app(TrashManager::class);
         $files = [];
-        $requests = DocumentRequest::onlyTrashed()->where('document_id', $record->getKey())->orderBy('id')->get();
-        foreach ($requests as $request) {
+        foreach ($this->trashedDependents($record) as $request) {
             array_push($files, ...$trash->purge($request, $actor));
         }
 
