@@ -96,7 +96,7 @@
             @csrf
             <div class="field">
                 <label for="signed-scan">{{ $submission->status === 'handover' ? 'Ganti scan (bila salah unggah)' : 'Unggah scan dokumen bertanda tangan' }}</label>
-                <input id="signed-scan" type="file" name="scan" accept="{{ $acceptAttribute }}" required>
+                <input id="signed-scan" type="file" name="scan" accept="{{ $acceptAttribute }}" data-max-kb="{{ config('lms.max_upload_size_kb') }}" required>
                 <small>Jenis berkas: {{ implode(', ', config('lms.allowed_extensions')) }}. Ukuran maksimal {{ number_format(config('lms.max_upload_size_kb') / 1024, 0) }} MB.</small>
             </div>
             <button type="submit" @class(['secondary' => $submission->status === 'handover'])>{{ $submission->status === 'handover' ? 'Ganti scan' : 'Unggah scan' }}</button>

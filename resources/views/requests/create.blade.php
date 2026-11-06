@@ -47,7 +47,7 @@
         <div class="field">
             <label for="supporting-document">Dokumen pendukung <span aria-hidden="true">*</span></label>
             @if($supportingPath)<small>Berkas tersimpan. Pilih berkas untuk mengganti.</small>@endif
-            <input id="supporting-document" type="file" name="attachments[supporting-document]" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" @required(!$supportingPath)>
+            <input id="supporting-document" type="file" name="attachments[supporting-document]" data-max-kb="{{ config('lms.max_upload_size_kb') }}" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" @required(!$supportingPath)>
             <small>{{ implode(', ', array_map('strtoupper', config('lms.allowed_extensions'))) }} · Maks. {{ (int)(config('lms.max_upload_size_kb') / 1024) }} MB</small>
         </div>
     @endif
@@ -66,7 +66,7 @@
                         <div class="field wide">
                             <label for="attachment-{{ $typeId }}-{{ $item['key'] }}">{{ $item['label'] }} @if($item['required'] ?? false)<span aria-hidden="true">*</span>@endif</label>
                             @if($existingPath)<small>Berkas tersimpan. Pilih berkas untuk mengganti.</small>@endif
-                            <input id="attachment-{{ $typeId }}-{{ $item['key'] }}" type="file" name="attachments[{{ $item['key'] }}]" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" data-required="{{ (int)(($item['required'] ?? false) && !$existingPath) }}">
+                            <input id="attachment-{{ $typeId }}-{{ $item['key'] }}" type="file" name="attachments[{{ $item['key'] }}]" data-max-kb="{{ config('lms.max_upload_size_kb') }}" accept="{{ implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions'))) }}" data-required="{{ (int)(($item['required'] ?? false) && !$existingPath) }}">
                         </div>
                     @endforeach
                     </div>
