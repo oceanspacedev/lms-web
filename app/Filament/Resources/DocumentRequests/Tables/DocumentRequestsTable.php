@@ -46,7 +46,7 @@ class DocumentRequestsTable
                         ->whereHas('requester', fn (Builder $requester): Builder => $requester->whereRaw("lower(users.name) like ? escape '!'", [self::likePattern($search)])))),
             TextColumn::make('status')->label('Status')->badge()->formatStateUsing(fn (string $state): string => DocumentRequest::statusLabel($state))->color(fn (string $state): string => match ($state) {
                 'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info'
-            }),
+            })->visibleFrom(TrashActions::statusVisibleFrom()),
             TextColumn::make('handover_note')->label('Keterangan')->state(fn (DocumentRequest $record): ?string => self::handoverNote($record))->placeholder('—')->visibleFrom('md')
                 ->limit(self::HANDOVER_NOTE_LIMIT)->wrap()
                 ->tooltip(fn (DocumentRequest $record): ?string => mb_strlen((string) self::handoverNote($record)) > self::HANDOVER_NOTE_LIMIT ? self::handoverNote($record) : null)

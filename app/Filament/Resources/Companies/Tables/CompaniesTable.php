@@ -23,6 +23,7 @@ class CompaniesTable
                     ->badge()
                     ->formatStateUsing(fn (bool $state, Company $record): string => $record->trashed() ? 'Dihapus' : ($state ? 'Aktif' : 'Nonaktif'))
                     ->color(fn (bool $state, Company $record): string => $state && ! $record->trashed() ? 'success' : 'gray')
+                    ->visibleFrom(TrashActions::statusVisibleFrom())
                     ->sortable(),
                 TrashActions::deletedColumn(),
                 TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d/m/Y H:i')->timezone(config('lms.reminder_timezone'))->sortable()->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md'),

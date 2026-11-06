@@ -555,6 +555,24 @@ class TrashUiTest extends TestCase
         };
     }
 
+    /**
+     * Di tampilan "Hanya data dihapus" kolom status baru tampil mulai layar `md`, supaya di layar HP tombol Lihat, Pulihkan, dan
+     * Hapus permanen muat tanpa menggeser tabel. Di tampilan lain kolom status tampil di semua layar.
+     */
+    #[DataProvider('resources')]
+    public function test_status_column_steps_aside_on_small_screens_only_in_the_trash_view(string $key): void
+    {
+        $scenario = $this->scenario($key);
+        $superAdmin = $this->signInAsSuperAdmin();
+        $this->trashed($key === 'document_request' ? fn (): Model => DocumentRequest::factory()->handover()->create() : $scenario['free'], $superAdmin);
+        $column = ['company' => 'is_active', 'document_type' => 'is_active', 'user' => 'status', 'document' => 'expiry_status', 'document_request' => 'status'][$key];
+        $visibleFrom = fn (Testable $list): ?string => $list->instance()->getTable()->getColumn($column)->getVisibleFrom();
+
+        $this->assertNull($visibleFrom(Livewire::test($scenario['list'])->assertTableColumnVisible($column)));
+        $this->assertNull($visibleFrom($this->listWithTrashed($scenario, $key)->assertTableColumnVisible($column)));
+        $this->assertSame('md', $visibleFrom(Livewire::test($scenario['list'])->filterTable('trashed', false)->assertTableColumnVisible($column)));
+    }
+
     #[DataProvider('resources')]
     public function test_trashed_rows_offer_view_instead_of_edit(string $key): void
     {

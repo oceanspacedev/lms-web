@@ -207,6 +207,17 @@ class TrashActions
             ->visible(fn (HasTable $livewire): bool => self::trashedFilterValue($livewire) !== null);
     }
 
+    /**
+     * Batas layar kolom status: saat melihat isi tempat sampah saja, kolom status baru tampil mulai layar `md`, supaya di layar HP
+     * tombol Lihat, Pulihkan, dan Hapus permanen muat tanpa menggeser tabel. Di tampilan lain kolom status tampil di semua layar.
+     *
+     * @return Closure(HasTable): ?string
+     */
+    public static function statusVisibleFrom(): Closure
+    {
+        return fn (HasTable $livewire): ?string => self::isShowingOnlyTrashed($livewire) ? 'md' : null;
+    }
+
     /** Aksi "Lihat {noun}" (ikon mata) untuk baris di tempat sampah, pengganti aksi Ubah: membuka halaman detail yang hanya-baca. */
     public static function viewTrashed(string $noun): Action
     {

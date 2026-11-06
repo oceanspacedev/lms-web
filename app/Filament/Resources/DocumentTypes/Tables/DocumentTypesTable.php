@@ -27,6 +27,7 @@ class DocumentTypesTable
                     ->badge()
                     ->formatStateUsing(fn (bool $state, DocumentType $record): string => $record->trashed() ? 'Dihapus' : ($state ? 'Aktif' : 'Nonaktif'))
                     ->color(fn (bool $state, DocumentType $record): string => $state && ! $record->trashed() ? 'success' : 'gray')
+                    ->visibleFrom(TrashActions::statusVisibleFrom())
                     ->sortable(),
                 TrashActions::deletedColumn(),
             ])

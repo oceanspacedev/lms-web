@@ -61,7 +61,8 @@ class DocumentsTable
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state, Document $record): string => $record->trashed() ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state, Document $record): string => $record->trashed() ? 'gray' : Document::EXPIRY_STATUS_COLORS[$state])
-                    ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null),
+                    ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null)
+                    ->visibleFrom(TrashActions::statusVisibleFrom()),
                 TrashActions::deletedColumn(),
                 TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')->limit(30)->wrap()->placeholder('-'),
                 TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
