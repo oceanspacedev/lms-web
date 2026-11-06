@@ -228,6 +228,31 @@ class Panduan extends Page
             );
         }
 
+        // Mengatur jenis dokumen (PIC, pemeriksa, isian, lampiran) hanya untuk yang boleh menambah atau mengubah jenis dokumen.
+        $user = auth()->user();
+        if ($user?->isSuperAdmin() || $user?->can('Create:DocumentType') || $user?->can('Update:DocumentType')) {
+            $guides[] = $this->guide('atur-jenis-dokumen', '12', 'Atur jenis dokumen & form pengajuan',
+                summary: 'Menentukan masa berlaku, siapa PIC dan pemeriksa pengajuan, serta isian dan lampiran yang diminta di form pengajuan untuk tiap jenis dokumen.',
+                audience: 'Admin pengelola Jenis Dokumen',
+                steps: [
+                    ['Buka Jenis Dokumen, klik jenisnya', 0, 'Ada di grup Data Master. Untuk jenis baru, klik tombol tambah di kanan atas.'],
+                    ['Atur nama dan masa berlaku', 3, 'Aktifkan Memiliki Masa Berlaku bila dokumen jenis ini punya tanggal berakhir. Dokumennya lalu wajib punya tanggal berakhir dan mendapat pengingat WhatsApp.'],
+                    ['Buka bagian Form Pengajuan', 8, 'Bagian ini tertutup saat halaman dibuka. Semua pengaturan di dalamnya hanya berlaku untuk pengajuan baru; pengajuan yang sudah masuk tidak berubah.'],
+                    ['Pilih PIC pengajuan', 10.6, 'PIC dikabari WhatsApp setiap ada pengajuan baru jenis ini, jadi pilih staf legal yang punya nomor WhatsApp. Dikosongkan: memakai Pemeriksa, lalu pemeriksa aktif pertama yang punya nomor WhatsApp.'],
+                    ['Tambah isian tambahan', 14, 'Pertanyaan khusus jenis ini di form pengajuan. Atur tipenya (Teks, Paragraf, Tanggal, atau Angka) dan apakah wajib. Klik Gunakan contoh Kerja Sama untuk isian dan lampiran siap pakai.'],
+                    ['Tambah lampiran', 19, 'Berkas yang harus diunggah pengaju. Pilih kapan diminta: Selalu, Ada biaya, atau Perpanjangan / adendum. Dua pilihan terakhir hanya berlaku di form internal.'],
+                    ['Pilih Pemeriksa, lalu Simpan', 22.4, 'Pemeriksa yang bisa Revisi, Tolak, dan Keluarkan Draft. Dikosongkan: pengajuan dari form publik diperiksa PIC pengajuan, pengajuan internal bisa diperiksa staf legal mana pun.'],
+                    ['Form pengajuan ikut berubah', 29.2, 'Isian dan lampiran baru langsung tampil di form publik dan form internal begitu jenis ini dipilih.'],
+                ],
+                impacts: [
+                    ['area' => 'Form pengajuan', 'text' => 'Isian dan lampiran tampil di form publik dan form Tambah Pengajuan.', 'url' => $requests],
+                    ['area' => 'Pengajuan baru', 'text' => 'Masuk ke PIC dan pemeriksa yang dipilih. PIC dikabari WhatsApp.', 'url' => $requests],
+                    ['area' => 'Dokumen', 'text' => 'Masa berlaku menentukan status dan pengingat WhatsApp dokumen jenis ini.', 'url' => $documents],
+                ],
+                action: ['label' => 'Buka Jenis Dokumen', 'url' => DocumentTypeResource::getUrl()],
+            );
+        }
+
         // Menghapus data dikerjakan super admin dan pemegang izin hapus, jadi panduan teks ini tidak ditampilkan ke peran lain.
         $deleteAction = $this->deleteAction();
         if ($deleteAction !== null) {

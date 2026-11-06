@@ -75,6 +75,30 @@ class DocumentTypeResourceTest extends TestCase
         Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])->assertFormFieldDoesNotExist('request_approver_id');
     }
 
+    public function test_request_pic_without_whatsapp_number_still_shows_its_name(): void
+    {
+        $this->signInWithPermissions(['ViewAny:DocumentType', 'Update:DocumentType']);
+        $review = Permission::findOrCreate('Review:DocumentRequest', 'web');
+        $withPhone = User::factory()->create(['name' => 'Bayu Berponsel', 'phone' => '081234567890']);
+        $withoutPhone = User::factory()->create(['name' => 'Sari Tanpa Nomor', 'phone' => '081298765432']);
+        $other = User::factory()->create(['name' => 'Dodi Tanpa Nomor', 'phone' => null]);
+        foreach ([$withPhone, $withoutPhone, $other] as $user) {
+            $user->givePermissionTo($review);
+        }
+        $type = DocumentType::factory()->create(['request_pic_id' => $withoutPhone->id]);
+        // Nomor WhatsApp PIC dihapus belakangan dari menu User.
+        $withoutPhone->forceFill(['phone' => null])->save();
+
+        Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])
+            ->assertFormFieldExists('request_pic_id', function ($field) use ($withPhone, $withoutPhone, $other): bool {
+                $options = $field->getOptions();
+
+                return ($options[$withoutPhone->id] ?? null) === $withoutPhone->displayName()
+                    && isset($options[$withPhone->id])
+                    && ! isset($options[$other->id]);
+            });
+    }
+
     public function test_reminder_schedule_comes_from_the_global_template_for_expiring_types_only(): void
     {
         $expiring = DocumentType::factory()->create(['has_expiry' => true]);

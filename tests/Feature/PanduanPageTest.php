@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Panduan;
 use App\Filament\Resources\Documents\DocumentResource;
+use App\Filament\Resources\DocumentTypes\DocumentTypeResource;
 use App\Filament\Resources\ReminderTemplates\ReminderTemplateResource;
 use App\Filament\Resources\TrashLogs\TrashLogResource;
 use App\Filament\Resources\Users\UserResource;
@@ -71,7 +72,7 @@ class PanduanPageTest extends TestCase
         $page = Livewire::test(Panduan::class);
         $guides = $page->instance()->guides();
 
-        $this->assertCount(11, $guides);
+        $this->assertCount(12, $guides);
         foreach ($guides as $guide) {
             $page->assertSee($guide['title'])
                 ->assertSeeHtml('id="panduan-'.$guide['id'].'"')
@@ -153,6 +154,24 @@ class PanduanPageTest extends TestCase
         $this->signInAsSuperAdmin();
         $guide = collect(Livewire::test(Panduan::class)->assertSeeHtml('id="panduan-nonaktifkan-user"')->instance()->guides())->firstWhere('id', 'nonaktifkan-user');
         $this->assertSame('Super admin', $guide['audience']);
+    }
+
+    public function test_document_type_guide_is_only_for_those_who_manage_document_types(): void
+    {
+        $this->signIn(['ViewAny:DocumentType', 'View:DocumentType', 'ViewAny:DocumentRequest']);
+        $page = Livewire::test(Panduan::class)->assertDontSeeHtml('id="panduan-atur-jenis-dokumen"');
+        $this->assertNotContains('atur-jenis-dokumen', array_column($page->instance()->guides(), 'id'));
+
+        $this->signIn(['ViewAny:DocumentType', 'Update:DocumentType']);
+        $page = Livewire::test(Panduan::class)
+            ->assertSeeHtml('id="panduan-atur-jenis-dokumen"')
+            ->assertSee('Pilih PIC pengajuan')
+            ->assertSee('Tambah isian tambahan');
+        $guide = collect($page->instance()->guides())->firstWhere('id', 'atur-jenis-dokumen');
+        $this->assertTrue($guide['canUse']);
+        $this->assertSame(DocumentTypeResource::getUrl(), $guide['action']['url']);
+        $this->assertNotNull($guide['video']);
+        $this->assertCount(8, $guide['steps']);
     }
 
     public function test_video_and_poster_files_exist_for_every_guide(): void
