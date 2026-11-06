@@ -6,8 +6,8 @@ use App\Models\DocumentRequest;
 use App\Models\User;
 
 /**
- * Staff Legal = pemegang `Review:DocumentRequest`. Pemeriksaan (draf pertama, revisi, tolak) mengikuti pemeriksa yang ditunjuk;
- * setelah draf keluar, semua Staff Legal boleh bertindak.
+ * Staff Legal = pemegang `Review:DocumentRequest`. Pemeriksaan (draf pertama, revisi, tolak) mengikuti pemeriksa yang ditunjuk,
+ * kecuali super admin yang boleh mengambil alih; setelah draf keluar, semua Staff Legal boleh bertindak.
  */
 class DocumentRequestPolicy
 {
@@ -111,9 +111,9 @@ class DocumentRequestPolicy
         return $user->isSuperAdmin();
     }
 
-    /** Bukan pengajuan sendiri, dan pemeriksa belum ditunjuk atau ditunjuk ke user ini. */
+    /** Bukan pengajuan sendiri, dan pemeriksa belum ditunjuk, ditunjuk ke user ini, atau user ini super admin. */
     private function isAssignedReviewer(User $user, DocumentRequest $request): bool
     {
-        return $request->requester_id !== $user->id && ($request->reviewer_id === null || $request->reviewer_id === $user->id);
+        return $request->requester_id !== $user->id && ($request->reviewer_id === null || $request->reviewer_id === $user->id || $user->isSuperAdmin());
     }
 }

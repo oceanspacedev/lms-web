@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -200,6 +201,34 @@ class RequestSigningFlowTest extends TestCase
 
         $this->assertSame('archived', $request->status);
         $this->assertSame($document->id, $request->document_id);
+    }
+
+    public function test_super_admin_can_review_a_request_assigned_to_another_reviewer(): void
+    {
+        $assigned = $this->legal('Ana Legal');
+        $other = $this->legal('Budi Legal');
+        $superAdmin = $this->legal('Sari Super');
+        $superAdmin->assignRole(Role::findOrCreate(config('filament-shield.super_admin.name'), 'web'));
+        $request = $this->request($this->requester(), $assigned);
+
+        $this->assertFalse($other->can('revise', $request));
+        $this->assertFalse($other->can('issueDraft', $request));
+        $this->assertTrue($superAdmin->can('revise', $request));
+        $this->assertTrue($superAdmin->can('issueDraft', $request));
+
+        $request->issueDraft($this->pdf('draf.pdf'), $superAdmin);
+
+        $this->assertSame('signing', $request->status);
+    }
+
+    public function test_super_admin_still_cannot_review_their_own_request(): void
+    {
+        $superAdmin = $this->user([...self::LEGAL_PERMISSIONS, ...self::REQUESTER_PERMISSIONS], 'Sari Super');
+        $superAdmin->assignRole(Role::findOrCreate(config('filament-shield.super_admin.name'), 'web'));
+        $request = $this->request($superAdmin);
+
+        $this->assertFalse($superAdmin->can('revise', $request));
+        $this->assertFalse($superAdmin->can('issueDraft', $request));
     }
 
     public function test_late_reason_only_when_late_and_kept_as_history(): void
