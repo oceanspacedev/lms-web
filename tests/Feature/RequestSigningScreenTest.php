@@ -383,6 +383,8 @@ class RequestSigningScreenTest extends TestCase
 
         $response = $this->actingAs($requester)->get($url)->assertOk();
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        // Tautan "Unduh" langsung mengunduh, tidak membuka pratinjau PDF di browser.
+        $this->assertStringStartsWith('attachment;', (string) $response->headers->get('Content-Disposition'));
 
         $this->actingAs($requester)->get(route('requests.file', ['documentRequest' => $request, 'kind' => 'signed']))->assertNotFound();
         $this->actingAs($requester)->get(route('requests.file', ['documentRequest' => $request, 'kind' => 'other']))->assertNotFound();

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/** Unduh draf dan scan bertanda tangan pengajuan (disk `local`), untuk staf (policy `view`) dan pengaju lewat tautan bertoken. */
+/** Unduh draf dan scan bertanda tangan pengajuan (disk `local`) sebagai file unduhan, untuk staf (policy `view`) dan pengaju lewat tautan bertoken. */
 class DocumentRequestFileController extends Controller
 {
     public function __invoke(DocumentRequest $documentRequest, string $kind): StreamedResponse
@@ -35,12 +35,8 @@ class DocumentRequestFileController extends Controller
         $name = $documentRequest->{"{$kind}_name"};
         $filename = is_string($name) && $name !== '' ? $name : Str::slug($documentRequest->title).'-'.$kind.'.'.pathinfo($path, PATHINFO_EXTENSION);
         $headers = ['Cache-Control' => 'no-store, private', 'X-Content-Type-Options' => 'nosniff', 'X-Frame-Options' => 'SAMEORIGIN'];
-        $mime = Storage::disk('local')->mimeType($path);
 
-        if (in_array($mime, ['application/pdf', 'image/jpeg', 'image/png'], true)) {
-            return Storage::disk('local')->response($path, $filename, $headers + ['Content-Type' => $mime]);
-        }
-
+        // Selalu diunduh, termasuk PDF dan gambar: pengaju langsung mendapat filenya untuk dicetak, tanpa pratinjau di browser.
         return Storage::disk('local')->download($path, $filename, $headers);
     }
 }

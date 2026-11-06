@@ -205,6 +205,16 @@ class PublicRequestSigningTest extends TestCase
             ->assertDontSee(route('requests.public.scan', ['token' => self::TOKEN]), false);
     }
 
+    public function test_public_draft_downloads_straight_away_instead_of_opening_a_preview(): void
+    {
+        $this->request('signing');
+        Storage::disk('local')->put('lms/requests/perjanjian/draft.pdf', "%PDF-1.4\n% draft\n%%EOF\n");
+
+        $response = $this->get(route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'draft']))->assertOk();
+
+        $this->assertSame('attachment; filename=draft.pdf', $response->headers->get('Content-Disposition'));
+    }
+
     public function test_public_file_route_rejects_unknown_token_and_kind(): void
     {
         $this->request('signing');
