@@ -79,7 +79,7 @@ class Panduan extends Page
                     ['Terlambat? Pengaju tulis alasan', 31.8, 'Pengingat WhatsApp dikirim sehari setelah batas lewat, lalu 14 dan 28 hari setelah scan masuk. Alasan hanya dicatat, tidak memperpanjang batas.'],
                     ['Legal pantau lewat filter Tahap', 39.6, 'Yang terlambat tampil merah lengkap dengan alasan terakhirnya.'],
                     ['Dokumen asli sampai, klik Fisik Diterima', 47.3, 'Bisa dari daftar atau halaman detail. Cukup konfirmasi; scan bertanda tangan menjadi file arsip. Scan belum masuk? Unggah sekalian di jendela yang sama.'],
-                    ['Selesai, dokumen masuk arsip', 54.1, 'Keterlambatan, bila ada, ikut tercatat dan pengaju dikabari.'],
+                    ['Selesai, dokumen masuk arsip', 54.6, 'Keterlambatan, bila ada, ikut tercatat dan pengaju dikabari.'],
                 ],
                 impacts: [
                     ['area' => 'Pengajuan Dokumen', 'text' => 'Status berjalan: Diperiksa, Menunggu Tanda Tangan, Menunggu Dokumen Fisik, lalu Selesai.', 'url' => $requests],
@@ -180,7 +180,7 @@ class Panduan extends Page
                     ['Pengaju tanda tangan, scan masuk', 10.8, 'Status menjadi Menunggu Dokumen Fisik. Dokumen asli wajib diserahkan ke legal dalam 7 hari sejak scan diunggah.'],
                     ['Pantau lewat filter Tahap', 16.6, 'Pilih Menunggu fisik atau Terlambat. Kolom Keterangan menunjukkan sisa hari, atau hari keterlambatan beserta alasan dari pengaju.'],
                     ['Dokumen asli sampai, klik Fisik Diterima', 24, 'Tombolnya ada di baris daftar dan di halaman detail. Cukup konfirmasi, scan otomatis menjadi file arsip; scan belum masuk bisa diunggah sekalian. Nomor dokumen dilengkapi nanti di menu Dokumen.'],
-                    ['Selesai, dokumen masuk arsip', 30.5, 'Keterlambatan, bila ada, ikut tercatat. Pengajuan batal, saat revisi atau setelah draft keluar? Klik Batalkan beserta alasannya.'],
+                    ['Selesai, dokumen masuk arsip', 31, 'Keterlambatan, bila ada, ikut tercatat. Pengajuan batal, saat revisi atau setelah draft keluar? Klik Batalkan beserta alasannya.'],
                 ],
                 impacts: [
                     ['area' => 'Pengaju', 'text' => 'Dikabari WhatsApp saat draft keluar, saat scan diterima (berisi batas penyerahan), saat terlambat, dan saat selesai atau dibatalkan.', 'url' => null],
