@@ -72,7 +72,7 @@ class PanduanPageTest extends TestCase
         $page = Livewire::test(Panduan::class);
         $guides = $page->instance()->guides();
 
-        $this->assertCount(12, $guides);
+        $this->assertCount(15, $guides);
         foreach ($guides as $guide) {
             $page->assertSee($guide['title'])
                 ->assertSeeHtml('id="panduan-'.$guide['id'].'"')
@@ -86,7 +86,7 @@ class PanduanPageTest extends TestCase
         }
     }
 
-    public function test_trash_guide_is_text_only_and_for_super_admins_and_delete_permission_holders(): void
+    public function test_trash_guide_has_a_video_and_is_for_super_admins_and_delete_permission_holders(): void
     {
         $this->signIn(['ViewAny:Document', 'ViewAny:User', 'Update:User']);
         $page = Livewire::test(Panduan::class)->assertDontSeeHtml('id="panduan-hapus-tempat-sampah"');
@@ -101,29 +101,27 @@ class PanduanPageTest extends TestCase
         $guide = collect($page->instance()->guides())->firstWhere('id', 'hapus-tempat-sampah');
         $this->assertSame('Hapus & tempat sampah', $guide['title']);
         $this->assertSame('Super admin dan pemegang izin hapus', $guide['audience']);
-        $this->assertNull($guide['video']);
-        $this->assertNull($guide['poster']);
-        $this->assertCount(8, $guide['steps']);
+        $this->assertNotNull($guide['video']);
+        $this->assertNotNull($guide['poster']);
         $this->assertSame(TrashLogResource::getUrl(), $guide['action']['url']);
         $page->assertSeeHtml('id="panduan-hapus-tempat-sampah"')
-            ->assertSee('Hapus dari daftar atau halaman detail')
+            ->assertSee('Klik ikon Hapus di baris dokumen')
             ->assertSee('Cek Riwayat Penghapusan')
-            ->assertDontSeeHtml('Video panduan: Hapus')
             ->assertDontSee('file-nya');
         $steps = collect($guide['steps'])->pluck('description', 'text');
         $this->assertSame([
-            'Hapus dari daftar atau halaman detail', 'Hapus beberapa sekaligus', 'Menghapus user', 'Data masuk tempat sampah',
-            'Super admin buka filter Data dihapus', 'Pulihkan atau Hapus permanen', 'Hapus permanen ditolak bila masih dipakai', 'Cek Riwayat Penghapusan',
+            'Klik ikon Hapus di baris dokumen', 'Konfirmasi, data masuk tempat sampah', 'Super admin buka filter Data dihapus',
+            'Pulihkan atau Hapus permanen', 'Pulihkan mengembalikan data seperti semula', 'Cek Riwayat Penghapusan',
         ], $steps->keys()->all());
-        $this->assertStringStartsWith('Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman detail.', $steps['Hapus dari daftar atau halaman detail']);
-        $this->assertStringContainsString('Hapus terpilih', $steps['Hapus beberapa sekaligus']);
-        $this->assertStringContainsString('pakai Nonaktifkan', $steps['Menghapus user']);
-        $this->assertStringContainsString('user yang punya tugas dilewati', $steps['Menghapus user']);
+        $this->assertStringStartsWith('Klik ikon Hapus di baris tabel, atau tombol Hapus di halaman detail.', $steps['Klik ikon Hapus di baris dokumen']);
+        $this->assertStringContainsString('Hapus terpilih', $steps['Klik ikon Hapus di baris dokumen']);
+        $this->assertStringContainsString('pakai Nonaktifkan', $steps['Klik ikon Hapus di baris dokumen']);
+        $this->assertStringContainsString('user yang punya tugas dilewati', $steps['Klik ikon Hapus di baris dokumen']);
         // Pengecualian User: pulih dalam keadaan nonaktif, dan hapus permanennya ditolak selama namanya masih tercatat.
-        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; klik tombol Aktifkan kembali di halaman user.', $steps['Pulihkan atau Hapus permanen']);
-        $this->assertStringContainsString('ikut menghapus filenya', $steps['Pulihkan atau Hapus permanen']);
-        $this->assertStringContainsString('Hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.', $steps['Hapus permanen ditolak bila masih dipakai']);
-        $this->assertStringContainsString('Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.', $steps['Hapus permanen ditolak bila masih dipakai']);
+        $this->assertStringContainsString('User yang dipulihkan kembali nonaktif; klik tombol Aktifkan kembali di halaman user.', $steps['Pulihkan mengembalikan data seperti semula']);
+        $this->assertStringContainsString('ikut menghapus semua versi beserta filenya', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertStringContainsString('hapus dulu data itu (pindahkan ke tempat sampah), lalu coba lagi.', $steps['Pulihkan atau Hapus permanen']);
+        $this->assertStringContainsString('Kecuali user: hapus permanen user ditolak selama namanya masih tercatat di data mana pun, termasuk yang di tempat sampah.', $steps['Pulihkan atau Hapus permanen']);
     }
 
     public function test_features_the_user_can_use_come_first_and_the_rest_are_grouped(): void
@@ -133,8 +131,9 @@ class PanduanPageTest extends TestCase
         $page = Livewire::test(Panduan::class)->assertSee('Butuh akses lain');
         $guides = $page->instance()->guides();
 
-        $this->assertSame(['alur-pengajuan', 'ajukan-dokumen', 'proses-pengajuan', 'serahkan-dokumen'], array_column(array_slice($guides, 0, 4), 'id'));
-        $this->assertSame([true, true, true, true, false, false, false, false, false], array_column($guides, 'canUse'));
+        // Urutan mengikuti perjalanan pengguna: masuk dan dasbor dulu, lalu alur pengajuan.
+        $this->assertSame(['masuk-aplikasi', 'kenali-dasbor', 'alur-pengajuan', 'ajukan-dokumen', 'proses-pengajuan', 'serahkan-dokumen'], array_column(array_slice($guides, 0, 6), 'id'));
+        $this->assertSame([true, true, true, true, true, true, false, false, false, false, false], array_column($guides, 'canUse'));
 
         $this->signIn(['ViewAny:Document', 'Create:Document', 'ViewAny:DocumentRequest', 'ViewAny:ReminderTemplate']);
         Livewire::test(Panduan::class)->assertDontSee('Butuh akses lain');
@@ -148,7 +147,7 @@ class PanduanPageTest extends TestCase
             ->assertDontSee('Nonaktifkan user')
             ->assertDontSeeHtml('id="panduan-nonaktifkan-user"')
             ->instance()->guides();
-        $this->assertCount(9, $guides);
+        $this->assertCount(11, $guides);
         $this->assertNotContains('nonaktifkan-user', array_column($guides, 'id'));
 
         $this->signInAsSuperAdmin();
@@ -174,6 +173,17 @@ class PanduanPageTest extends TestCase
         $this->assertCount(8, $guide['steps']);
     }
 
+    public function test_company_and_user_guide_is_only_for_admins_who_manage_them(): void
+    {
+        $this->signIn(['ViewAny:Document', 'ViewAny:User']);
+        $this->assertNotContains('kelola-badan-usaha-user', array_column(Livewire::test(Panduan::class)->instance()->guides(), 'id'));
+
+        $this->signIn(['ViewAny:Company', 'Create:Company']);
+        $guide = collect(Livewire::test(Panduan::class)->assertSeeHtml('id="panduan-kelola-badan-usaha-user"')->instance()->guides())->firstWhere('id', 'kelola-badan-usaha-user');
+        $this->assertTrue($guide['canUse']);
+        $this->assertNotNull($guide['video']);
+    }
+
     public function test_video_and_poster_files_exist_for_every_guide(): void
     {
         $this->signInAsSuperAdmin();
@@ -192,7 +202,7 @@ class PanduanPageTest extends TestCase
     public function test_video_supports_range_requests_so_clicking_a_step_can_jump_to_its_second(): void
     {
         $this->signIn(['ViewAny:Document']);
-        $url = route('panduan.video', ['file' => '01-tambah-dokumen.mp4']);
+        $url = route('panduan.video', ['file' => '01-masuk-aplikasi.mp4']);
 
         $response = $this->get($url, ['Range' => 'bytes=100-199']);
 
@@ -203,7 +213,7 @@ class PanduanPageTest extends TestCase
 
     public function test_videos_are_only_for_signed_in_users_and_unknown_files_are_not_found(): void
     {
-        $this->get(route('panduan.video', ['file' => '01-tambah-dokumen.mp4']))->assertRedirect();
+        $this->get(route('panduan.video', ['file' => '01-masuk-aplikasi.mp4']))->assertRedirect();
 
         $this->signIn(['ViewAny:Document']);
         $this->get(route('panduan.video', ['file' => '99-tidak-ada.mp4']))->assertNotFound();
