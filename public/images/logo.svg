@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+    <rect width="512" height="512" rx="108" fill="#16A34A"/>
+    <!-- Monogram L dari lima baris balok, seperti S (Shelf) dan H (Helpdesk). -->
+    <g fill="#FFFFFF">
+        <path d="M 136 112 L 256 97 L 256 152 L 136 152 Z"/>
+        <path d="M 136 174 H 256 V 214 H 136 Z"/>
+        <path d="M 136 236 H 256 V 276 H 136 Z"/>
+        <path d="M 136 298 H 256 V 338 H 136 Z"/>
+        <path d="M 136 360 L 376 360 L 376 400 L 136 424 Z"/>
+    </g>
+</svg>

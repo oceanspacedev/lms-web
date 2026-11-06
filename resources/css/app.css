@@ -6,6 +6,25 @@
 @source '../views/**/*.blade.php';
 @source '../../app/Filament/**/*.php';
 
+/* Sidebar Mekaya menulis nama aplikasi di samping logo, jadi nama bawaan logo hanya tampil di halaman masuk. */
+.mky-si .lms-brand-name,
+.mky-sidebar-mobile-panel .lms-brand-name {
+    display: none;
+}
+
+/* Tombol primary memakai hijau logo (#16A34A = primary-400) dengan teks putih atas pilihan pengguna, walau kontrasnya di bawah
+ * WCAG AA. Tanpa ini Filament memilih latar hijau terang dengan teks gelap. Hover sedikit lebih gelap (primary-500). */
+.fi-btn.fi-color.fi-color-primary:not(.fi-outlined):not(label) {
+    --bg: var(--primary-400);
+    --hover-bg: var(--primary-500);
+    --dark-bg: var(--primary-400);
+    --dark-hover-bg: var(--primary-500);
+    --text: oklch(1 0 0);
+    --hover-text: oklch(1 0 0);
+    --dark-text: oklch(1 0 0);
+    --dark-hover-text: oklch(1 0 0);
+}
+
 .whatsapp-login-icon {
     fill: #25d366;
 }

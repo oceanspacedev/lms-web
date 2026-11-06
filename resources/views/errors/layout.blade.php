@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title')</title>
+    <link rel="icon" type="image/svg+xml" href="{{ asset('images/logo.svg') }}">
     <style>
         body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; box-sizing: border-box; background: #fafaf9; color: #18181b; font-family: ui-sans-serif, system-ui, sans-serif; }
         main { max-width: 28rem; text-align: center; }

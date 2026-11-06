@@ -323,7 +323,7 @@ class EmailOtpLoginTest extends TestCase
         $this->assertStringContainsString(asset('images/mail/envelope.png'), $html);
         $this->assertStringContainsString('Masuk ke LMS Legal', $html);
         $this->assertStringContainsString('class="code-box"', $html);
-        $this->assertStringContainsString('background-color: #155dfc', $html);
+        $this->assertStringContainsString('background-color: #16a34a', $html);
         $this->assertStringContainsString('Hak cipta dilindungi.', $html);
         $this->assertFileExists(public_path('images/mail/envelope.png'));
     }

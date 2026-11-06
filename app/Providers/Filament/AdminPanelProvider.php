@@ -35,12 +35,15 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->brandName('LMS Legal')
+            ->brandLogo(fn (): View => view('filament.brand'))
+            ->brandLogoHeight('2rem')
+            ->favicon(asset('images/logo.svg'))
             ->path('admin')
             // Tema Mekaya (sama dengan member-web): sidebar, topbar, kartu, tabel yang ringkas.
             // Pengaturan auth & tema di bawah dipanggil setelah plugin supaya menimpa bawaan Mekaya.
             ->plugin(
                 MekayaPlugin::make()
-                    ->colors(['primary' => Color::Blue])
+                    ->colors(['primary' => self::green()])
                     ->sidebarWidth('16rem'),
             )
             ->viteTheme('resources/css/app.css')
@@ -105,6 +108,30 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ]);
+    }
+
+    /**
+     * Hijau logo LMS (#16A34A = shade 400), digeser lebih gelap dari palet Green bawaan. Tombol Filament memakai teks putih
+     * hanya bila shade 600 (latar) dan 500 (hover) sama-sama lolos kontras WCAG AA dengan putih; bila tidak, tombol jatuh ke
+     * shade 400 dengan teks gelap (hijau neon). Karena itu 600 = #15803D dan 500 = #16853F, hijau paling cerah yang masih lolos kontras dengan teks putih.
+     *
+     * @return array<int, string>
+     */
+    private static function green(): array
+    {
+        return array_map(Color::convertToOklch(...), [
+            50 => '#F0FDF4',
+            100 => '#DCFCE7',
+            200 => '#86EFAC',
+            300 => '#4ADE80',
+            400 => '#16A34A',
+            500 => '#16853F',
+            600 => '#15803D',
+            700 => '#166534',
+            800 => '#0F3F22',
+            900 => '#0B3019',
+            950 => '#052E16',
+        ]);
     }
 
     /**

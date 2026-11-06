@@ -4,7 +4,7 @@
  * - Kartu = bingkai mky-card (gray-50, sudut 12px, padding 6px, garis tipis) berisi permukaan putih bersudut 8px.
  * - Kepala kartu: ikon dalam kotak putih, judul Figtree, keterangan abu-abu.
  * - Kode dalam kotak seperti input Filament, tombol primary selebar kartu.
- * Warna memakai palet panel (primary Blue, gray Zinc) dalam hex karena klien email tidak mendukung oklch.
+ * Warna memakai palet panel (primary Green, gray Zinc) dalam hex karena klien email tidak mendukung oklch.
  */
 
 /* Base */
@@ -37,7 +37,7 @@ blockquote {
 }
 
 a {
-    color: #155dfc;
+    color: #15803d;
 }
 
 a img {
@@ -367,13 +367,13 @@ img {
 
 .button-blue,
 .button-primary {
-    background-color: #155dfc;
-    border-bottom: 9px solid #155dfc;
-    border-left: 12px solid #155dfc;
-    border-right: 12px solid #155dfc;
-    border-top: 9px solid #155dfc;
+    background-color: #16a34a;
+    border-bottom: 9px solid #16a34a;
+    border-left: 12px solid #16a34a;
+    border-right: 12px solid #16a34a;
+    border-top: 9px solid #16a34a;
     /* Tanpa bayangan inset: padding tombol memakai border, sehingga bayangan inset tampil sebagai garis di dalam tombol. */
-    box-shadow: 0 1px 1px -1px rgba(0, 0, 0, 0.18), 0 2px 5px -2px rgba(21, 93, 252, 0.45);
+    box-shadow: 0 1px 1px -1px rgba(0, 0, 0, 0.18), 0 2px 5px -2px rgba(22, 163, 74, 0.45);
 }
 
 .button-green,
