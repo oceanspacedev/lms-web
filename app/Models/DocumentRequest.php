@@ -784,20 +784,22 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Fisik diterima: arsipkan scan bertanda tangan sebagai dokumen lalu tandai pengajuan Selesai. Hanya setelah scan masuk.
+     * Fisik diterima: arsipkan scan bertanda tangan sebagai dokumen lalu tandai pengajuan Selesai.
+     * Bila scan belum masuk, `$signedScan` disimpan dulu sebagai scan pengajuan dalam transaksi yang sama (tanpa pesan "menunggu dokumen fisik").
      * Nomor dokumen boleh kosong (dilengkapi nanti di menu Dokumen); tanggal terbit dan berakhir diambil dari pengajuan bila tidak diberikan.
      */
-    public function markReceived(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null): Document
+    public function markReceived(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null, ?UploadedFile $signedScan = null): Document
     {
-        $storedFile = null;
+        /** @var list<array{0: string, 1: string}> $storedFiles */
+        $storedFiles = [];
 
         try {
-            return $this->markReceivedInTransaction($number, $issuedDate, $expiryDate, $user, $companyId, $storedFile);
+            return $this->markReceivedInTransaction($number, $issuedDate, $expiryDate, $user, $companyId, $signedScan, $storedFiles);
         } catch (Throwable $exception) {
-            // Document::archive sudah menyimpan file; bila langkah di luarnya gagal, DB di-rollback tetapi file tertinggal.
-            if ($storedFile !== null) {
+            // File sudah tersimpan di disk sebelum DB di-rollback; hapus agar tidak tertinggal.
+            foreach ($storedFiles as [$disk, $path]) {
                 try {
-                    Storage::disk($storedFile[0])->delete($storedFile[1]);
+                    Storage::disk($disk)->delete($path);
                 } catch (Throwable $cleanupException) {
                     report($cleanupException);
                 }
@@ -807,15 +809,18 @@ class DocumentRequest extends Model
         }
     }
 
-    /** @param array{0: string, 1: string}|null $storedFile */
-    private function markReceivedInTransaction(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?array &$storedFile): Document
+    /** @param list<array{0: string, 1: string}> $storedFiles */
+    private function markReceivedInTransaction(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?UploadedFile $signedScan, array &$storedFiles): Document
     {
-        return DB::transaction(function () use ($number, $issuedDate, $expiryDate, $user, $companyId, &$storedFile): Document {
+        return DB::transaction(function () use ($number, $issuedDate, $expiryDate, $user, $companyId, $signedScan, &$storedFiles): Document {
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             if (! in_array($request->status, ['signing', 'handover'], true)) {
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
             }
             Gate::forUser($user)->authorize('markReceived', $request);
+            if ($signedScan !== null && ! $request->hasSignedScan()) {
+                $request->takeSignedScanForReceipt($signedScan, $user, $storedFiles);
+            }
             $file = $request->status === 'handover' ? $request->signedScanFile() : null;
             if ($file === null) {
                 throw ValidationException::withMessages(['status' => 'Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.']);
@@ -830,7 +835,7 @@ class DocumentRequest extends Model
             $request->company_id = $companyId;
             // Badan usaha dan jenis dokumen yang sudah terpasang pada pengajuan tetap sah walau kini nonaktif atau di tempat sampah.
             $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id ?? $request->reviewer_id ?? $user->id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
-            $storedFile = [$document->currentVersion->disk, $document->currentVersion->file_path];
+            $storedFiles[] = [$document->currentVersion->disk, $document->currentVersion->file_path];
             $request->document_id = $document->id;
             $request->physical_received_at = now();
             $request->status = 'archived';
@@ -844,6 +849,24 @@ class DocumentRequest extends Model
         });
     }
 
+    /**
+     * Simpan scan yang diunggah bersama Fisik Diterima, seperti uploadSigned tetapi tanpa pesan WhatsApp (pesan Selesai menyusul).
+     *
+     * @param  list<array{0: string, 1: string}>  $storedFiles
+     */
+    private function takeSignedScanForReceipt(UploadedFile $file, User $user, array &$storedFiles): void
+    {
+        Gate::forUser($user)->authorize('uploadSigned', $this);
+        Validator::make(['signed_scan' => $file], ['signed_scan' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]], [], ['signed_scan' => 'Scan dokumen bertanda tangan'])->validate();
+        $path = $this->storeFlowFile($file, 'signed');
+        $storedFiles[] = ['local', $path];
+        $this->signed_path = $path;
+        $this->signed_name = basename(str_replace('\\', '/', $file->getClientOriginalName()));
+        $this->signed_uploaded_at ??= now();
+        $this->status = 'handover';
+        $this->recordEvent('handover', $user);
+    }
+
     /** Scan bertanda tangan yang tersimpan, sebagai berkas unggahan agar bisa diarsipkan; null bila belum ada. */
     private function signedScanFile(): ?UploadedFile
     {
@@ -855,7 +878,7 @@ class DocumentRequest extends Model
         return new UploadedFile($disk->path($this->signed_path), $this->signed_name ?? basename($this->signed_path), null, null, true);
     }
 
-    /** Scan bertanda tangan sudah masuk, syarat tombol Fisik Diterima bisa diklik. */
+    /** Scan bertanda tangan sudah masuk; bila belum, Fisik Diterima meminta scan diunggah sekaligus. */
     public function hasSignedScan(): bool
     {
         return $this->status === 'handover' && filled($this->signed_path);

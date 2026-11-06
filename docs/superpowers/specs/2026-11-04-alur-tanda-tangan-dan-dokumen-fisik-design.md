@@ -120,8 +120,9 @@ Batas waktunya **7 hari kalender** sejak scan pertama diunggah, dihitung dengan 
 ### 3.7 Dokumen fisik diterima, pengajuan selesai
 
 - Saat dokumen asli sampai, Staff Legal menekan aksi **Fisik Diterima** di halaman pengajuan.
-- Aksi ini menggantikan **Unggah Dokumen Final** yang sekarang. **Keputusan pengguna (6 Nov 2026):** **Fisik Diterima** baru bisa diklik setelah scan bertanda tangan masuk (sebelum itu tombolnya mati dengan keterangan "Unggah scan bertanda tangan dulu."), dan cukup konfirmasi tanpa isian:
-  - **File arsipnya adalah scan bertanda tangan yang sudah diunggah.** Kalau scan kurang jelas, ganti dulu lewat **Ganti Scan**.
+- Aksi ini menggantikan **Unggah Dokumen Final** yang sekarang. **Keputusan pengguna (6 Nov 2026):** **Fisik Diterima** cukup konfirmasi tanpa isian, dan tombolnya ada di baris daftar pengajuan maupun di halaman detail (keputusan pengguna, 6 Nov 2026, revisi kedua):
+  - **File arsipnya adalah scan bertanda tangan.** Kalau scan sudah masuk, itu yang dipakai (scan kurang jelas? ganti dulu lewat **Ganti Scan**). Kalau scan belum masuk, jendela Fisik Diterima meminta unggah scan sekaligus: scan disimpan sebagai scan pengajuan dan langsung diarsipkan dalam satu langkah.
+  - Unggah sekaligus tidak mengirim WhatsApp "menunggu dokumen fisik" ke pemohon, karena pengajuan langsung Selesai; pemohon hanya mendapat pesan Selesai. Riwayat tetap mencatat scan masuk lalu Selesai.
   - Tanggal terbit dan tanggal berakhir diambil dari pengajuan. Nomor dokumen dikosongkan dan dilengkapi nanti di menu Dokumen.
   - Isian hanya muncul untuk data yang memang tidak ada di pengajuan: **badan usaha** (pengajuan publik dengan badan usaha lain) dan **tanggal berakhir** (jenis dokumen yang punya masa berlaku, tetapi pengajuan tidak mencantumkannya).
   - PIC dokumen arsip: PIC pengajuan; bila kosong, pemeriksa; bila kosong juga, Staff Legal yang menekan tombol.
@@ -129,7 +130,7 @@ Batas waktunya **7 hari kalender** sejak scan pertama diunggah, dihitung dengan 
 - Dokumen otomatis masuk arsip Dokumen, seperti alur **Unggah Dokumen Final** yang sekarang.
 - Status berubah ke **Selesai**. Pemohon mendapat WhatsApp bahwa dokumen fisik sudah diterima legal.
 - Tanggal fisik diterima dicatat. Kalau terlambat, berapa hari keterlambatannya juga tercatat.
-- Dokumen asli yang diserahkan langsung ke legal tanpa scan, atau pengajuan lama hasil penyesuaian (§6): Staff Legal mengunggah scan-nya dulu lewat **Unggah Scan Bertanda Tangan** atas nama pemohon, lalu menekan **Fisik Diterima**. (Sebelumnya **Fisik Diterima** bisa langsung dari Menunggu Tanda Tangan dengan unggah file di aksi yang sama; aturan itu diganti per 6 Nov 2026.)
+- Dokumen asli yang diserahkan langsung ke legal tanpa scan, atau pengajuan lama hasil penyesuaian (§6): Staff Legal menekan **Fisik Diterima** dan mengunggah scan-nya di jendela yang sama. (Sempat diputuskan scan wajib diunggah dulu lewat aksi terpisah; pada hari yang sama pengguna memilih unggah sekaligus.)
 
 ### 3.8 Membatalkan pengajuan setelah draft keluar
 

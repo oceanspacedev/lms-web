@@ -319,6 +319,48 @@ class RequestSigningFlowTest extends TestCase
         $this->assertSame('scan-ttd.pdf', $document->currentVersion->file_name);
     }
 
+    public function test_mark_received_can_take_the_signed_scan_in_the_same_step(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal);
+        $request->issueDraft($this->pdf('draf.pdf'), $legal);
+        $events = count($request->history);
+
+        $document = $request->markReceived(null, null, null, $legal, null, $this->pdf('scan-ttd.pdf'));
+
+        $this->assertSame('archived', $request->status);
+        $this->assertNotNull($request->signed_uploaded_at);
+        $this->assertSame('scan-ttd.pdf', $request->signed_name);
+        Storage::disk('local')->assertExists($request->signed_path);
+        $this->assertSame('scan-ttd.pdf', $document->currentVersion->file_name);
+        $this->assertSame(Storage::disk('local')->get($request->signed_path), Storage::disk('s3')->get($document->currentVersion->file_path));
+        $this->assertSame(['handover', 'archived'], array_column(array_slice($request->history, $events), 'status'));
+        // Satu pesan saja (Selesai): tidak ada pesan "menunggu dokumen fisik" yang langsung basi.
+        $handoverEvent = $events + 1;
+        $this->assertFalse($request->notifications()->pluck('event_key')->contains(fn (string $key): bool => str_contains($key, "-{$handoverEvent}-")));
+        $this->assertTrue($request->notifications()->where('event_key', 'like', '%-'.count($request->history).'-%')->exists());
+    }
+
+    public function test_scan_uploaded_with_mark_received_is_removed_when_archiving_fails(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, ['company_id' => null, 'other_business_name' => 'PT Usaha Lain']);
+        $request->issueDraft($this->pdf('draf.pdf'), $legal);
+        $before = Storage::disk('local')->allFiles();
+
+        try {
+            $request->markReceived(null, null, null, $legal, null, $this->pdf('scan-ttd.pdf'));
+            $this->fail('Tanpa badan usaha arsip, fisik diterima harus ditolak.');
+        } catch (ValidationException) {
+        }
+
+        $request->refresh();
+        $this->assertSame('signing', $request->status);
+        $this->assertNull($request->signed_path);
+        $this->assertSame($before, Storage::disk('local')->allFiles());
+        $this->assertSame(0, Document::count());
+    }
+
     public function test_mark_received_twice_creates_one_document(): void
     {
         $legal = $this->legal();

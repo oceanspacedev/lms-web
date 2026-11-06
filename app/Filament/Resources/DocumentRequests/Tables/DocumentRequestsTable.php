@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DocumentRequests\Tables;
 
 use App\Filament\Concerns\TrashActions;
+use App\Filament\Resources\DocumentRequests\Actions\MarkReceivedAction;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
 use App\Models\DocumentRequest;
@@ -79,6 +80,8 @@ class DocumentRequestsTable
             TrashActions::filter(),
         ])
             ->recordActions([
+                // Langsung dari daftar tanpa membuka detail; bila scan belum masuk, modalnya meminta scan sekaligus.
+                MarkReceivedAction::make()->icon('heroicon-o-inbox-arrow-down')->color('success')->iconButton()->tooltip('Fisik diterima'),
                 Action::make('open')->label('Buka')->icon('heroicon-o-eye')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record]))
                     ->hidden(fn (DocumentRequest $record): bool => $record->trashed()),
                 TrashActions::viewTrashed('pengajuan'),

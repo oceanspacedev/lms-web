@@ -10,12 +10,12 @@ use App\Models\Document;
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -89,7 +89,7 @@ class RequestSigningScreenTest extends TestCase
 
     private function pdf(string $name = 'berkas.pdf'): UploadedFile
     {
-        return UploadedFile::fake()->create($name, 20, 'application/pdf');
+        return UploadedFile::fake()->createWithContent($name, "%PDF-1.4\n% {$name}\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
     }
 
     public function test_legal_sees_issue_draft_on_submitted_and_requester_does_not(): void
@@ -174,20 +174,41 @@ class RequestSigningScreenTest extends TestCase
         Livewire::test(EditDocumentRequest::class, ['record' => $onTime->getRouteKey()])->assertActionHidden('addLateReason');
     }
 
-    public function test_mark_received_waits_for_the_signed_scan(): void
+    public function test_mark_received_without_scan_asks_for_it_in_the_same_modal(): void
     {
         $legal = $this->legal();
         $request = $this->request($this->requester(), $legal, 'signing', ['signed_path' => null]);
 
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
-            ->assertActionVisible('markReceived')
-            ->assertActionDisabled('markReceived')
-            ->assertActionVisible('uploadSigned');
+            ->assertActionEnabled('markReceived')
+            ->assertActionVisible('uploadSigned')
+            ->mountAction('markReceived')
+            ->assertMountedActionModalSee('Scan dokumen bertanda tangan')
+            ->callMountedAction()
+            ->assertHasActionErrors(['signed_scan' => 'required'])
+            ->fillForm(['signed_scan' => $this->pdf('scan.pdf')])
+            ->callMountedAction()
 
-        $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.');
-        $request->markReceived(null, null, null, $legal);
+            ->assertHasNoActionErrors()
+            ->assertNotified('Fisik diterima');
+
+        $request->refresh();
+        $this->assertSame('archived', $request->status);
+        $this->assertSame('scan.pdf', $request->signed_name);
+        $this->assertSame('scan.pdf', Document::findOrFail($request->document_id)->currentVersion->file_name);
+    }
+
+    public function test_mark_received_with_scan_does_not_ask_for_it_again(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, 'handover');
+        Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
+
+        $this->actingAs($legal);
+        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
+            ->mountAction('markReceived')
+            ->assertMountedActionModalDontSee('Scan dokumen bertanda tangan');
     }
 
     public function test_mark_received_is_one_click_without_fields(): void
@@ -257,6 +278,78 @@ class RequestSigningScreenTest extends TestCase
 
         Livewire::test(EditDocumentRequest::class, ['record' => $signing->getRouteKey()])->assertSee('Belum scan');
         Livewire::test(EditDocumentRequest::class, ['record' => $handover->getRouteKey()])->assertSee('Fisik belum diterima');
+    }
+
+    public function test_list_offers_mark_received_while_waiting_for_scan_or_physical_document(): void
+    {
+        $legal = $this->legal();
+        $requester = $this->requester();
+        $submitted = $this->request($requester, $legal, 'submitted');
+        $signing = $this->request($requester, $legal, 'signing', ['signed_path' => null]);
+        $handover = $this->request($requester, $legal, 'handover');
+        $archived = $this->request($requester, $legal, 'handover', ['status' => 'archived', 'physical_received_at' => now()]);
+
+        $this->actingAs($legal);
+        Livewire::test(ListDocumentRequests::class)
+            ->assertActionVisible(TestAction::make('markReceived')->table($handover))
+            ->assertActionVisible(TestAction::make('markReceived')->table($signing))
+            ->assertActionHidden(TestAction::make('markReceived')->table($submitted))
+            ->assertActionHidden(TestAction::make('markReceived')->table($archived));
+
+        $this->actingAs($requester);
+        Livewire::test(ListDocumentRequests::class)->assertActionHidden(TestAction::make('markReceived')->table($handover));
+    }
+
+    public function test_mark_received_from_the_list_takes_the_scan_when_missing(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, 'signing', ['signed_path' => null]);
+
+        $this->actingAs($legal);
+        Livewire::test(ListDocumentRequests::class)
+            ->callAction(TestAction::make('markReceived')->table($request), ['signed_scan' => $this->pdf('scan.pdf')])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Fisik diterima');
+
+        $this->assertSame('archived', $request->refresh()->status);
+    }
+
+    public function test_mark_received_from_the_list_archives_the_request(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, 'handover');
+        Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
+
+        $this->actingAs($legal);
+        Livewire::test(ListDocumentRequests::class)
+            ->callAction(TestAction::make('markReceived')->table($request))
+            ->assertHasNoActionErrors()
+            ->assertNotified('Fisik diterima');
+
+        $request->refresh();
+        $this->assertSame('archived', $request->status);
+        $this->assertNotNull(Document::find($request->document_id));
+    }
+
+    public function test_mark_received_from_the_list_asks_for_missing_data(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, 'handover', [
+            'document_type_id' => DocumentType::factory()->create(['has_expiry' => true])->id, 'expiry_date' => null,
+        ]);
+        Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
+
+        $this->actingAs($legal);
+        Livewire::test(ListDocumentRequests::class)
+            ->mountAction(TestAction::make('markReceived')->table($request))
+            ->assertMountedActionModalSee('Tanggal berakhir')
+            ->callMountedAction()
+            ->assertHasActionErrors(['expiry_date' => 'required'])
+            ->fillForm(['expiry_date' => '2027-12-31'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame('archived', $request->refresh()->status);
     }
 
     public function test_cancel_action_requires_note(): void
