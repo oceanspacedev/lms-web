@@ -154,7 +154,21 @@ class PublicRequestSigningTest extends TestCase
             ->assertDontSee(route('requests.public.scan', ['token' => self::TOKEN]), false)
             ->assertDontSee(route('requests.public.reason', ['token' => self::TOKEN]), false)
             ->assertDontSee(self::TOKEN)
-            ->assertSee('Buka tautan status yang dikirim ke WhatsApp pengaju');
+            ->assertSee('Menunggu dokumen asli')
+            ->assertSee('Scan sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal.')
+            ->assertSee('Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.')
+            ->assertDontSee('mengunggah scan');
+    }
+
+    public function test_lookup_page_tells_what_to_do_while_waiting_for_signed_scan(): void
+    {
+        $submission = $this->request('signing');
+
+        $this->post(route('requests.public.lookup.submit'), ['submission_id' => (string) $submission->id, 'requester_phone' => '081234567890'])->assertOk()
+            ->assertSee('Menunggu scan bertanda tangan')
+            ->assertSee('Draft sudah siap. Pengaju perlu mengunduh draft, menandatanganinya, lalu mengunggah scan-nya lewat tautan status yang dikirim ke WhatsApp pengaju.')
+            ->assertSee('Halaman ini hanya untuk melihat status.')
+            ->assertDontSee('<form', false);
     }
 
     public function test_scan_upload_and_reason_confirm_what_happens_next(): void

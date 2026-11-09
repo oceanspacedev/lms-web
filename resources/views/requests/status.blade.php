@@ -27,7 +27,11 @@
     <div class="notice success" role="status"><strong>{{ is_string(session('status_done')) ? session('status_done') : 'Berhasil disimpan.' }}</strong></div>
 @endif
 @if($lookup && in_array($submission->status, ['signing', 'handover'], true))
-    <div class="notice" role="status"><strong>{{ $submission->status === 'signing' ? 'Menunggu scan bertanda tangan' : 'Menunggu dokumen asli' }}</strong><p>Buka tautan status yang dikirim ke WhatsApp pengaju untuk mengunduh draft, mengunggah scan{{ $submission->status === 'handover' ? ', atau menulis alasan keterlambatan' : '' }}. Hal itu tidak bisa dilakukan dari halaman ini.</p></div>
+    @if($submission->status === 'signing')
+        <div class="notice" role="status"><strong>Menunggu scan bertanda tangan</strong><p>Draft sudah siap. Pengaju perlu mengunduh draft, menandatanganinya, lalu mengunggah scan-nya lewat tautan status yang dikirim ke WhatsApp pengaju. Halaman ini hanya untuk melihat status.</p></div>
+    @else
+        <div class="notice" role="status"><strong>Menunggu dokumen asli</strong><p>Scan sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal. Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.</p></div>
+    @endif
 @endif
 <section class="form-section receipt">
     <div class="receipt-heading"><span>Pengajuan #{{ $submission->id }}</span><span class="status {{ $submission->status }}">{{ \App\Models\DocumentRequest::statusLabel($submission->status) }}</span></div>
