@@ -161,7 +161,7 @@ class Panduan extends Page
                     ['Pengaju tanda tangan, scan masuk', 17, 'Status menjadi Menunggu Dokumen Fisik. Dokumen asli wajib diserahkan ke legal dalam 7 hari sejak scan diunggah.'],
                     ['Pantau lewat filter Tahap', 22.6, 'Pilih Menunggu fisik atau Terlambat. Kolom Keterangan menunjukkan sisa hari, atau hari keterlambatan beserta alasan dari pengaju.'],
                     ['Dokumen asli sampai, klik ikon Fisik Diterima', 30, 'Ikon hijau ada di baris daftar dan tombolnya ada di halaman detail. Cukup konfirmasi, scan otomatis menjadi file arsip; scan belum masuk bisa diunggah sekalian. Nomor dokumen dilengkapi nanti di menu Dokumen.'],
-                    ['Selesai, dokumen masuk arsip', 37.2, 'Keterlambatan, bila ada, ikut tercatat. Pengajuan batal saat revisi atau setelah draft keluar? Klik Batalkan beserta alasannya.'],
+                    ['Selesai, dokumen masuk arsip', 37.2, 'Keterlambatan, bila ada, ikut tercatat. Pengajuan batal saat revisi atau setelah draft keluar? Buka menu Lainnya, klik Batalkan, lalu tulis alasannya.'],
                 ],
                 impacts: [
                     ['area' => 'Pengaju', 'text' => 'Dikabari WhatsApp saat draft keluar, saat scan diterima (berisi batas penyerahan), saat terlambat, dan saat selesai atau dibatalkan.', 'url' => null],
@@ -196,7 +196,7 @@ class Panduan extends Page
                     ['Pilih badan usaha dan jenis dokumen', 3, 'Ketik beberapa huruf untuk mencari. Jenis dokumen menentukan apakah dokumen punya masa berlaku.'],
                     ['Isi judul, nomor, dan pihak lawan', 7.8, 'Nomor dan pihak lawan boleh dikosongkan bila memang tidak ada.'],
                     ['Pilih PIC dan tanggal berakhir', 14, 'PIC adalah penerima pengingat WhatsApp. Tanggal berakhir wajib untuk dokumen yang punya masa berlaku.'],
-                    ['Unggah file, lalu klik Buat', 18.8, 'Format PDF, DOC, DOCX, JPG, atau PNG, maksimal 20 MB.'],
+                    ['Unggah file, lalu klik Simpan', 18.8, 'Format PDF, DOC, DOCX, JPG, atau PNG, maksimal 20 MB.'],
                     ['Dokumen tersimpan sebagai versi 1', 23.4, 'Nama file dibuat otomatis agar mudah dilacak. Pengingat dihitung dari tanggal berakhir.'],
                 ],
                 impacts: [
@@ -309,7 +309,7 @@ class Panduan extends Page
                 audience: 'Super admin',
                 steps: [
                     ['Buka Badan Usaha, klik Tambah Badan Usaha', 0, 'Badan usaha dipakai di dokumen dan pilihan di form pengajuan. Yang dinonaktifkan tidak bisa dipilih lagi, tetapi datanya tetap tersimpan.'],
-                    ['Isi nama dan bentuk badan usaha, klik Buat', 2.8, 'Bentuk badan usaha (PT, CV, dan lainnya) ikut tampil di nama, misalnya PT Nusantara Reefer Logistik.'],
+                    ['Isi nama dan bentuk badan usaha, klik Simpan', 2.8, 'Bentuk badan usaha (PT, CV, dan lainnya) ikut tampil di nama, misalnya PT Nusantara Reefer Logistik.'],
                     ['Buka User, klik Tambah User', 9.2, 'Hanya admin yang bisa membuat akun. Tidak ada pendaftaran mandiri.'],
                     ['Isi data, nomor WhatsApp, dan peran', 12, 'Nomor WhatsApp dipakai untuk masuk dengan kode dan menerima pengingat. Peran menentukan menu dan tombol yang bisa dipakai.'],
                     ['Atur izin tiap peran di Hak Akses', 20.8, 'Centang izin per menu, misalnya boleh melihat, membuat, atau menghapus. Perubahan berlaku untuk semua user dengan peran itu.'],
