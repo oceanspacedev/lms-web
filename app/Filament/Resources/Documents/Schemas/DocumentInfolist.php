@@ -4,11 +4,11 @@ namespace App\Filament\Resources\Documents\Schemas;
 
 use App\Filament\Concerns\TrashActions;
 use App\Models\Document;
+use App\Support\FileSize;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Number;
 
 class DocumentInfolist
 {
@@ -37,17 +37,18 @@ class DocumentInfolist
                     ->columnSpan(['default' => 1, 'xl' => 1])
                     ->columns(2)
                     ->schema([
-                        TextEntry::make('currentVersion.stored_name')->label('Nama File')
-                            ->icon('heroicon-o-document-text')->wrap()->columnSpanFull()->placeholder('Belum ada file'),
+                        // Nama asli lebih mudah dikenali pengguna, jadi tampil lebih dulu; nama penyimpanan dipakai saat file diunduh.
                         TextEntry::make('currentVersion.file_name')->label('Nama File Asli')
-                            ->helperText('Nama file di komputer pengunggah.')->wrap()->columnSpanFull()->placeholder('—'),
+                            ->icon('heroicon-o-document-text')->weight('medium')->wrap()->columnSpanFull()->placeholder('Belum ada file'),
+                        TextEntry::make('currentVersion.stored_name')->label('Nama File Saat Diunduh')
+                            ->color('gray')->size('sm')->wrap()->columnSpanFull()->placeholder('—'),
                         TextEntry::make('currentVersion.version_number')->label('Versi')->prefix('v')->placeholder('—'),
                         TextEntry::make('currentVersion.file_size')->label('Ukuran File')
-                            ->formatStateUsing(fn (int $state): string => Number::fileSize($state, precision: 1))->placeholder('—'),
-                        TextEntry::make('currentVersion.issued_date')->label('Tanggal Terbit')->date('d/m/Y')->placeholder('Belum diisi'),
-                        TextEntry::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa masa berlaku'),
+                            ->formatStateUsing(fn (int $state): string => FileSize::format($state))->placeholder('—'),
+                        TextEntry::make('currentVersion.issued_date')->label('Tanggal Terbit')->date('d M Y')->placeholder('Belum diisi'),
+                        TextEntry::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku'),
                         TextEntry::make('currentVersion.uploader.name')->label('Diunggah Oleh')->state(fn (Document $record): ?string => $record->currentVersion?->uploader?->displayName())->wrap()->columnSpanFull()->placeholder('—'),
-                        TextEntry::make('currentVersion.created_at')->label('Waktu Unggah')->dateTime('d/m/Y H:i')->timezone(config('lms.reminder_timezone'))->columnSpanFull()->placeholder('—'),
+                        TextEntry::make('currentVersion.created_at')->label('Waktu Unggah')->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->columnSpanFull()->placeholder('—'),
                     ]),
             ]);
     }

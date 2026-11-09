@@ -51,7 +51,7 @@ class UserResource extends Resource
      */
     public static function deactivateAction(): Action
     {
-        return Action::make('deactivate')->label('Nonaktifkan')->icon(Heroicon::OutlinedNoSymbol)->color('danger')
+        return Action::make('deactivate')->label('Nonaktifkan')->icon(Heroicon::OutlinedNoSymbol)->color('warning')
             ->visible(fn (User $record): bool => app(UserDeactivator::class)->deactivationDenialReason(auth()->user(), $record) === null)
             ->modalHeading(fn (User $record): string => "Nonaktifkan {$record->name}?")
             ->modalDescription(fn (User $record): HtmlString => static::workloadSummary($record))

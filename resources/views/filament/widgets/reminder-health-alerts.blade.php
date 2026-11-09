@@ -4,8 +4,8 @@
             <ul class="space-y-2">
                 @foreach ($alerts as $alert)
                     <li class="flex flex-wrap items-center justify-between gap-2 text-sm" data-alert="{{ $alert['key'] }}">
-                        <span class="flex items-center gap-2">
-                            <x-filament::badge :color="$alert['level']">{{ $alert['level'] === 'danger' ? 'Penting' : 'Perhatian' }}</x-filament::badge>
+                        <span class="flex items-start gap-2">
+                            <x-filament::badge :color="$alert['level']" class="shrink-0">{{ $alert['level'] === 'danger' ? 'Penting' : 'Perhatian' }}</x-filament::badge>
                             {{ $alert['message'] }}
                         </span>
                         @if ($alert['url'])

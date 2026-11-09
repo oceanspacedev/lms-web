@@ -29,14 +29,14 @@ class DocumentRequestsTable
 
     public static function configure(Table $table): Table
     {
-        return $table->striped()->modifyQueryUsing(fn (Builder $query): Builder => $query->with('lateReasons'))->paginated([10, 25, 50])->searchPlaceholder('Cari nomor, pengajuan, pihak lawan / mitra, atau pengaju')->columns([
+        return $table->striped()->stackedOnMobile()->modifyQueryUsing(fn (Builder $query): Builder => $query->with('lateReasons'))->paginated([10, 25, 50])->searchPlaceholder('Cari nomor, pengajuan, pihak lawan / mitra, atau pengaju')->columns([
             TextColumn::make('id')->label('No.')->formatStateUsing(fn (int|string $state): string => '#'.$state)->sortable()->visibleFrom('md')
                 ->searchable(query: function (Builder $query, string $search): Builder {
                     $number = ltrim(trim($search), '#');
 
                     return ctype_digit($number) && strlen($number) <= 18 ? $query->orWhere('document_requests.id', (int) $number) : $query;
                 }),
-            TextColumn::make('title')->label('Pengajuan')->searchable()->weight('medium')->limit(45)->wrap()->tooltip(fn (DocumentRequest $record): string => $record->title)
+            TextColumn::make('title')->label('Pengajuan')->searchable()->weight('medium')->limit(80)->wrap()->extraHeaderAttributes(['class' => 'md:min-w-48'])->tooltip(fn (DocumentRequest $record): string => $record->title)
                 ->description(fn (DocumentRequest $record): string => $record->documentType->displayName().($record->revisionNumber() ? ' · Revisi ke-'.$record->revisionNumber() : '')),
             TextColumn::make('partner_name')->label('Pihak Lawan / Mitra')->searchable()->state(fn (DocumentRequest $record): ?string => $record->counterpartyName())->placeholder('—')->limit(30)->wrap()->visibleFrom('md'),
             TextColumn::make('requester_name')->label('Pengaju')->limit(30)->wrap()->visibleFrom('md')->state(fn (DocumentRequest $record): string => $record->applicantDisplayName())
@@ -46,7 +46,7 @@ class DocumentRequestsTable
                     ->orWhere(fn (Builder $query): Builder => $query->whereNull('document_requests.requester_name')
                         ->whereHas('requester', fn (Builder $requester): Builder => $requester->whereRaw("lower(users.name) like ? escape '!'", [self::likePattern($search)])))),
             // Status ditambah badge "Belum scan" / "Fisik belum diterima" agar langkah yang belum beres terlihat tanpa membuka detail.
-            TextColumn::make('status')->label('Status')->badge()
+            TextColumn::make('status')->label('Status')->badge()->listWithLineBreaks()
                 ->state(fn (DocumentRequest $record): array => $record->statusBadges())
                 ->color(fn (string $state, DocumentRequest $record): string => $record->statusBadgeColor($state))
                 ->visibleFrom(TrashActions::statusVisibleFrom()),
@@ -60,12 +60,13 @@ class DocumentRequestsTable
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
             SelectFilter::make('stage')->label('Tahap')->options([
                 'to_review' => 'Perlu diperiksa', 'signing' => 'Menunggu tanda tangan', 'scan_overdue' => 'Belum unggah scan > 7 hari',
-                'handover_on_time' => 'Menunggu fisik (belum lewat batas)', 'late' => 'Terlambat', 'late_no_reason' => 'Terlambat, belum ada alasan',
+                'handover' => 'Menunggu dokumen fisik (semua)', 'handover_on_time' => 'Menunggu fisik (belum lewat batas)', 'late' => 'Terlambat', 'late_no_reason' => 'Terlambat, belum ada alasan',
                 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
             ])->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                 'to_review' => $query->where('status', 'submitted'),
                 'signing' => $query->where('status', 'signing'),
                 'scan_overdue' => $query->scanOverdue(),
+                'handover' => $query->where('status', 'handover'),
                 'handover_on_time' => $query->handoverOnTime(),
                 'late' => $query->handoverLate(),
                 'late_no_reason' => $query->lateWithoutReason(),

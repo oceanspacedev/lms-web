@@ -75,11 +75,11 @@ class IndonesianMessagesAndLocalTimeTest extends TestCase
         $this->actingAs($viewer);
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSee('14/10/2026 10:36')
-            ->assertDontSee('14/10/2026 03:36');
+            ->assertSee('14 Okt 2026 10:36')
+            ->assertDontSee('14 Okt 2026 03:36');
 
         Livewire::test(VersionsRelationManager::class, ['ownerRecord' => $document, 'pageClass' => ViewDocument::class])
-            ->assertSee('14/10/2026 10:36')
-            ->assertDontSee('14/10/2026 03:36');
+            ->assertSee('14 Okt 2026 10:36')
+            ->assertDontSee('14 Okt 2026 03:36');
     }
 }

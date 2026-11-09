@@ -548,7 +548,7 @@ class TrashActions
         $timezone = config('lms.reminder_timezone');
         $deletedBy = $record->deletedBy?->name;
 
-        return $record->deleted_at->copy()->timezone($timezone)->format('d/m/Y H:i').' '.($timezone === 'Asia/Jakarta' ? 'WIB' : $timezone)
+        return $record->deleted_at->copy()->timezone($timezone)->translatedFormat('d M Y H:i').' '.($timezone === 'Asia/Jakarta' ? 'WIB' : $timezone)
             .($deletedBy === null ? '' : ' oleh '.$deletedBy);
     }
 

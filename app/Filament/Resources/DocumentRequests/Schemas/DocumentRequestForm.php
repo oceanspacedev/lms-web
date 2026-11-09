@@ -196,11 +196,11 @@ class DocumentRequestForm
                 TextInput::make('partner_contact')->label('Kontak mitra')->maxLength(255),
             ])->disabled(fn (?DocumentRequest $record): bool => $record && ! $record->editableBy(auth()->user())),
             Section::make('Rencana')->columnSpanFull()->visible(fn (?DocumentRequest $record): bool => ! self::isReadOnly($record))->columns(2)->schema([
-                DatePicker::make('start_date')->label('Mulai')->markAsRequired()->helperText('Wajib diisi saat mengajukan.'),
-                DatePicker::make('expiry_date')->label('Berakhir')->afterOrEqual('start_date')
+                DatePicker::make('start_date')->label('Mulai')->native(false)->markAsRequired()->helperText('Wajib diisi saat mengajukan.'),
+                DatePicker::make('expiry_date')->label('Berakhir')->native(false)->afterOrEqual('start_date')
                     ->markAsRequired(fn (Get $get, ?DocumentRequest $record): bool => self::requiresExpiry($get, $record))
                     ->helperText(fn (Get $get, ?DocumentRequest $record): ?string => self::requiresExpiry($get, $record) ? 'Wajib diisi saat mengajukan.' : null),
-                DatePicker::make('target_date')->label('Target selesai'),
+                DatePicker::make('target_date')->label('Target selesai')->native(false),
                 Toggle::make('has_cost')->label('Ada biaya')->default(false)->live(),
                 TextInput::make('amount')->label('Nilai (Rp)')->numeric()->minValue(0)->maxValue(9999999999999999)->markAsRequired()->helperText('Wajib diisi saat mengajukan.')->visible(fn (Get $get): bool => (bool) $get('has_cost')),
                 Textarea::make('payment_terms')->label('Pembayaran')->rows(2)->maxLength(4000)->markAsRequired()->helperText('Wajib diisi saat mengajukan.')->visible(fn (Get $get): bool => (bool) $get('has_cost')),
@@ -209,7 +209,7 @@ class DocumentRequestForm
                         $name = 'details.'.$item['key'];
                         $field = match ($item['type']) {
                             'textarea' => Textarea::make($name)->rows(2)->maxLength(4000),
-                            'date' => DatePicker::make($name),
+                            'date' => DatePicker::make($name)->native(false),
                             'number' => TextInput::make($name)->numeric(),
                             default => TextInput::make($name)->maxLength(4000),
                         };

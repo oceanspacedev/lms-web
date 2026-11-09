@@ -26,7 +26,7 @@ class CompaniesTable
                     ->visibleFrom(TrashActions::statusVisibleFrom())
                     ->sortable(),
                 TrashActions::deletedColumn(),
-                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d/m/Y H:i')->timezone(config('lms.reminder_timezone'))->sortable()->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md'),
+                TextColumn::make('updated_at')->label('Terakhir Diperbarui')->dateTime('d M Y H:i')->timezone(config('lms.reminder_timezone'))->sortable()->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md'),
             ])
             ->filters([
                 TernaryFilter::make('is_active')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif'),

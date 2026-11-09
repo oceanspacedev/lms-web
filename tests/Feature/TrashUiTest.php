@@ -541,7 +541,7 @@ class TrashUiTest extends TestCase
         $active = $scenario['free']();
 
         $list = $this->listWithTrashed($scenario, $key)
-            ->assertTableColumnFormattedStateSet('deleted_at', '05/11/2026 16:00 WIB oleh Admin Pusat', $trashed);
+            ->assertTableColumnFormattedStateSet('deleted_at', '05 Nov 2026 16:00 WIB oleh Admin Pusat', $trashed);
         $this->assertFalse($list->instance()->getTable()->getColumn('deleted_at')->isBadge());
 
         // Badan Usaha, Jenis Dokumen, User, dan Dokumen: status "Dihapus" abu-abu; Pengajuan tetap status alurnya, tanpa Keterangan.
@@ -603,7 +603,7 @@ class TrashUiTest extends TestCase
         $superAdmin = $this->signInAsSuperAdmin();
         $superAdmin->update(['name' => 'Admin Pusat']);
         $trashed = $this->trashed($scenario['free'], $superAdmin);
-        $notice = 'Data ini ada di tempat sampah — dihapus 05/11/2026 16:00 WIB oleh Admin Pusat. Pulihkan untuk mengubahnya.';
+        $notice = 'Data ini ada di tempat sampah — dihapus 05 Nov 2026 16:00 WIB oleh Admin Pusat. Pulihkan untuk mengubahnya.';
         $trashIndex = $scenario['resource']::getUrl('index', ['filters' => ['trashed' => ['value' => '0']]]);
 
         $page = Livewire::test($scenario['detail'], ['record' => $trashed->getRouteKey()])

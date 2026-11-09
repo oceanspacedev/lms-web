@@ -159,7 +159,7 @@ class DocumentTrashTest extends TestCase
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
             ->assertSuccessful()
-            ->assertSee('Data ini ada di tempat sampah — dihapus 05/10/2026 22:00 WIB. Pulihkan untuk mengubahnya.')
+            ->assertSee('Data ini ada di tempat sampah — dihapus 05 Okt 2026 22:00 WIB. Pulihkan untuk mengubahnya.')
             ->assertActionVisible('restore')->assertActionVisible('forceDelete')
             ->assertActionHidden('download')->assertActionHidden('preview')->assertActionHidden('edit')
             ->assertActionHidden('renew')->assertActionHidden('updateVersion')->assertActionHidden('delete');

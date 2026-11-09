@@ -36,17 +36,19 @@ class UserForm
                 ->dehydrateStateUsing(fn (?string $state): ?string => app(WaghubService::class)->normalizePhone($state)),
             Select::make('roles')->label('Peran')
                 ->relationship('roles', 'name', modifyQueryUsing: fn (Builder $query): Builder => $query->where('guard_name', 'web'))
-                ->multiple()->searchable()->preload()
+                ->multiple()->searchable()->preload()->placeholder('Pilih peran')
                 ->disabled(fn (): bool => ! Gate::allows('Update:Role'))
+                // User tanpa peran tidak bisa masuk, jadi akun baru wajib diberi peran (bila pembuatnya boleh mengatur peran).
+                ->required(fn (string $operation): bool => $operation === 'create' && Gate::allows('Update:Role'))
                 ->helperText('Hak akses mengikuti peran. User tanpa peran atau izin tidak dapat masuk panel.'),
             TextInput::make('password')->label('Kata Sandi')->password()->revealable()->minLength(8)->maxLength(255)
                 ->afterStateHydrated(fn (TextInput $component) => $component->state(null))
                 ->required(fn (string $operation): bool => $operation === 'create')
                 ->dehydrated(fn (?string $state): bool => filled($state))
                 ->same('password_confirmation')
-                ->helperText('Minimal 8 karakter. Saat mengubah user, kosongkan untuk mempertahankan kata sandi.'),
+                ->helperText(fn (string $operation): string => $operation === 'create' ? 'Minimal 8 karakter.' : 'Minimal 8 karakter. Kosongkan bila kata sandi tidak diubah.'),
             TextInput::make('password_confirmation')->label('Konfirmasi Kata Sandi')->password()->revealable()
-                ->requiredWith('password')->dehydrated(false),
+                ->requiredWith('password')->markAsRequired(fn (string $operation): bool => $operation === 'create')->dehydrated(false),
         ]);
     }
 }

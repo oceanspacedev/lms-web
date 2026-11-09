@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
 class WaitingRequestsOverview extends StatsOverviewWidget
 {
     /** @var array<string, string> Tahap yang dipantau staf legal (nilai filter `stage`), beserta labelnya di kartu. */
-    public const STAGES = ['to_review' => 'Menunggu Pemeriksaan', 'signing' => 'Menunggu Tanda Tangan', 'handover_on_time' => 'Menunggu Fisik', 'late' => 'Terlambat'];
+    public const STAGES = ['to_review' => 'Menunggu Pemeriksaan', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Fisik', 'late' => 'Terlambat'];
 
     protected static ?int $sort = 1;
 
@@ -70,10 +70,11 @@ class WaitingRequestsOverview extends StatsOverviewWidget
                 ->description($scanOverdue > 0 ? "{$scanOverdue} belum unggah scan lebih dari 7 hari" : 'Tidak ada scan yang tertunda lebih dari 7 hari')
                 ->color($scanOverdue > 0 ? 'warning' : 'gray')
                 ->url($stageUrl($scanOverdue > 0 ? 'scan_overdue' : 'signing')),
-            Stat::make(self::STAGES['handover_on_time'], static::visibleRequests()->handoverOnTime()->count())
-                ->description('Dokumen fisik belum diterima, belum lewat batas 7 hari')
-                ->color('gray')
-                ->url($stageUrl('handover_on_time')),
+            // Semua yang fisiknya belum diterima, termasuk yang terlambat; kartu Terlambat merinci yang lewat batas.
+            Stat::make(self::STAGES['handover'], static::visibleRequests()->where('status', 'handover')->count())
+                ->description($late > 0 ? "{$late} di antaranya terlambat" : 'Belum ada yang lewat batas 7 hari')
+                ->color($late > 0 ? 'warning' : 'gray')
+                ->url($stageUrl('handover')),
             Stat::make(self::STAGES['late'], $late)
                 ->description(match (true) {
                     $late === 0 => 'Tidak ada yang terlambat',

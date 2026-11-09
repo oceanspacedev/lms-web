@@ -14,8 +14,13 @@ use App\Services\Trash\TrashHandler;
 use App\Services\Trash\TrashManager;
 use App\Services\Trash\UserTrashHandler;
 use App\Services\WaghubService;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Schema;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Http\Request;
@@ -38,10 +43,57 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
+     * Layar Hak Akses (Shield) menampilkan "Nama Guard" berisi "web": istilah teknis yang tidak berarti bagi pengguna.
+     * Aplikasi hanya memakai guard web, jadi kolom dan isiannya disembunyikan; isian tetap terkirim agar nilai bawaannya tersimpan.
+     */
+    private function hideGuardNameOnRoleScreens(): void
+    {
+        TextColumn::configureUsing(function (TextColumn $column): void {
+            if ($column->getName() === 'guard_name') {
+                $column->hidden();
+            }
+        });
+        TextInput::configureUsing(function (TextInput $input): void {
+            if ($input->getName() === 'guard_name') {
+                $input->hidden()->dehydratedWhenHidden();
+            }
+        });
+    }
+
+    /**
+     * Tanggal yang formatnya tidak ditulis langsung (mis. kolom "Terakhir Diubah" bawaan Shield) memakai format Indonesia
+     * yang sama dengan halaman lain ("09 Nov 2026 10:36") dan jam WIB. Format/zona yang ditulis pada kolom tetap diutamakan.
+     */
+    private function useIndonesianDateDefaults(): void
+    {
+        Table::configureUsing(fn (Table $table): Table => $table->defaultDateDisplayFormat('d M Y')->defaultDateTimeDisplayFormat('d M Y H:i'));
+        Schema::configureUsing(fn (Schema $schema): Schema => $schema->defaultDateDisplayFormat('d M Y')->defaultDateTimeDisplayFormat('d M Y H:i'));
+        TextColumn::configureUsing(function (TextColumn $column): void {
+            if (in_array($column->getName(), ['created_at', 'updated_at'], true)) {
+                $column->timezone(config('lms.reminder_timezone'));
+            }
+        });
+    }
+
+    /**
+     * Placeholder pilihan mengikuti labelnya ("Pilih badan usaha") alih-alih "Pilih salah satu opsi" yang sama di semua isian.
+     * Placeholder yang ditulis langsung pada isian tetap dipakai karena dipasang setelah konfigurasi ini.
+     */
+    private function useLabelBasedSelectPlaceholders(): void
+    {
+        Select::configureUsing(fn (Select $select): Select => $select->placeholder(fn (Select $component): string => 'Pilih '.collect(explode(' ', strip_tags((string) $component->getLabel())))
+            ->map(fn (string $word): string => mb_strtoupper($word) === $word ? $word : mb_strtolower($word))
+            ->implode(' ')));
+    }
+
+    /**
      * Bootstrap any application services.
      */
     public function boot(): void
     {
+        $this->hideGuardNameOnRoleScreens();
+        $this->useLabelBasedSelectPlaceholders();
+        $this->useIndonesianDateDefaults();
         Livewire::component('phone-login', PhoneLogin::class);
         Livewire::component('email-login', EmailLogin::class);
 

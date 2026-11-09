@@ -45,7 +45,7 @@ class ExpiringDocuments extends TableWidget
                 TextColumn::make('title')->label('Judul')->searchable(),
                 TextColumn::make('company.name')->label('Badan Usaha')->formatStateUsing(fn (string $state, Document $record): string => $record->company?->displayName() ?? $state),
                 TextColumn::make('documentType.name')->label('Jenis Dokumen')->formatStateUsing(fn (string $state, Document $record): string => $record->documentType?->displayName() ?? $state),
-                TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y'),
+                TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d M Y'),
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),

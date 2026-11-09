@@ -33,7 +33,7 @@ class UsersTable
                     ->color(fn (User $record): string => $record->isActive() && ! $record->trashed() ? 'success' : 'gray')
                     ->visibleFrom(TrashActions::statusVisibleFrom())
                     ->description(fn (User $record): ?string => $record->isActive() || $record->trashed() ? null
-                        : 'Dinonaktifkan oleh '.($record->deactivatedBy?->name ?? '-').' pada '.$record->deactivated_at->timezone(config('lms.reminder_timezone'))->format('d/m/Y H:i')),
+                        : 'Dinonaktifkan oleh '.($record->deactivatedBy?->name ?? '-').' pada '.$record->deactivated_at->timezone(config('lms.reminder_timezone'))->translatedFormat('d M Y H:i')),
                 TrashActions::deletedColumn(),
             ])
             ->filters([

@@ -153,13 +153,16 @@ class RequestMonitoringTest extends TestCase
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke(Livewire::test(WaitingRequestsOverview::class)->instance());
 
         $this->assertSame(['Menunggu Pemeriksaan', 'Menunggu Tanda Tangan', 'Menunggu Fisik', 'Terlambat'], array_map(fn ($stat): string => (string) $stat->getLabel(), $stats));
-        $this->assertSame([2, 2, 3, 2], array_map(fn ($stat): int => $stat->getValue(), $stats));
+        // Menunggu Fisik menghitung semua yang belum diterima fisiknya, termasuk yang terlambat, agar angkanya tidak tampak nol saat ada yang menunggu.
+        $this->assertSame([2, 2, 5, 2], array_map(fn ($stat): int => $stat->getValue(), $stats));
         $this->assertSame('1 belum unggah scan lebih dari 7 hari', (string) $stats[1]->getDescription());
+        $this->assertSame('2 di antaranya terlambat', (string) $stats[2]->getDescription());
         $this->assertSame('1 belum ada alasan', (string) $stats[3]->getDescription());
         $this->assertSame('danger', $stats[3]->getColor());
         $this->assertStringContainsString('to_review', rawurldecode($stats[0]->getUrl()));
         $this->assertStringContainsString('scan_overdue', rawurldecode($stats[1]->getUrl()));
-        $this->assertStringContainsString('handover_on_time', rawurldecode($stats[2]->getUrl()));
+        $this->assertStringContainsString('[stage][value]=handover', rawurldecode($stats[2]->getUrl()));
+        $this->assertStringNotContainsString('handover_on_time', rawurldecode($stats[2]->getUrl()));
         $this->assertStringContainsString('late_no_reason', rawurldecode($stats[3]->getUrl()));
         $this->get($stats[3]->getUrl())->assertOk();
 

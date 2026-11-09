@@ -10,6 +10,6 @@
     <script src="{{ asset('js/request-form.js') }}" defer></script>
 </head>
 <body>
-    <main>@yield('content')</main>
+    <main><div class="brand"><img src="{{ asset('images/logo.svg') }}" alt="" width="32" height="32"><span>{{ config('app.name') }}</span></div>@yield('content')</main>
 </body>
 </html>

@@ -12,6 +12,7 @@ use App\Models\DocumentRequest;
 use App\Policies\DocumentRequestPolicy;
 use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -60,6 +61,15 @@ class EditDocumentRequest extends EditRecord
     {
         $policy = new DocumentRequestPolicy;
 
+        $cancel = Action::make('cancel')->label('Batalkan')->color('danger')->modalWidth('lg')
+            ->modalHeading('Batalkan pengajuan?')->modalSubmitActionLabel('Ya, batalkan')->modalCancelActionLabel('Kembali')
+            ->visible(fn (): bool => in_array($this->record->status, DocumentRequest::CANCELLABLE_STATUSES, true) && auth()->user()->can('cancel', $this->record))
+            ->schema([Textarea::make('note')->label('Alasan pembatalan')->required()->maxLength(4000)->rows(3)])
+            ->action(fn (array $data) => $this->runFlowAction(
+                fn () => $this->record->transition('cancelled', auth()->user(), $data['note']),
+                ['note'], 'Pengajuan dibatalkan', 'Pengajuan belum dibatalkan',
+            ));
+
         $flowActions = [
             Action::make('submit')->label('Ajukan')->visible(fn (): bool => $this->record->editableBy(auth()->user()) && auth()->user()->can('update', $this->record))
                 ->action(function (): void {
@@ -103,14 +113,6 @@ class EditDocumentRequest extends EditRecord
                     ['reason'], 'Alasan dicatat', 'Alasan belum dicatat',
                 )),
             MarkReceivedAction::make()->after(fn () => $this->refreshFormData(['status', 'history'])),
-            Action::make('cancel')->label('Batalkan')->color('danger')->modalWidth('lg')
-                ->modalHeading('Batalkan pengajuan?')->modalSubmitActionLabel('Ya, batalkan')->modalCancelActionLabel('Kembali')
-                ->visible(fn (): bool => in_array($this->record->status, DocumentRequest::CANCELLABLE_STATUSES, true) && auth()->user()->can('cancel', $this->record))
-                ->schema([Textarea::make('note')->label('Alasan pembatalan')->required()->maxLength(4000)->rows(3)])
-                ->action(fn (array $data) => $this->runFlowAction(
-                    fn () => $this->record->transition('cancelled', auth()->user(), $data['note']),
-                    ['note'], 'Pengajuan dibatalkan', 'Pengajuan belum dibatalkan',
-                )),
         ];
 
         return [
@@ -120,7 +122,11 @@ class EditDocumentRequest extends EditRecord
             // Pengajuan di tempat sampah hanya-baca: semua langkah alur disembunyikan sampai dipulihkan.
             ...array_map(fn (Action $action): Action => $action->hidden(fn (): bool => $this->record->trashed()), $flowActions),
             Action::make('document')->label('Buka Dokumen')->color('gray')->visible(fn (): bool => $this->record->document_id && auth()->user()->can('View:Document'))->url(fn (): ?string => $this->record->document_id ? DocumentResource::getUrl('view', ['record' => $this->record->document_id]) : null),
-            TrashActions::delete('pengajuan'),
+            // Aksi yang jarang dipakai dan berisiko dikumpulkan di menu Lainnya agar tidak sejajar dengan tombol utama (mis. Fisik Diterima).
+            ActionGroup::make([
+                $cancel->hidden(fn (): bool => $this->record->trashed()),
+                TrashActions::delete('pengajuan'),
+            ])->label('Lainnya')->icon('heroicon-m-ellipsis-horizontal')->color('gray')->button(),
         ];
     }
 
