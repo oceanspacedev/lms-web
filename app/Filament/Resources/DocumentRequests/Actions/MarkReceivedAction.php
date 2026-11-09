@@ -4,6 +4,7 @@ namespace App\Filament\Resources\DocumentRequests\Actions;
 
 use App\Models\Company;
 use App\Models\DocumentRequest;
+use App\Support\StorageFailure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
@@ -41,7 +42,7 @@ class MarkReceivedAction
                 Select::make('company_id')->label('Badan Usaha arsip')->options(fn (): array => Company::where('is_active', true)->pluck('name', 'id')->all())->searchable()->required()
                     ->helperText('Pengajuan ini belum memakai badan usaha yang terdaftar.')
                     ->visible(fn (DocumentRequest $record): bool => $record->company_id === null),
-                DatePicker::make('expiry_date')->label('Tanggal berakhir')->required()
+                DatePicker::make('expiry_date')->label('Tanggal berakhir')->native(false)->required()
                     ->helperText('Jenis dokumen ini punya masa berlaku, tetapi pengajuan belum mencantumkan tanggal berakhir.')
                     ->visible(fn (DocumentRequest $record): bool => $record->documentType->has_expiry && $record->expiry_date === null),
             ])
@@ -62,7 +63,7 @@ class MarkReceivedAction
                 } catch (Throwable $exception) {
                     report($exception);
                     $record->refresh();
-                    Notification::make()->title('Fisik belum ditandai diterima')->body('Terjadi gangguan sistem. Tidak ada yang berubah; coba lagi.')->danger()->send();
+                    Notification::make()->title('Fisik belum ditandai diterima')->body(StorageFailure::message($exception, 'Terjadi gangguan sistem. Tidak ada yang berubah; coba lagi.'))->danger()->send();
                     $action->cancel();
                 }
                 Notification::make()->title('Fisik diterima')->body('Pengajuan selesai dan dokumen sudah masuk menu Dokumen.')->success()->send();

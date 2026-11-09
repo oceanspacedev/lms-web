@@ -7,6 +7,7 @@ use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Schemas\DocumentVersionForm;
 use App\Models\Document;
+use App\Support\StorageFailure;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
@@ -99,7 +100,7 @@ class ViewDocument extends ViewRecord
                         ->mapWithKeys(fn (array $messages, string $field): array => ['mountedActions.0.data.'.$field => $messages])->all());
                 } catch (Throwable $exception) {
                     report($exception);
-                    Notification::make()->title('Versi baru belum tersimpan')->body('Penyimpanan gagal. Versi sebelumnya tetap aktif. Coba lagi.')->danger()->send();
+                    Notification::make()->title('Versi baru belum tersimpan')->body(StorageFailure::message($exception, 'Penyimpanan gagal. Versi sebelumnya tetap aktif. Coba lagi.'))->danger()->send();
 
                     throw new Halt;
                 }
