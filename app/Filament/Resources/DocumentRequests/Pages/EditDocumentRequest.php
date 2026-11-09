@@ -61,7 +61,7 @@ class EditDocumentRequest extends EditRecord
     {
         $policy = new DocumentRequestPolicy;
 
-        $cancel = Action::make('cancel')->label('Batalkan')->color('danger')->modalWidth('lg')
+        $cancel = Action::make('cancel')->label('Batalkan')->icon('heroicon-o-x-circle')->color('danger')->modalWidth('lg')
             ->modalHeading('Batalkan pengajuan?')->modalSubmitActionLabel('Ya, batalkan')->modalCancelActionLabel('Kembali')
             ->visible(fn (): bool => in_array($this->record->status, DocumentRequest::CANCELLABLE_STATUSES, true) && auth()->user()->can('cancel', $this->record))
             ->schema([Textarea::make('note')->label('Alasan pembatalan')->required()->maxLength(4000)->rows(3)])

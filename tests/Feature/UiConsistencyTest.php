@@ -14,6 +14,8 @@ use App\Support\FileSize;
 use BezhanSalleh\FilamentShield\Resources\Roles\Pages\ListRoles;
 use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -93,6 +95,13 @@ class UiConsistencyTest extends TestCase
             ->assertSeeInOrder(['Nama File Asli', 'Kontrak Asli.pdf', 'Nama File Saat Diunduh', $document->currentVersion->stored_name])
             ->assertSee('1,5 MB')->assertSee('01 Mar 2026')->assertSee('01 Mar 2027')->assertDontSee('01/03/2026');
         $this->assertSame('108 B', FileSize::format(108));
+    }
+
+    public function test_calendar_shows_the_picked_date_in_indonesian_order(): void
+    {
+        $this->assertSame('d M Y', DatePicker::make('tanggal')->native(false)->getDisplayFormat());
+        $this->assertSame('d M Y H:i', DateTimePicker::make('waktu')->native(false)->seconds(false)->getDisplayFormat());
+        $this->assertSame('d M Y H:i:s', DateTimePicker::make('waktu')->native(false)->getDisplayFormat());
     }
 
     public function test_cancel_and_delete_live_in_the_more_menu_on_request_detail(): void

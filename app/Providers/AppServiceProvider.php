@@ -14,6 +14,7 @@ use App\Services\Trash\TrashHandler;
 use App\Services\Trash\TrashManager;
 use App\Services\Trash\UserTrashHandler;
 use App\Services\WaghubService;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -68,6 +69,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Table::configureUsing(fn (Table $table): Table => $table->defaultDateDisplayFormat('d M Y')->defaultDateTimeDisplayFormat('d M Y H:i'));
         Schema::configureUsing(fn (Schema $schema): Schema => $schema->defaultDateDisplayFormat('d M Y')->defaultDateTimeDisplayFormat('d M Y H:i'));
+        // Kalender Filament menampilkan tanggal terpilih sebagai "Nov 30, 2026" bila tidak diatur; samakan dengan "30 Nov 2026".
+        DateTimePicker::configureUsing(fn (DateTimePicker $picker): DateTimePicker => $picker->defaultDateDisplayFormat('d M Y')->defaultDateTimeDisplayFormat('d M Y H:i')->defaultDateTimeWithSecondsDisplayFormat('d M Y H:i:s'));
         TextColumn::configureUsing(function (TextColumn $column): void {
             if (in_array($column->getName(), ['created_at', 'updated_at'], true)) {
                 $column->timezone(config('lms.reminder_timezone'));
