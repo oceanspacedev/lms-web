@@ -11,19 +11,19 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Akun dummy untuk pengujian manual, satu akun per role.
+ * Akun dummy untuk pengujian manual, satu akun per role (termasuk role buatan sendiri).
  *
- * Jalankan: php artisan db:seed --class=DummyAccountSeeder
- * Masuk dengan email {nama-role}@dummy.test dan kata sandi PASSWORD.
+ * Dipanggil DatabaseSeeder di environment local, atau manual: php artisan db:seed --class=DummyAccountSeeder
+ * Masuk dengan email {nama-role tanpa awalan dummy_}@test.com, misalnya legal@test.com, dan kata sandi PASSWORD.
  * Nomor WhatsApp dikosongkan agar pesan tidak sampai ke nomor sungguhan. Isi LMS_DUMMY_PHONE di .env
  * dengan nomor milik sendiri bila ingin menguji pengiriman.
- * Seeder ini menolak berjalan di production dan tidak dipanggil oleh DatabaseSeeder.
+ * Seeder ini menolak berjalan di production.
  */
 class DummyAccountSeeder extends Seeder
 {
-    public const PASSWORD = 'dummy-password';
+    public const PASSWORD = 'password123';
 
-    public const EMAIL_DOMAIN = 'dummy.test';
+    public const EMAIL_DOMAIN = 'test.com';
 
     /**
      * Role dasar untuk menguji alur dokumen dan pengajuan. Berawalan dummy_ agar tidak menimpa role buatan sendiri.
@@ -38,8 +38,9 @@ class DummyAccountSeeder extends Seeder
             'ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'Review:DocumentRequest', 'receive_reminder',
         ],
         'dummy_viewer' => ['ViewAny:Document', 'View:Document'],
-        'dummy_pemeriksa' => ['ViewAny:Document', 'View:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest'],
+        'dummy_pemeriksa' => ['ViewAny:Document', 'View:Document', 'Create:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest'],
         'dummy_penyetuju' => ['ViewAny:Document', 'View:Document', 'Create:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'Approve:DocumentRequest'],
+        'dummy_koordinator' => ['ViewAny:Document', 'View:Document', 'ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'ReceiveEscalation:DocumentRequest'],
         'dummy_pengaju' => ['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Create:DocumentRequest', 'Update:DocumentRequest'],
     ];
 
@@ -51,19 +52,20 @@ class DummyAccountSeeder extends Seeder
             return;
         }
 
-        Role::findOrCreate(config('filament-shield.super_admin.name'), 'web');
-        $this->call([
-            MonitoringPermissionSeeder::class, UserPermissionSeeder::class, DocumentMasterPermissionSeeder::class,
-            DocumentRequestPermissionSeeder::class, ReminderLogSeeder::class,
-        ]);
+        $this->call(PermissionSeeder::class);
+
         foreach (self::BASELINE_ROLES as $name => $permissions) {
-            Role::findOrCreate($name, 'web')->syncPermissions(array_map(fn (string $permission): Permission => Permission::findOrCreate($permission, 'web'), $permissions));
+            Role::findOrCreate($name, 'web')->syncPermissions(array_map(fn (string $permission): Permission => Permission::findByName($permission, 'web'), $permissions));
         }
+
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         Role::where('guard_name', 'web')->orderBy('name')->get()->each(function (Role $role): void {
-            $user = User::updateOrCreate(['email' => Str::slug($role->name).'@'.self::EMAIL_DOMAIN], [
-                'name' => 'Dummy '.Str::headline(Str::replaceStart('dummy_', '', $role->name)), 'password' => Hash::make(self::PASSWORD), 'phone' => env('LMS_DUMMY_PHONE'),
+            $label = Str::replaceStart('dummy_', '', $role->name);
+            $user = User::updateOrCreate(['email' => Str::slug($label).'@'.self::EMAIL_DOMAIN], [
+                'name' => Str::headline($label),
+                'password' => Hash::make(self::PASSWORD),
+                'phone' => env('LMS_DUMMY_PHONE'),
             ]);
             $user->syncRoles([$role]);
             $this->command?->line($user->email.' → '.$role->name);

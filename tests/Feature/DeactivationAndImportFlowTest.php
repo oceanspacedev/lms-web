@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Auth\WhatsAppLogin;
+use App\Filament\Auth\Pages\PhoneLogin;
 use App\Filament\Resources\DocumentRequests\Pages\EditDocumentRequest;
 use App\Filament\Resources\Documents\Pages\CreateDocument;
 use App\Filament\Resources\Documents\Pages\ImportDocuments;
@@ -21,7 +21,6 @@ use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentImporter;
 use App\Services\DocumentImportTemplate;
-use App\Services\UserDeactivator;
 use Database\Seeders\DummyAccountSeeder;
 use DateTimeInterface;
 use Filament\Actions\Testing\TestAction;
@@ -84,11 +83,11 @@ class DeactivationAndImportFlowTest extends TestCase
         Http::fake(['waghub.test/*' => Http::response(['status' => 'accepted'], 202)]);
 
         $this->seed(DummyAccountSeeder::class);
-        $this->reviewer = $this->dummy('dummy-pemeriksa', '6281200000001');
-        $this->approver = $this->dummy('dummy-penyetuju', '6281200000002');
-        $this->legal = $this->dummy('dummy-legal', '6281200000003');
+        $this->reviewer = $this->dummy('pemeriksa', '6281200000001');
+        $this->approver = $this->dummy('penyetuju', '6281200000002');
+        $this->legal = $this->dummy('legal', '6281200000003');
         $this->admin = $this->dummy('super-admin', '6281200000004');
-        $this->viewer = $this->dummy('dummy-viewer', '6281200000005');
+        $this->viewer = $this->dummy('viewer', '6281200000005');
         $this->company = Company::factory()->create(['name' => 'Alur Impor', 'legal_form' => 'PT', 'is_active' => true]);
         DocumentType::factory()->create(['name' => 'Perjanjian Sewa', 'has_expiry' => true]);
         DocumentType::factory()->withoutExpiry()->create(['name' => 'Akta Pendirian']);
@@ -465,16 +464,14 @@ class DeactivationAndImportFlowTest extends TestCase
     public function test_deactivated_leaver_hands_every_task_to_replacements_end_to_end(): void
     {
         $leaver = $this->reviewer;
-        $secondApprover = User::factory()->create(['name' => 'Penyetuju Cadangan', 'phone' => '6281200000006']);
-        $secondApprover->assignRole('dummy_penyetuju');
         $vendorType = DocumentType::factory()->create([
             'name' => 'Perjanjian Vendor', 'has_expiry' => true,
             'request_pic_id' => $leaver->id, 'request_reviewer_id' => $leaver->id, 'request_approver_id' => $leaver->id,
         ]);
 
         // 1. Sebelum keluar, staf masih bisa meminta kode masuk WhatsApp.
-        $otp = Livewire::test(WhatsAppLogin::class)->fillForm(['phone' => '081200000001'])->call('submit')->assertHasNoFormErrors()->assertSet('step', 'code');
-        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode masuk LMS Legal'));
+        $otp = Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081200000001'])->call('send')->assertHasNoFormErrors()->assertSet('awaitingOtp', true);
+        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode OTP LMS Legal'));
         preg_match('/\b(\d{6})\b/', $this->messagesTo('6281200000001')[0]['text'], $match);
         $oldCode = $match[1];
 
@@ -486,24 +483,24 @@ class DeactivationAndImportFlowTest extends TestCase
         $document = Document::where('title', 'Sewa Gudang Barat')->sole();
         $this->assertSame($leaver->id, $document->pic_user_id);
 
-        // 3. Pengajuan publik masuk dengan staf ini sebagai PIC, pemeriksa, dan penyetuju.
+        // 3. Pengajuan publik masuk dengan staf ini sebagai PIC dan pemeriksa; kolom penyetuju lama tidak lagi diisi.
         $this->logOut();
         $request = $this->submitPublicRequest($vendorType, 'Kontrak Vendor Katering');
-        $this->assertSame([$leaver->id, $leaver->id, $leaver->id], [$request->pic_user_id, $request->reviewer_id, $request->approver_id]);
+        $this->assertSame([$leaver->id, $leaver->id, null], [$request->pic_user_id, $request->reviewer_id, $request->approver_id]);
         DB::table('sessions')->insert([
             ['id' => 'sesi-staf-keluar', 'user_id' => $leaver->id, 'payload' => '', 'last_activity' => now()->timestamp],
             ['id' => 'sesi-admin', 'user_id' => $this->admin->id, 'payload' => '', 'last_activity' => now()->timestamp],
         ]);
         $leaverMessagesBefore = count($this->messagesTo('6281200000001'));
 
-        // 4. Admin menonaktifkan staf dan memilih pengganti per kelompok tugas, termasuk "Tim persetujuan".
+        // 4. Admin menonaktifkan staf dan memilih pengganti per kelompok tugas.
         $this->actingAs($this->admin);
         Livewire::test(EditUser::class, ['record' => $leaver->getRouteKey()])
             ->mountAction('deactivate')
             ->assertMountedActionModalSee(['1 dokumen sebagai PIC', '1 pengajuan berjalan', '1 jenis dokumen'])
-            ->assertFormFieldExists('approver', fn (Select $field): bool => array_key_first($field->getOptions()) === UserDeactivator::APPROVAL_TEAM
-                && ! array_key_exists($leaver->id, $field->getOptions()))
-            ->setActionData(['document_pic' => $this->viewer->id, 'reviewer' => $this->legal->id, 'approver' => UserDeactivator::APPROVAL_TEAM])
+            ->assertFormFieldDoesNotExist('approver')
+            ->assertFormFieldExists('reviewer', fn (Select $field): bool => ! array_key_exists($leaver->id, $field->getOptions()))
+            ->setActionData(['document_pic' => $this->viewer->id, 'reviewer' => $this->legal->id])
             ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertNotified('User dinonaktifkan');
@@ -525,11 +522,10 @@ class DeactivationAndImportFlowTest extends TestCase
         Livewire::test(Login::class)->fillForm(['email' => $leaver->email, 'password' => DummyAccountSeeder::PASSWORD])
             ->call('authenticate')->assertHasFormErrors(['email']);
         $this->assertGuest();
-        $otp->fillForm(['code' => $oldCode])->call('submit')->assertHasFormErrors(['code']);
+        $otp->set('data.otp', $oldCode)->call('verify')->assertHasFormErrors(['whatsapp_number']);
         $this->assertGuest();
-        $this->travel(2)->minutes();
-        Livewire::test(WhatsAppLogin::class)->fillForm(['phone' => '081200000001'])->call('submit')->assertHasNoFormErrors()->assertSet('step', 'code');
-        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode masuk LMS Legal'));
+        Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081200000001'])->call('send')->assertHasFormErrors(['whatsapp_number'])->assertSet('awaitingOtp', false);
+        $this->assertCount(1, $this->messagesTo('6281200000001', 'Kode OTP LMS Legal'));
 
         // 6. Pengajuan menggantung 2 hari: pengingat ke pemeriksa pengganti, bukan ke staf yang keluar.
         $this->travelTo(now()->setDate(2026, 10, 11)->setTime(8, 0));
@@ -542,20 +538,13 @@ class DeactivationAndImportFlowTest extends TestCase
         $this->assertStringContainsString('Tahap: Diperiksa', $stale[0]['text']);
         $this->assertCount($leaverMessagesBefore, $this->messagesTo('6281200000001'));
 
-        // 7. Pemeriksa pengganti benar-benar bisa meneruskan, lalu penyetuju mana pun dari tim bisa menyetujui.
+        // 7. Pemeriksa pengganti benar-benar bisa memeriksa dan mengeluarkan draf.
         $this->actingAs($this->legal);
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertActionVisible('review')
-            ->callAction('review')->assertHasNoActionErrors();
-        $request->refresh();
-        $this->assertSame('review', $request->status);
-        $this->assertTrue(Gate::forUser($this->approver)->allows('approve', $request));
-        $this->assertTrue(Gate::forUser($secondApprover)->allows('approve', $request));
-        $this->actingAs($secondApprover);
-        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertActionVisible('approve')
-            ->callAction('approve')->assertHasNoActionErrors();
-        $request->refresh();
-        $this->assertSame('approved', $request->status);
-        $this->assertSame($secondApprover->id, collect($request->history)->last()['user_id']);
+        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertActionVisible('revise')->assertActionVisible('reject');
+        $this->assertTrue(Gate::forUser($this->legal)->allows('issueDraft', $request));
+        $request->issueDraft(UploadedFile::fake()->createWithContent('draf-vendor.pdf', $this->pdf('draf-vendor.pdf')), $this->legal);
+        $this->assertSame('signing', $request->status);
+        $this->assertSame($this->legal->id, collect($request->history)->last()['user_id']);
 
         // 8. Pengajuan baru untuk jenis dokumen yang sama langsung diarahkan ke pengganti.
         $this->logOut();
@@ -602,11 +591,11 @@ class DeactivationAndImportFlowTest extends TestCase
             ->call('authenticate')->assertHasNoFormErrors();
         $this->assertAuthenticatedAs($leaver);
         $this->logOut();
-        $login = Livewire::test(WhatsAppLogin::class)->fillForm(['phone' => '081200000001'])->call('submit')->assertHasNoFormErrors();
-        $codes = $this->messagesTo('6281200000001', 'Kode masuk LMS Legal');
+        $login = Livewire::test(PhoneLogin::class)->fillForm(['whatsapp_number' => '081200000001'])->call('send')->assertHasNoFormErrors();
+        $codes = $this->messagesTo('6281200000001', 'Kode OTP LMS Legal');
         $this->assertCount(2, $codes);
         preg_match('/\b(\d{6})\b/', $codes[1]['text'], $match);
-        $login->fillForm(['code' => $match[1]])->call('submit')->assertHasNoFormErrors()->assertRedirect(Filament::getUrl());
+        $login->set('data.otp', $match[1])->call('verify')->assertHasNoFormErrors()->assertRedirect(Filament::getUrl());
         $this->assertAuthenticatedAs($leaver);
 
         // 12. Dinonaktifkan lagi, nomornya dipakai staf baru, lalu aktivasi ulang ditolak karena nomor bentrok.

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DocumentRequests;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\DocumentRequests\Pages\CreateDocumentRequest;
 use App\Filament\Resources\DocumentRequests\Pages\EditDocumentRequest;
 use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
@@ -49,17 +50,21 @@ class DocumentRequestResource extends Resource
         return $query->where(function (Builder $query) use ($user): void {
             $query->where('requester_id', $user->id);
             $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where('pic_user_id', $user->id));
-            foreach (['Review' => 'reviewer_id', 'Approve' => 'approver_id'] as $permission => $column) {
-                if ($user->can($permission.':DocumentRequest')) {
-                    $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull($column)->orWhere($column, $user->id)));
-                }
+            if ($user->can('Review:DocumentRequest')) {
+                $query->orWhere(fn (Builder $query): Builder => $query->where('status', '!=', 'draft')->where(fn (Builder $query): Builder => $query->whereNull('reviewer_id')->orWhere('reviewer_id', $user->id)->orWhereIn('status', DocumentRequest::LEGAL_VISIBLE_STATUSES)));
             }
         });
     }
 
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return TrashActions::routeBindingQuery(parent::getRecordRouteBindingEloquentQuery());
+    }
+
     /**
      * Batasi $query ke pengajuan yang bisa ditindaklanjuti user saat ini juga. Mengikuti DocumentRequestPolicy:
-     * diperiksa (review), disetujui (approve), diarsipkan (archive), atau dikirim ulang oleh pengaju (draf/revisi).
+     * diperiksa (review), dokumen fisik ditunggu tim legal (handover), dikirim ulang oleh pengaju (draf/revisi),
+     * serta scan dan dokumen fisik yang harus diserahkan pengaju (signing, handover).
      * Pengajuan publik tidak punya requester_id, jadi "bukan pengajuan sendiri" harus menerima NULL.
      *
      * @param  Builder<DocumentRequest>  $query
@@ -76,13 +81,11 @@ class DocumentRequestResource extends Resource
             if ($user->can('Review:DocumentRequest')) {
                 $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'submitted')->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
             }
-            if ($user->can('Approve:DocumentRequest')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'review')->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.approver_id')));
+            if ($user->can('Review:DocumentRequest') && $user->can('Create:Document')) {
+                // Dokumen fisik ditunggu tim legal: semua Staff Legal yang boleh mengarsipkan dapat menandainya diterima.
+                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'handover')->where($notOwnRequest));
             }
-            if ($user->can('Create:Document')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'approved')
-                    ->when(! $user->can('Approve:DocumentRequest'), fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)));
-            }
+            $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->whereIn('document_requests.status', ['signing', 'handover']));
             if ($user->can('Update:DocumentRequest')) {
                 $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->whereIn('document_requests.status', ['draft', 'revision']));
             }

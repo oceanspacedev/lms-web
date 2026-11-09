@@ -6,7 +6,7 @@ use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -20,7 +20,7 @@ class DocumentGlobalSearchTest extends TestCase
     {
         parent::setUp();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     public static function searchTerms(): array

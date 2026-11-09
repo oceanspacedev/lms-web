@@ -11,7 +11,6 @@ use App\Services\DocumentRequestReminderSender;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
-use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class RequestReminderTest extends TestCase
@@ -23,7 +22,6 @@ class RequestReminderTest extends TestCase
         parent::setUp();
         $this->travelTo(now()->setDate(2026, 10, 9)->setTime(8, 0));
         config(['services.waghub.url' => 'https://waghub.test', 'services.waghub.token' => 'test-token', 'services.waghub.purpose' => 'test-purpose']);
-        Permission::findOrCreate('Approve:DocumentRequest', 'web');
         Http::preventStrayRequests();
         Http::fake(['waghub.test/*' => Http::response(['status' => 'accepted'], 202)]);
     }
@@ -109,29 +107,9 @@ class RequestReminderTest extends TestCase
         $this->assertSame('6281200000001', DocumentRequestNotification::sole()->recipient_phone);
     }
 
-    public function test_review_stage_reminds_the_approver_or_all_approvers_when_unassigned(): void
-    {
-        $approver = $this->user('081200000002');
-        $this->request('review', attributes: ['approver_id' => $approver->id]);
-        $this->sendReminders();
-        $first = DocumentRequestNotification::sole();
-        $this->assertSame('approver', $first->recipient_kind);
-        $this->assertSame('6281200000002', $first->recipient_phone);
-        $this->assertStringContainsString('Tahap: Menunggu Persetujuan', $first->payload['message']['text']);
-
-        DocumentRequestNotification::query()->delete();
-        DocumentRequest::query()->update(['approver_id' => null]);
-        $this->user('081200000003')->givePermissionTo('Approve:DocumentRequest');
-        $this->user('081200000004')->givePermissionTo('Approve:DocumentRequest');
-        $this->user('081200000005');
-        $this->sendReminders();
-
-        $this->assertEqualsCanonicalizing(['6281200000003', '6281200000004'], DocumentRequestNotification::pluck('recipient_phone')->all());
-    }
-
     public function test_only_requests_waiting_for_staff_are_reminded(): void
     {
-        foreach (['draft', 'revision', 'approved', 'rejected', 'archived'] as $status) {
+        foreach (['draft', 'revision', 'review', 'approved', 'rejected', 'archived'] as $status) {
             $this->request($status, 10, ['reviewer_id' => $this->user()->id, 'approver_id' => $this->user()->id]);
         }
 

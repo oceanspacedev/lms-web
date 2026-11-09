@@ -11,8 +11,9 @@ use App\Filament\Resources\Documents\RelationManagers\VersionsRelationManager;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
+use App\Models\TrashLog;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -30,7 +31,7 @@ class DocumentTrashTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 5)->setTime(15, 0));
         Storage::fake('s3');
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     /** @param list<string> $permissions */
@@ -38,6 +39,16 @@ class DocumentTrashTest extends TestCase
     {
         $user = User::factory()->create();
         $user->givePermissionTo($permissions);
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    /** Pulihkan hanya untuk super admin; peran super admin mendapat semua izin dari PermissionSeeder. */
+    private function signInAsSuperAdmin(): User
+    {
+        $user = User::factory()->create();
+        $user->assignRole(config('filament-shield.super_admin.name'));
         $this->actingAs($user);
 
         return $user;
@@ -74,8 +85,11 @@ class DocumentTrashTest extends TestCase
         $list = Livewire::test(ListDocuments::class)
             ->assertCanSeeTableRecords([$other])->assertCanNotSeeTableRecords([$document]);
         $this->assertNotContains($document->id, $list->instance()->getTableQueryForExport()->pluck('documents.id')->all());
+        $list->assertTableFilterHidden('trashed');
 
-        $list->filterTable('trashed', false)->assertCanSeeTableRecords([$document])->assertCanNotSeeTableRecords([$other])
+        $this->signInAsSuperAdmin();
+        Livewire::test(ListDocuments::class)
+            ->filterTable('trashed', false)->assertCanSeeTableRecords([$document])->assertCanNotSeeTableRecords([$other])
             ->filterTable('trashed', true)->assertCanSeeTableRecords([$document, $other])
             ->filterTable('trashed', null)->assertCanSeeTableRecords([$other])->assertCanNotSeeTableRecords([$document]);
     }
@@ -89,16 +103,17 @@ class DocumentTrashTest extends TestCase
             ->mountAction('delete')
             ->assertMountedActionModalSee([
                 'Hapus dokumen ini?',
-                'hilang dari daftar',
-                'pengingat masa berlakunya berhenti',
-                'dapat dipulihkan oleh pengguna yang memiliki izin memulihkan dokumen',
-            ]);
+                'Dokumen dipindahkan ke tempat sampah dan hilang dari daftar. Super admin bisa memulihkannya atau menghapusnya permanen.',
+                'Pengingat masa berlakunya berhenti dan file tidak ikut dihapus.',
+                'Ya, hapus',
+            ])
+            ->assertMountedActionModalDontSee('izin memulihkan dokumen');
         $this->assertNotSoftDeleted($document);
     }
 
     public function test_restoring_from_the_list_brings_the_document_back_and_its_detail_page_works(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(ListDocuments::class)->assertCanNotSeeTableRecords([$document])
@@ -108,30 +123,29 @@ class DocumentTrashTest extends TestCase
 
         $this->assertNotSoftDeleted($document);
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSuccessful()->assertDontSee('Dokumen ini sudah dihapus')
+            ->assertSuccessful()->assertDontSee('Data ini ada di tempat sampah')
             ->assertActionVisible('download')->assertActionVisible('preview')->assertActionHidden('restore');
         $this->get(DocumentResource::getUrl('view', ['record' => $document]))->assertOk()->assertSee($document->title);
     }
 
-    public function test_trashed_rows_offer_only_view_and_restore(): void
+    public function test_trashed_rows_offer_only_view_restore_and_force_delete(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $trashed = $this->trashedDocument();
         $active = $this->document('Dokumen Aktif');
 
         Livewire::test(ListDocuments::class)->filterTable('trashed', true)
             ->assertCanSeeTableRecords([$trashed, $active])
-            ->assertTableActionVisible('view', $trashed)->assertTableActionVisible('restore', $trashed)
-            ->assertTableActionHidden('edit', $trashed)->assertTableActionHidden('download', $trashed)
-            ->assertTableActionVisible('view', $active)->assertTableActionVisible('edit', $active)
-            ->assertTableActionVisible('download', $active)->assertTableActionHidden('restore', $active)
-            ->assertTableActionDoesNotExist('forceDelete');
-        $this->assertFalse(DocumentResource::canForceDelete($trashed));
+            ->assertTableActionVisible('view', $trashed)->assertTableActionVisible('restore', $trashed)->assertTableActionVisible('forceDelete', $trashed)
+            ->assertTableActionHidden('edit', $trashed)->assertTableActionHidden('download', $trashed)->assertTableActionHidden('delete', $trashed)
+            ->assertTableActionVisible('view', $active)->assertTableActionVisible('edit', $active)->assertTableActionVisible('delete', $active)
+            ->assertTableActionVisible('download', $active)->assertTableActionHidden('restore', $active)->assertTableActionHidden('forceDelete', $active);
+        $this->assertTrue(DocumentResource::canForceDelete($trashed));
     }
 
     public function test_grid_marks_trashed_documents_as_deleted(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $trashed = $this->trashedDocument();
 
         Livewire::test(ListDocuments::class)->call('setDocumentView', 'grid')->filterTable('trashed', false)
@@ -140,36 +154,35 @@ class DocumentTrashTest extends TestCase
 
     public function test_trashed_document_detail_page_opens_with_notice_and_only_view_safe_actions(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
             ->assertSuccessful()
-            ->assertSee('Dokumen ini sudah dihapus')->assertSee('Dihapus pada 05/10/2026 22:00 WIB')
-            ->assertSee('Pulihkan dokumen untuk memakainya kembali')
-            ->assertActionVisible('restore')
+            ->assertSee('Data ini ada di tempat sampah — dihapus 05 Okt 2026 22:00 WIB. Pulihkan untuk mengubahnya.')
+            ->assertActionVisible('restore')->assertActionVisible('forceDelete')
             ->assertActionHidden('download')->assertActionHidden('preview')->assertActionHidden('edit')
-            ->assertActionHidden('renew')->assertActionHidden('updateVersion');
+            ->assertActionHidden('renew')->assertActionHidden('updateVersion')->assertActionHidden('delete');
         $this->get(DocumentResource::getUrl('view', ['record' => $document]))
-            ->assertOk()->assertSee('Dokumen ini sudah dihapus')->assertSee('Pulihkan');
+            ->assertOk()->assertSee('Data ini ada di tempat sampah')->assertSee('Pulihkan');
     }
 
     public function test_restoring_from_the_detail_page_clears_the_notice_and_returns_the_actions(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSee('Dokumen ini sudah dihapus')
+            ->assertSee('Data ini ada di tempat sampah')
             ->callAction('restore')->assertHasNoActionErrors()
-            ->assertDontSee('Dokumen ini sudah dihapus')
+            ->assertDontSee('Data ini ada di tempat sampah')
             ->assertActionHidden('restore')->assertActionVisible('download')->assertActionVisible('preview')->assertActionVisible('edit');
         $this->assertNotSoftDeleted($document);
     }
 
     public function test_trashed_document_cannot_be_edited_until_restored(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
 
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->assertForbidden();
@@ -180,24 +193,21 @@ class DocumentTrashTest extends TestCase
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->assertSuccessful();
     }
 
-    public function test_user_without_restore_permission_cannot_restore(): void
+    public function test_only_super_admin_can_restore_even_with_the_restore_permission(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Delete:Document']);
+        $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Delete:Document', 'Restore:Document', 'RestoreAny:Document']);
         $document = $this->trashedDocument();
 
         $this->assertFalse(DocumentResource::canRestore($document));
-        Livewire::test(ListDocuments::class)->filterTable('trashed', false)
-            ->assertCanSeeTableRecords([$document])->assertTableActionHidden('restore', $document);
-        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSuccessful()->assertSee('Dokumen ini sudah dihapus')->assertSee('Minta pengguna yang berhak memulihkan dokumen')
-            ->assertActionHidden('restore')
-            ->mountAction('restore')->assertActionNotMounted('restore');
+        Livewire::test(ListDocuments::class)->assertTableFilterHidden('trashed')
+            ->set('tableFilters.trashed.value', '0')->assertCanNotSeeTableRecords([$document]);
+        $this->get(DocumentResource::getUrl('view', ['record' => $document]))->assertNotFound();
         $this->assertSoftDeleted($document);
     }
 
     public function test_trashed_document_cannot_be_downloaded_until_restored(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->document();
         Storage::disk('s3')->buildTemporaryUrlsUsing(fn (): string => 'https://storage.test/signed');
         $this->get(route('documents.download', $document))->assertRedirect();
@@ -212,7 +222,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_deleting_and_restoring_are_recorded_in_the_activity_history(): void
     {
-        $user = $this->signInWith(['ViewAny:Document', 'View:Document', 'Update:Document', 'Delete:Document', 'Restore:Document']);
+        $user = $this->signInAsSuperAdmin();
         $document = $this->document();
 
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->callAction('delete')->assertHasNoActionErrors();
@@ -225,6 +235,7 @@ class DocumentTrashTest extends TestCase
         Livewire::test(EditDocument::class, ['record' => $document->getRouteKey()])->callAction('delete');
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])->callAction('restore')->assertHasNoActionErrors();
         $this->assertSame(['uploaded', 'deleted', 'restored', 'deleted', 'restored'], $document->activities()->orderBy('id')->pluck('event')->all());
+        $this->assertSame(['deleted', 'restored', 'deleted', 'restored'], TrashLog::where('subject_type', 'document')->where('subject_id', $document->id)->where('user_id', $user->id)->orderBy('id')->pluck('action')->all());
 
         Livewire::test(ActivitiesRelationManager::class, ['ownerRecord' => $document->fresh(), 'pageClass' => ViewDocument::class])
             ->assertSee('Dokumen dihapus')->assertSee('Dokumen dipulihkan');
@@ -232,7 +243,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_restoring_from_the_detail_page_refreshes_the_version_history(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
         $version = $document->currentVersion;
 
@@ -247,7 +258,7 @@ class DocumentTrashTest extends TestCase
 
     public function test_version_history_does_not_offer_downloads_for_a_trashed_document(): void
     {
-        $this->signInWith(['ViewAny:Document', 'View:Document', 'Restore:Document']);
+        $this->signInAsSuperAdmin();
         $document = $this->trashedDocument();
         $version = $document->currentVersion;
 

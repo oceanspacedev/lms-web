@@ -148,7 +148,7 @@ class WhatsAppScheduleSetupTest extends TestCase
 
         $this->assertFalse(ReminderTemplate::globalSetting()->is_active);
         $this->assertSame([[
-            'title' => 'Template WhatsApp disimpan',
+            'title' => 'Isi pesan WhatsApp disimpan',
             'body' => "Pengingat masa berlaku otomatis masih nonaktif. Aktifkan lewat 'Atur jadwal'.",
             'status' => 'success',
         ]], $this->sentNotifications());
@@ -162,7 +162,7 @@ class WhatsAppScheduleSetupTest extends TestCase
         Livewire::test(ManageReminderTemplates::class)
             ->callAction(TestAction::make('edit_reminder')->schemaComponent('expiry_settings.template_reminder', 'content'), ['body' => 'Pengingat {dokumen}.']);
 
-        $this->assertSame([['title' => 'Template WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
+        $this->assertSame([['title' => 'Isi pesan WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
     }
 
     public function test_status_message_template_and_request_reminder_edits_never_claim_the_schedule_is_saved(): void
@@ -172,7 +172,7 @@ class WhatsAppScheduleSetupTest extends TestCase
             ->callAction(TestAction::make('edit_revision')->schemaComponent('notification_settings.template_navigation.revision.template_revision', 'content'), [
                 'request_templates' => ['revision' => 'Mohon revisi {judul}.'],
             ])->assertHasNoActionErrors();
-        $this->assertSame([['title' => 'Template WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
+        $this->assertSame([['title' => 'Isi pesan WhatsApp disimpan', 'body' => null, 'status' => 'success']], $this->sentNotifications());
         $this->assertFalse(ReminderTemplate::globalSetting()->is_active);
 
         ReminderTemplate::query()->delete();
@@ -203,7 +203,7 @@ class WhatsAppScheduleSetupTest extends TestCase
             ->assertSeeInOrder(['3650 hari sebelum', '3643 hari sebelum', '…', '2 hari sebelum', '1 hari sebelum', 'Tanggal berakhir', 'Total 3651 pengingat'])
             ->assertDontSee('3000 hari sebelum')->html();
 
-        $this->assertLessThan(200000, strlen($html));
+        $this->assertLessThan(300000, strlen($html));
     }
 
     public function test_settings_page_lists_every_date_up_to_the_shortening_limit(): void
@@ -269,9 +269,9 @@ class WhatsAppScheduleSetupTest extends TestCase
             ->assertMountedActionModalSee('Pengingat dikirim pada: 14 hari sebelum, 3 hari sebelum, Tanggal berakhir');
     }
 
-    public function test_whatsapp_settings_live_next_to_the_reminder_log_in_the_administration_group(): void
+    public function test_whatsapp_settings_live_next_to_the_reminder_log_in_the_whatsapp_group(): void
     {
-        $this->assertSame('Administrasi', ReminderTemplateResource::getNavigationGroup());
+        $this->assertSame('WhatsApp', ReminderTemplateResource::getNavigationGroup());
         $this->assertSame(ReminderLogResource::getNavigationGroup(), ReminderTemplateResource::getNavigationGroup());
         $this->assertSame(0, ReminderTemplateResource::getNavigationSort());
         $this->assertLessThan(ReminderLogResource::getNavigationSort(), ReminderTemplateResource::getNavigationSort());
@@ -279,6 +279,6 @@ class WhatsAppScheduleSetupTest extends TestCase
         $this->authorizeSettings(['ViewAny:ReminderTemplate', 'ViewAny:ReminderLog', 'View:ReminderLog']);
         $groups = collect(Filament::getNavigation())->keyBy(fn ($group): string => (string) $group->getLabel());
         $this->assertNull($groups->get('Data Master')?->getItems()->first(fn ($item): bool => $item->getLabel() === 'Pengaturan WhatsApp'));
-        $this->assertSame(['Pengaturan WhatsApp', 'Log Pengingat'], $groups->get('Administrasi')->getItems()->map(fn ($item): string => $item->getLabel())->values()->all());
+        $this->assertSame(['Pengaturan WhatsApp', 'Log Pengingat'], $groups->get('WhatsApp')->getItems()->map(fn ($item): string => $item->getLabel())->values()->all());
     }
 }

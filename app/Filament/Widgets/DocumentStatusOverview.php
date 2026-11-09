@@ -10,9 +10,19 @@ use Illuminate\Support\Facades\Gate;
 
 class DocumentStatusOverview extends StatsOverviewWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected ?string $heading = 'Masa Berlaku Dokumen';
+
+    /** @var array<string, string> */
+    private const DESCRIPTIONS = [
+        'active' => 'Masih berlaku', 'expiring' => 'Perlu disiapkan perpanjangan', 'expired' => 'Sudah lewat tanggal berakhir', 'no_expiry' => 'Tidak punya tanggal berakhir',
+    ];
+
+    /** @var array<string, string> */
+    private const ICONS = [
+        'active' => 'heroicon-m-check-circle', 'expiring' => 'heroicon-m-clock', 'expired' => 'heroicon-m-exclamation-triangle', 'no_expiry' => 'heroicon-m-minus-circle',
+    ];
 
     public static function canView(): bool
     {
@@ -31,6 +41,9 @@ class DocumentStatusOverview extends StatsOverviewWidget
         return collect(Document::EXPIRY_STATUSES)->map(fn (string $label, string $status): Stat => Stat::make(
             $label, Document::query()->withExpiryStatus($status)->count(),
         )->color(Document::EXPIRY_STATUS_COLORS[$status])
+            // Keterangan berwarna membuat kartu bermasalah (kedaluwarsa, segera berakhir) langsung terlihat beda dari kartu Aktif.
+            ->description(self::DESCRIPTIONS[$status])
+            ->descriptionIcon(self::ICONS[$status])
             ->url(DocumentResource::getUrl('index', ['filters' => ['expiry_status' => ['value' => $status]]])))->values()->all();
     }
 }

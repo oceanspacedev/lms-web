@@ -149,7 +149,10 @@ class DocumentImporter
                 return $import;
             }
             // Satu tahap mengunggah hingga CHUNK_SIZE file ke penyimpanan; beri waktu lebih dari batas bawaan PHP.
-            @set_time_limit(300);
+            // Hanya untuk permintaan web: di konsol (termasuk PHPUnit) di Windows batas ini menghitung waktu dinding dan menempel di seluruh proses.
+            if (! app()->runningInConsole()) {
+                @set_time_limit(300);
+            }
 
             $rows = $import->rows;
             $processed = 0;

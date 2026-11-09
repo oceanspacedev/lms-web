@@ -15,8 +15,7 @@ use App\Models\User;
 use App\Services\DocumentImporter;
 use App\Services\DocumentImportTemplate;
 use Carbon\CarbonImmutable;
-use Database\Seeders\DocumentSeeder;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use DateTimeInterface;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,8 +60,7 @@ class DocumentImportTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         Storage::fake('s3');
         Storage::fake('local');
-        $this->seed(DocumentSeeder::class);
-        $this->seed(ReminderLogSeeder::class);
+        $this->seed(PermissionSeeder::class);
         ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30, 7], 'overdue_days' => [1, 7], 'body' => ReminderTemplate::DEFAULT_BODY]);
         $this->user = User::factory()->create();
         $this->user->givePermissionTo(['ViewAny:Document', 'View:Document', 'Create:Document']);
@@ -500,6 +498,23 @@ class DocumentImportTest extends TestCase
             $this->fail('Kolom wajib yang hilang harus ditolak.');
         } catch (ValidationException $exception) {
             $this->assertStringContainsString('Kolom wajib tidak ditemukan: Jenis Dokumen, Email PIC, Nama File', $exception->errors()['excel'][0]);
+        }
+    }
+
+    public function test_processing_a_chunk_in_the_console_does_not_change_the_php_time_limit(): void
+    {
+        $import = $this->check([$this->row()]);
+        $importer = app(DocumentImporter::class);
+        $importer->start($import, true);
+        $original = ini_get('max_execution_time');
+        ini_set('max_execution_time', '123');
+
+        try {
+            $importer->processChunk($import, $this->user, 1);
+
+            $this->assertSame('123', ini_get('max_execution_time'));
+        } finally {
+            ini_set('max_execution_time', (string) $original);
         }
     }
 

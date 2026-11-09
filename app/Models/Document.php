@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Trashable;
 use App\Services\StorageFileName;
+use App\Support\ActiveReference;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\DocumentFactory;
@@ -13,7 +15,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +59,17 @@ class Document extends Model
     }
 
     /** @use HasFactory<DocumentFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, Trashable;
+
+    public function trashSubject(): string
+    {
+        return 'document';
+    }
+
+    public function trashLabel(): string
+    {
+        return (string) $this->title;
+    }
 
     protected static function booted(): void
     {
@@ -69,17 +80,17 @@ class Document extends Model
 
     public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class)->withTrashed();
     }
 
     public function documentType(): BelongsTo
     {
-        return $this->belongsTo(DocumentType::class);
+        return $this->belongsTo(DocumentType::class)->withTrashed();
     }
 
     public function pic(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'pic_user_id');
+        return $this->belongsTo(User::class, 'pic_user_id')->withTrashed();
     }
 
     public function currentVersion(): BelongsTo
@@ -115,18 +126,6 @@ class Document extends Model
         });
     }
 
-    /** Keterangan waktu penghapusan dalam zona waktu aplikasi, mis. "Dihapus pada 05/10/2026 22:00 WIB"; null bila belum dihapus. */
-    public function deletedAtLabel(): ?string
-    {
-        if ($this->deleted_at === null) {
-            return null;
-        }
-
-        $timezone = config('lms.reminder_timezone');
-
-        return 'Dihapus pada '.$this->deleted_at->copy()->timezone($timezone)->format('d/m/Y H:i').' '.($timezone === 'Asia/Jakarta' ? 'WIB' : $timezone);
-    }
-
     public function scopeWithExpiryStatus(Builder $query, string $status): Builder
     {
         if ($status === 'no_expiry') {
@@ -147,7 +146,7 @@ class Document extends Model
         }
 
         $today = CarbonImmutable::today(config('lms.reminder_timezone'));
-        $typesByWindow = DocumentType::query()->where('has_expiry', true)->get()
+        $typesByWindow = DocumentType::withTrashed()->where('has_expiry', true)->get()
             ->groupBy(fn (DocumentType $type): int => self::expiringWindowDays($type));
 
         return $query->where(function (Builder $query) use ($status, $typesByWindow, $today): void {
@@ -209,18 +208,24 @@ class Document extends Model
         ];
     }
 
-    /** @param array<string, mixed> $data */
-    public static function archive(array $data, UploadedFile $file, User $uploader): self
+    /**
+     * Arsipkan dokumen baru beserta versi pertamanya. `$keep` memuat nilai lama yang tetap sah walau induknya nonaktif
+     * atau di tempat sampah (pengajuan berjalan yang diselesaikan); nilai baru harus aktif dan tidak di tempat sampah.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array{company_id?: int|string|null, document_type_id?: int|string|null, pic_user_id?: int|string|null}  $keep
+     */
+    public static function archive(array $data, UploadedFile $file, User $uploader, array $keep = []): self
     {
-        $documentType = DocumentType::findOrFail($data['document_type_id'] ?? null);
+        $documentType = DocumentType::withTrashed()->findOrFail($data['document_type_id'] ?? null);
         $data['expiry_date'] = $documentType->has_expiry ? ($data['expiry_date'] ?? null) : null;
         $validated = Validator::make([...$data, 'file' => $file], [
-            'company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)],
-            'document_type_id' => ['required', Rule::exists('document_types', 'id')->where('is_active', true)],
+            'company_id' => ['required', ActiveReference::rule('companies', $keep['company_id'] ?? null, ['is_active' => true])],
+            'document_type_id' => ['required', ActiveReference::rule('document_types', $keep['document_type_id'] ?? null, ['is_active' => true])],
             'title' => ['required', 'string', 'max:255'],
             'document_number' => ['nullable', 'string', 'max:255'],
             'counterparty' => ['nullable', 'string', 'max:255'],
-            'pic_user_id' => ['required', 'exists:users,id,deactivated_at,NULL'],
+            'pic_user_id' => ['required', ActiveReference::rule('users', $keep['pic_user_id'] ?? null, ['deactivated_at' => null])],
             'notes' => ['nullable', 'string', 'max:10000'],
             'change_note' => ['nullable', 'string', 'max:10000'],
             ...self::versionValidationRules($documentType->has_expiry, $data['issued_date'] ?? null),
@@ -316,7 +321,7 @@ class Document extends Model
     {
         $type = $this->documentType()->value('name');
         $filename = StorageFileName::build([
-            StorageFileName::companyName(Company::find($this->company_id)),
+            StorageFileName::companyName(Company::withTrashed()->find($this->company_id)),
             $type,
             $this->document_number,
             $this->title,

@@ -7,6 +7,7 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use RuntimeException;
+use Throwable;
 
 #[Signature('lms:send-reminders {--dry-run : Periksa jadwal tanpa mengirim atau membuat log}')]
 #[Description('Kirim pengingat WhatsApp untuk dokumen yang akan berakhir')]
@@ -16,8 +17,11 @@ class SendDocumentReminders extends Command
     {
         try {
             $result = $sender->run((bool) $this->option('dry-run'));
-        } catch (RuntimeException $exception) {
-            $this->error($exception->getMessage());
+        } catch (Throwable $exception) {
+            if (! $exception instanceof RuntimeException) {
+                report($exception);
+            }
+            $this->error($exception instanceof RuntimeException ? $exception->getMessage() : 'Pengiriman pengingat terhenti karena kesalahan tak terduga; lihat log aplikasi.');
 
             return self::FAILURE;
         }

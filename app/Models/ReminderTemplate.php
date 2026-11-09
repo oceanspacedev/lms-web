@@ -114,49 +114,107 @@ class ReminderTemplate extends Model
     ];
 
     public const REQUEST_REMINDER_EXAMPLE_VALUES = [
-        'nomor_pengajuan' => '123', 'judul' => 'Pengajuan Kontrak Dummy', 'pengaju' => 'Budi', 'perusahaan' => 'PT Dummy',
+        'nomor_pengajuan' => '123', 'judul' => 'PKS Sewa Gudang Cikarang', 'pengaju' => 'Budi', 'perusahaan' => 'PT Bahari Logistik Nusantara',
         'jenis_dokumen' => 'Kontrak', 'status' => 'Diperiksa', 'hari_menunggu' => '3', 'tautan' => 'https://contoh.test/admin/document-requests/123/edit',
     ];
 
     public const OVERDUE_VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Badan Usaha', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'hari_terlambat' => 'Hari Terlambat', 'pic' => 'Nama PIC'];
 
-    public const OVERDUE_EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'hari_terlambat' => '3', 'pic' => 'PIC Dummy'];
+    public const OVERDUE_EXAMPLE_VALUES = ['dokumen' => 'PKS Sewa Gudang Cikarang', 'nomor' => 'PKS/001/2026', 'perusahaan' => 'PT Bahari Logistik Nusantara', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'hari_terlambat' => '3', 'pic' => 'Sari Kusuma'];
 
-    public const EXAMPLE_VALUES = ['dokumen' => 'Kontrak Dummy', 'nomor' => 'DUMMY-001', 'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'sisa_hari' => '30', 'pic' => 'PIC Dummy'];
+    public const EXAMPLE_VALUES = ['dokumen' => 'PKS Sewa Gudang Cikarang', 'nomor' => 'PKS/001/2026', 'perusahaan' => 'PT Bahari Logistik Nusantara', 'jenis_dokumen' => 'Kontrak', 'tanggal_berakhir' => '2030-01-31', 'sisa_hari' => '30', 'pic' => 'Sari Kusuma'];
 
+    /** Jenis pesan pengajuan, diurutkan mengikuti jalannya pengajuan. Label dibuat pendek agar muat di daftar. */
     public const REQUEST_TEMPLATE_LABELS = [
-        'submitted' => 'Pengajuan diterima / diperiksa',
-        'review' => 'Menunggu persetujuan',
-        'approved' => 'Disetujui / menunggu tanda tangan',
+        'pic' => 'Pengajuan baru',
+        'submitted' => 'Pengajuan diterima',
         'revision' => 'Perlu revisi',
         'rejected' => 'Ditolak',
-        'archived' => 'Selesai / diarsipkan',
-        'pic' => 'Pengajuan baru untuk PIC',
+        'signing' => 'Draft siap',
+        'draft_replaced' => 'Draft diganti',
+        'scan_reminder' => 'Ingatkan unggah scan',
+        'handover' => 'Scan diterima',
+        'handover_staff' => 'Scan masuk',
+        'late_7' => 'Lewat batas',
+        'late_14' => 'Terlambat 1 minggu',
+        'late_28' => 'Terlambat 3 minggu',
+        'late_staff' => 'Terlambat (ke tim legal)',
+        'archived' => 'Selesai',
+        'cancelled' => 'Dibatalkan',
+    ];
+
+    /** Penjelasan singkat tiap jenis pesan pengajuan: siapa penerimanya dan kapan dikirim. */
+    public const REQUEST_TEMPLATE_HINTS = [
+        'pic' => 'Ke PIC pengajuan (diatur di Jenis Dokumen), saat ada pengajuan baru masuk.',
+        'submitted' => 'Ke pengaju, saat pengajuannya diterima dan mulai diperiksa.',
+        'revision' => 'Ke pengaju, saat tim legal meminta perbaikan. Catatan revisi ikut dikirim.',
+        'rejected' => 'Ke pengaju, saat pengajuan ditolak. Alasan penolakan ikut dikirim.',
+        'signing' => 'Ke pengaju, saat draft dokumen siap ditandatangani.',
+        'draft_replaced' => 'Ke pengaju, saat tim legal mengganti draft yang sudah dikirim.',
+        'scan_reminder' => 'Ke pengaju, sekali, bila 7 hari setelah draft keluar scan bertanda tangan belum diunggah.',
+        'handover' => 'Ke pengaju, saat scan bertanda tangan masuk. Memuat batas penyerahan dokumen fisik.',
+        'handover_staff' => 'Ke tim legal, saat scan bertanda tangan masuk dan dokumen fisik mulai ditunggu.',
+        'late_7' => 'Ke pengaju, sehari setelah batas penyerahan lewat (hari ke-8 setelah scan masuk) bila dokumen fisik belum diterima.',
+        'late_14' => 'Ke pengaju, bila sampai hari ke-15 setelah scan masuk dokumen fisik belum diterima (terlambat sekitar 1 minggu).',
+        'late_28' => 'Ke pengaju, bila sampai hari ke-29 setelah scan masuk dokumen fisik belum diterima (terlambat sekitar 3 minggu).',
+        'late_staff' => 'Ke tim legal bersama pesan "Terlambat 1 minggu", dan juga ke koordinator bersama pesan "Terlambat 3 minggu".',
+        'archived' => 'Ke pengaju, saat dokumen fisik diterima dan pengajuan selesai.',
+        'cancelled' => 'Ke pengaju, saat pengajuan dibatalkan. Alasan pembatalan ikut dikirim.',
+    ];
+
+    /** Status pengajuan pada contoh pesan untuk template yang namanya bukan nama status. */
+    public const REQUEST_TEMPLATE_EXAMPLE_STATUSES = [
+        'draft_replaced' => 'signing', 'handover_staff' => 'handover', 'scan_reminder' => 'signing',
+        'late_7' => 'handover', 'late_14' => 'handover', 'late_28' => 'handover', 'late_staff' => 'handover', 'pic' => 'submitted',
     ];
 
     public const DEFAULT_REQUEST_TEMPLATES = [
+        'pic' => "Pengajuan baru #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\n{tautan}",
         'submitted' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan diterima dan sedang diperiksa.{baris_catatan}\n{tautan}",
-        'review' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan sedang diproses untuk persetujuan.{baris_catatan}\n{tautan}",
-        'approved' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan disetujui. Menunggu dokumen final.{baris_catatan}\n{tautan}",
         'revision' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan perlu direvisi.{baris_catatan}\n{tautan}",
         'rejected' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan ditolak.{baris_catatan}\n{tautan}",
-        'archived' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan selesai. Dokumen final telah diarsipkan.{baris_catatan}\n{tautan}",
-        'pic' => "Pengajuan baru #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\n{tautan}",
+        'signing' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDraft dokumen sudah dikeluarkan. Silakan unduh dan cetak, tanda tangani (dan cap bila perlu), lalu unggah scan-nya lewat tautan ini.{baris_catatan}\n{tautan}",
+        'draft_replaced' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDraft dokumen diperbarui. Gunakan draft terbaru untuk ditandatangani.{baris_catatan}\n{tautan}",
+        'scan_reminder' => "Pengajuan #{nomor_pengajuan}\n{judul}\nScan dokumen bertanda tangan belum diunggah. Mohon segera unggah.\n{tautan}",
+        'handover' => "Pengajuan #{nomor_pengajuan}\n{judul}\nScan bertanda tangan sudah diterima. Serahkan dokumen asli ke tim legal paling lambat {batas_waktu}.\n{tautan}",
+        'handover_staff' => "Scan bertanda tangan masuk\nPengajuan #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\nDokumen fisik harus diterima paling lambat {batas_waktu}.\n{tautan}",
+        'late_7' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik belum diserahkan. Batas {batas_waktu} sudah lewat {hari_terlambat} hari.\nMohon segera serahkan dokumen asli ke tim legal dan tulis alasan keterlambatan lewat tautan ini:\n{tautan}",
+        'late_14' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik masih belum diserahkan. Batas {batas_waktu} sudah lewat {hari_terlambat} hari.\nMohon segera serahkan dokumen asli ke tim legal dan tulis alasan keterlambatan lewat tautan ini:\n{tautan}",
+        'late_28' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik belum juga diserahkan. Batas {batas_waktu} sudah lewat {hari_terlambat} hari.\nMohon segera serahkan dokumen asli ke tim legal dan tulis alasan keterlambatan lewat tautan ini:\n{tautan}",
+        'late_staff' => "Dokumen fisik terlambat\nPengajuan #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\nBatas {batas_waktu} sudah lewat {hari_terlambat} hari.\nAlasan terakhir: {alasan_terlambat}\n{tautan}",
+        'archived' => "Pengajuan #{nomor_pengajuan}\n{judul}\nDokumen fisik sudah diterima. Pengajuan selesai dan dokumen telah diarsipkan.{baris_catatan}\n{tautan}",
+        'cancelled' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan dibatalkan.{baris_catatan}\n{tautan}",
     ];
 
     public const REQUEST_VARIABLE_LABELS = [
         'nomor_pengajuan' => 'Nomor pengajuan', 'judul' => 'Judul pengajuan', 'pengaju' => 'Nama pengaju',
         'perusahaan' => 'Nama badan usaha', 'jenis_dokumen' => 'Jenis dokumen', 'pic' => 'Nama PIC',
-        'status' => 'Status pengajuan', 'catatan' => 'Catatan pemeriksa',
+        'status' => 'Status pengajuan', 'catatan' => 'Catatan / alasan dari tim legal',
         'baris_catatan' => 'Baris catatan (hanya jika ada)', 'tautan' => 'Tautan pengajuan',
+        'batas_waktu' => 'Batas penyerahan dokumen fisik', 'hari_terlambat' => 'Hari terlambat',
+        'alasan_terlambat' => 'Alasan keterlambatan terakhir',
     ];
 
     public const REQUEST_EXAMPLE_VALUES = [
-        'nomor_pengajuan' => '123', 'judul' => 'Pengajuan Kontrak Dummy', 'pengaju' => 'Budi',
-        'perusahaan' => 'PT Dummy', 'jenis_dokumen' => 'Kontrak', 'pic' => 'PIC Dummy',
+        'nomor_pengajuan' => '123', 'judul' => 'PKS Sewa Gudang Cikarang', 'pengaju' => 'Budi',
+        'perusahaan' => 'PT Bahari Logistik Nusantara', 'jenis_dokumen' => 'Kontrak', 'pic' => 'Sari Kusuma',
         'status' => 'Perlu Revisi', 'catatan' => 'Mohon lengkapi lampiran.',
         'baris_catatan' => "\nCatatan: Mohon lengkapi lampiran.", 'tautan' => 'https://contoh.test/pengajuan/123',
+        'batas_waktu' => '11 Nov 2030', 'hari_terlambat' => '3',
+        'alasan_terlambat' => 'Direktur sedang dinas luar kota.',
     ];
+
+    /**
+     * Nilai contoh untuk pratinjau dan pesan uji template pengajuan; `status` mengikuti tahap template tersebut.
+     *
+     * @return array<string, string>
+     */
+    public static function requestExampleValues(string $event): array
+    {
+        $status = self::REQUEST_TEMPLATE_EXAMPLE_STATUSES[$event] ?? $event;
+
+        return [...self::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$status] ?? 'Diperiksa'];
+    }
 
     public function requestTemplate(string $event): ?string
     {

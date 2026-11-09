@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
@@ -17,7 +18,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
@@ -31,23 +32,18 @@ class UserResource extends Resource
 
     protected static ?string $pluralModelLabel = 'User';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Data Master';
+    protected static string|\UnitEnum|null $navigationGroup = 'Pengguna & Akses';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 1;
 
     protected static bool $isGloballySearchable = false;
 
-    public static function canDelete(Model $record): bool
-    {
-        return false;
-    }
-
-    public static function canDeleteAny(): bool
-    {
-        return false;
-    }
-
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return TrashActions::routeBindingQuery(parent::getRecordRouteBindingEloquentQuery());
+    }
 
     /**
      * Aksi Nonaktifkan yang sama untuk daftar dan halaman ubah user. Semua tugas user wajib dialihkan ke pengganti
@@ -55,7 +51,7 @@ class UserResource extends Resource
      */
     public static function deactivateAction(): Action
     {
-        return Action::make('deactivate')->label('Nonaktifkan')->icon(Heroicon::OutlinedNoSymbol)->color('danger')
+        return Action::make('deactivate')->label('Nonaktifkan')->icon(Heroicon::OutlinedNoSymbol)->color('warning')
             ->visible(fn (User $record): bool => app(UserDeactivator::class)->deactivationDenialReason(auth()->user(), $record) === null)
             ->modalHeading(fn (User $record): string => "Nonaktifkan {$record->name}?")
             ->modalDescription(fn (User $record): HtmlString => static::workloadSummary($record))
@@ -100,14 +96,17 @@ class UserResource extends Resource
             });
     }
 
-    /** Ringkasan tugas user yang dihitung dari database, untuk deskripsi modal Nonaktifkan. */
-    private static function workloadSummary(User $record): HtmlString
+    /**
+     * Ringkasan tugas user yang dihitung dari database, untuk deskripsi modal Nonaktifkan dan Hapus.
+     * Di modal Hapus (`$forDeletion`) peran dan izin disebut tersimpan untuk pemulihan, bukan untuk diaktifkan kembali.
+     */
+    public static function workloadSummary(User $record, bool $forDeletion = false): HtmlString
     {
         $workload = app(UserDeactivator::class)->workload($record);
         $lines = array_filter([
             $workload['documents'] > 0 ? "{$workload['documents']} dokumen sebagai PIC (termasuk dokumen yang dihapus)" : null,
-            $workload['requests'] > 0 ? "{$workload['requests']} pengajuan berjalan sebagai PIC, pemeriksa, atau penyetuju" : null,
-            $workload['document_types'] > 0 ? "{$workload['document_types']} jenis dokumen sebagai PIC, pemeriksa, atau penyetuju pengajuan" : null,
+            $workload['requests'] > 0 ? "{$workload['requests']} pengajuan berjalan sebagai PIC atau pemeriksa" : null,
+            $workload['document_types'] > 0 ? "{$workload['document_types']} jenis dokumen sebagai PIC atau pemeriksa pengajuan" : null,
         ]);
         $summary = $lines === []
             ? '<p>User ini tidak memegang tugas apa pun.</p>'
@@ -117,23 +116,24 @@ class UserResource extends Resource
             $summary .= "<p>{$workload['drafts']} draf pengajuan milik user ini dibiarkan apa adanya.</p>";
         }
 
-        return new HtmlString($summary.'<p>User langsung keluar dari aplikasi. Peran dan izinnya tetap disimpan agar bisa diaktifkan kembali.</p>');
+        $kept = $forDeletion ? 'Peran dan izinnya tetap disimpan bila user dipulihkan.' : 'Peran dan izinnya tetap disimpan agar bisa diaktifkan kembali.';
+
+        return new HtmlString($summary."<p>User langsung keluar dari aplikasi. {$kept}</p>");
     }
 
     /**
      * Satu Select wajib per kelompok tugas yang jumlahnya lebih dari nol; opsinya hanya kandidat yang sah.
+     * Dipakai modal Nonaktifkan dan modal Hapus; nama field sama dengan kunci kelompok UserDeactivator.
      *
      * @return list<Select>
      */
-    private static function replacementFields(User $record): array
+    public static function replacementFields(User $record): array
     {
         $deactivator = app(UserDeactivator::class);
         $fields = [
             UserDeactivator::GROUP_DOCUMENT_PIC => fn (): Select => Select::make(UserDeactivator::GROUP_DOCUMENT_PIC)->label('Pengganti PIC dokumen'),
             UserDeactivator::GROUP_REVIEWER => fn (): Select => Select::make(UserDeactivator::GROUP_REVIEWER)->label('Pengganti pemeriksa / PIC pengajuan')
                 ->helperText('Hanya user dengan izin "Periksa pengajuan". PIC pengajuan pada jenis dokumen juga harus punya nomor WhatsApp valid.'),
-            UserDeactivator::GROUP_APPROVER => fn (): Select => Select::make(UserDeactivator::GROUP_APPROVER)->label('Pengganti penyetuju')
-                ->helperText('"Tim persetujuan" berarti pengajuan bisa disetujui siapa saja yang punya izin "Setujui pengajuan".'),
         ];
 
         return array_map(fn (string $group): Select => $fields[$group]()

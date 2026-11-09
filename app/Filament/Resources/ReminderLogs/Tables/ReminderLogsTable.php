@@ -19,7 +19,7 @@ class ReminderLogsTable
                 ->description(fn (ReminderLog $record): ?string => $record->documentVersion?->document?->trashed() ? 'Dokumen dihapus' : null)
                 ->searchable(query: fn (Builder $query, string $search): Builder => $query->orWhereHas('documentVersion.document', fn (Builder $document): Builder => $document->withTrashed()
                     ->whereRaw("lower(documents.title) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%']))),
-            TextColumn::make('documentVersion.document.company.name')->label('Badan Usaha')->searchable(),
+            TextColumn::make('documentVersion.document.company.name')->label('Badan Usaha')->searchable()->formatStateUsing(fn (string $state, ReminderLog $record): string => $record->documentVersion?->document?->company?->displayName() ?? $state),
             TextColumn::make('documentVersion.version_number')->label('Versi')->prefix('v'),
             TextColumn::make('offset_days')->label('Pengingat')->formatStateUsing(fn (int $state): string => $state < 0 ? 'H+'.abs($state) : 'H-'.$state),
             TextColumn::make('recipient_phone')->label('WhatsApp')->placeholder('-'),

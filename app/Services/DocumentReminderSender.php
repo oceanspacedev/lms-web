@@ -112,7 +112,12 @@ class DocumentReminderSender
                 return null;
             }
             try {
-                $payload = $log->request_payload ?? $this->payload($document, $log, $today);
+                // Payload tersimpan (antre, gagal, atau kirim ulang) yang menuju user di tempat sampah disusun ulang ke penerima yang sah.
+                $payload = $log->request_payload;
+                if ($payload !== null && User::phoneBelongsOnlyToTrashedUsers($payload['recipient']['value'] ?? null)) {
+                    $payload = null;
+                }
+                $payload ??= $this->payload($document, $log, $today);
                 $log->update(['request_payload' => $payload, 'recipient_phone' => $payload['recipient']['value']]);
                 $response = $this->waghub->send($payload, $key);
                 $log->update(['provider_response' => $response->json() ?? ['http_status' => $response->status()]]);
@@ -123,6 +128,7 @@ class DocumentReminderSender
 
                 return 'accepted';
             } catch (Throwable $exception) {
+                report($exception);
                 $log->update(['status' => 'failed', 'error_message' => $exception instanceof RuntimeException && ! $exception instanceof ConnectionException
                     ? $exception->getMessage() : 'Koneksi WagHub gagal; pengiriman akan dicoba kembali.']);
 
@@ -167,7 +173,8 @@ class DocumentReminderSender
     /** @return array<string, mixed> */
     private function payload(Document $document, ReminderLog $log, CarbonImmutable $today): array
     {
-        $phone = $document->pic?->isActive() ? $this->waghub->normalizePhone($document->pic->phone) : null;
+        // PIC nonaktif atau di tempat sampah tidak menerima WhatsApp; pesan beralih ke penerima cadangan.
+        $phone = $document->pic?->isActive() && ! $document->pic->trashed() ? $this->waghub->normalizePhone($document->pic->phone) : null;
         if ($phone === null) {
             foreach (User::permission('receive_reminder')->active()->orderBy('id')->cursor() as $user) {
                 $phone = $this->waghub->normalizePhone($user->phone);

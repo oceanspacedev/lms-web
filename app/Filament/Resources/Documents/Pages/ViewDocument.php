@@ -2,9 +2,12 @@
 
 namespace App\Filament\Resources\Documents\Pages;
 
+use App\Filament\Concerns\HasBackToListAction;
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Schemas\DocumentVersionForm;
 use App\Models\Document;
+use App\Support\StorageFailure;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
@@ -19,6 +22,8 @@ use Throwable;
 
 class ViewDocument extends ViewRecord
 {
+    use HasBackToListAction;
+
     protected static string $resource = DocumentResource::class;
 
     public function getTitle(): string
@@ -28,14 +33,17 @@ class ViewDocument extends ViewRecord
 
     public function getSubheading(): ?string
     {
-        return collect([$this->getRecord()->company?->name, $this->getRecord()->documentType?->name])
+        return collect([$this->getRecord()->company?->displayName(), $this->getRecord()->documentType?->displayName()])
             ->filter()->implode(' · ');
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            DocumentResource::restoreAction()->icon('heroicon-o-arrow-uturn-left')->color('primary'),
+            $this->backToListAction(),
+            TrashActions::restore('dokumen')
+                ->after(fn () => $this->dispatch('document-version-updated')),
+            TrashActions::forceDelete('dokumen'),
             $this->previewAction(),
             Action::make('download')->label('Unduh File')->icon('heroicon-o-arrow-down-tray')
                 ->url(fn (): string => route('documents.download', $this->getRecord()))->openUrlInNewTab()
@@ -49,6 +57,7 @@ class ViewDocument extends ViewRecord
                 ->fillForm(fn (): array => $this->getRecord()->renewalSuggestion()),
             $this->versionAction('updateVersion')->label('Unggah Versi Baru')->icon('heroicon-o-arrow-up-tray')->color('gray')
                 ->modalHeading('Perbarui Dokumen'),
+            TrashActions::delete('dokumen')->label('Hapus Dokumen'),
         ];
     }
 
@@ -91,7 +100,7 @@ class ViewDocument extends ViewRecord
                         ->mapWithKeys(fn (array $messages, string $field): array => ['mountedActions.0.data.'.$field => $messages])->all());
                 } catch (Throwable $exception) {
                     report($exception);
-                    Notification::make()->title('Versi baru belum tersimpan')->body('Penyimpanan gagal. Versi sebelumnya tetap aktif. Coba lagi.')->danger()->send();
+                    Notification::make()->title('Versi baru belum tersimpan')->body(StorageFailure::message($exception, 'Penyimpanan gagal. Versi sebelumnya tetap aktif. Coba lagi.'))->danger()->send();
 
                     throw new Halt;
                 }

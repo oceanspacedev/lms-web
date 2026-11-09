@@ -6,7 +6,7 @@ use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +25,7 @@ class DocumentStorageDiskTest extends TestCase
         Storage::fake('s3');
         Storage::fake('local');
         Storage::fake('public');
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     private function document(string $content = "%PDF-1.4\nversi 1"): Document

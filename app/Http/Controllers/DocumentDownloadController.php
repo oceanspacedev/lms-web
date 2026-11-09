@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use League\Flysystem\FilesystemException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class DocumentDownloadController extends Controller
 {
@@ -42,26 +43,33 @@ class DocumentDownloadController extends Controller
         $fallback = str_replace('%', '_', Str::ascii($filename));
         $disposition = HeaderUtils::makeDisposition($inline ? 'inline' : 'attachment', $filename, $fallback);
 
-        if (config("filesystems.disks.{$version->disk}.driver") === 's3') {
-            $url = $disk->temporaryUrl($version->file_path, now()->addMinutes(config('lms.signed_url_minutes')), [
-                'ResponseContentDisposition' => $disposition,
-                'ResponseContentType' => $version->mime_type,
-            ]);
-            $response = redirect()->away($url)->withHeaders(['Cache-Control' => 'no-store, private']);
-        } else {
-            $response = $disk->response($version->file_path, $fallback, [
-                'Content-Type' => $version->mime_type,
-                'Content-Disposition' => $disposition,
-                'Cache-Control' => 'no-store, private',
-                'X-Content-Type-Options' => 'nosniff',
-            ]);
+        try {
+            if (config("filesystems.disks.{$version->disk}.driver") === 's3') {
+                $url = $disk->temporaryUrl($version->file_path, now()->addMinutes(config('lms.signed_url_minutes')), [
+                    'ResponseContentDisposition' => $disposition,
+                    'ResponseContentType' => $version->mime_type,
+                ]);
+                $response = redirect()->away($url)->withHeaders(['Cache-Control' => 'no-store, private']);
+            } else {
+                $response = $disk->response($version->file_path, $fallback, [
+                    'Content-Type' => $version->mime_type,
+                    'Content-Disposition' => $disposition,
+                    'Cache-Control' => 'no-store, private',
+                    'X-Content-Type-Options' => 'nosniff',
+                ]);
+            }
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->view('errors.storage-unavailable', [], 503)->header('Retry-After', '60');
         }
 
-        $document->activities()->create([
+        // Catatan aktivitas gagal tidak boleh menggagalkan unduhan yang sudah siap.
+        rescue(fn () => $document->activities()->create([
             'document_version_id' => $version->id,
             'user_id' => $request->user()->id,
             'event' => $request->boolean('preview') ? 'previewed' : 'downloaded',
-        ]);
+        ]));
 
         return $response;
     }

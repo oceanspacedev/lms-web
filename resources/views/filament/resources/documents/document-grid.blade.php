@@ -13,7 +13,7 @@
             $isImage = in_array($format, ['JPG', 'PNG'], true);
             $status = $record->expiry_status;
             $canView = \App\Filament\Resources\Documents\DocumentResource::canView($record);
-            $fileSize = $version ? \Illuminate\Support\Number::fileSize($version->file_size, precision: 1) : 'Belum ada file';
+            $fileSize = $version ? \App\Support\FileSize::format($version->file_size) : 'Belum ada file';
             $actions = collect($table->getRecordActions())
                 ->map(fn ($action) => $action->getClone()->record($record))
                 ->filter(fn ($action) => $action->isVisible())
@@ -47,7 +47,7 @@
                         {{ $record->title }}
                     @endif
                 </h3>
-                <p class="document-card__company">{{ $record->company?->name ?? '—' }}</p>
+                <p class="document-card__company">{{ $record->company?->displayName() ?? '—' }}</p>
 
                 <div class="document-card__status-row">
                     @if ($record->trashed())

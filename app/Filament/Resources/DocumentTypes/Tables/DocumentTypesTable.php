@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\DocumentTypes\Tables;
 
+use App\Filament\Concerns\TrashActions;
+use App\Models\DocumentType;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
@@ -18,23 +20,32 @@ class DocumentTypesTable
                     ->label('Masa Berlaku')
                     ->badge()
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Memiliki Masa Berlaku' : 'Tanpa Masa Berlaku')
-                    ->color(fn (bool $state): string => $state ? 'warning' : 'gray'),
+                    ->color(fn (bool $state): string => $state ? 'warning' : 'gray')
+                    ->visibleFrom('md'),
                 TextColumn::make('is_active')
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn (bool $state): string => $state ? 'Aktif' : 'Nonaktif')
-                    ->color(fn (bool $state): string => $state ? 'success' : 'gray')
+                    ->formatStateUsing(fn (bool $state, DocumentType $record): string => $record->trashed() ? 'Dihapus' : ($state ? 'Aktif' : 'Nonaktif'))
+                    ->color(fn (bool $state, DocumentType $record): string => $state && ! $record->trashed() ? 'success' : 'gray')
+                    ->visibleFrom(TrashActions::statusVisibleFrom())
                     ->sortable(),
+                TrashActions::deletedColumn(),
             ])
             ->filters([
                 TernaryFilter::make('is_active')->label('Status')->placeholder('Semua status')->trueLabel('Aktif')->falseLabel('Nonaktif'),
                 TernaryFilter::make('has_expiry')->label('Masa Berlaku')->placeholder('Semua jenis')->trueLabel('Memiliki Masa Berlaku')->falseLabel('Tanpa Masa Berlaku'),
+                TrashActions::filter(),
             ])
             ->recordActions([
-                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah'),
+                EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah')->hidden(fn (DocumentType $record): bool => $record->trashed()),
+                TrashActions::viewTrashed('jenis dokumen'),
+                TrashActions::delete('jenis dokumen')->iconButton(),
+                TrashActions::restore('jenis dokumen')->iconButton(),
+                TrashActions::forceDelete('jenis dokumen')->iconButton(),
             ])
+            ->toolbarActions(TrashActions::bulkActions('jenis dokumen'))
             ->defaultSort('name')
-            ->emptyStateHeading('Belum ada jenis dokumen')
-            ->emptyStateDescription('Tambahkan jenis dokumen.');
+            ->emptyStateHeading(TrashActions::emptyStateHeading('Belum ada jenis dokumen'))
+            ->emptyStateDescription(TrashActions::emptyStateDescription('jenis dokumen', 'Tambahkan jenis dokumen.'));
     }
 }

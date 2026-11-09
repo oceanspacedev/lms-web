@@ -3,7 +3,6 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\EditProfile;
-use App\Filament\Auth\WhatsAppLogin;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use Apriansyahrs\MekayaTheme\Auth\MekayaLogin;
 use Apriansyahrs\MekayaTheme\MekayaPlugin;
@@ -26,7 +25,6 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -37,12 +35,15 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->brandName('LMS Legal')
+            ->brandLogo(fn (): View => view('filament.brand'))
+            ->brandLogoHeight('2rem')
+            ->favicon(asset('images/logo.svg'))
             ->path('admin')
             // Tema Mekaya (sama dengan member-web): sidebar, topbar, kartu, tabel yang ringkas.
             // Pengaturan auth & tema di bawah dipanggil setelah plugin supaya menimpa bawaan Mekaya.
             ->plugin(
                 MekayaPlugin::make()
-                    ->colors(['primary' => Color::Blue])
+                    ->colors(['primary' => self::green()])
                     ->sidebarWidth('16rem'),
             )
             ->viteTheme('resources/css/app.css')
@@ -50,35 +51,41 @@ class AdminPanelProvider extends PanelProvider
             ->registration(null)
             ->passwordReset(null)
             ->profile(EditProfile::class, isSimple: false)
-            ->routes(fn () => Route::get('/login/whatsapp', WhatsAppLogin::class)->name('auth.whatsapp-login'))
+            // Tombol "Atau masuk dengan" WhatsApp dan email (route di routes/web.php), sama dengan dnd-web dan gais-web.
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn (): View => view('filament.auth.whatsapp-login-link'),
-                scopes: MekayaLogin::class,
+                fn (): View => view('auth.login-extra'),
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_HEADER_ACTIONS_AFTER,
                 fn (): View => view('filament.resources.documents.filters'),
                 scopes: ListDocuments::class,
             )
+            // Setelah membuat atau menyimpan data, kembali ke daftar, bukan ke halaman ubah/detail data tersebut.
+            ->resourceCreatePageRedirect('index')
+            ->resourceEditPageRedirect('index')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
             ])
+            // Menu kerja harian (Dasbor, Dokumen, Pengajuan) tanpa grup di atas; pengaturan dan bantuan di bawahnya.
             ->navigationGroups([
                 'Data Master',
-                'Administrasi',
+                'Pengguna & Akses',
+                'WhatsApp',
+                'Sistem',
+                'Bantuan',
             ])
             ->navigationItems([
                 NavigationItem::make('Horizon')
-                    ->group('Administrasi')
+                    ->group('Sistem')
                     ->sort(2)
                     ->icon(Heroicon::OutlinedQueueList)
                     ->url(fn (): string => route('horizon.index'), shouldOpenInNewTab: true)
                     ->visible(fn (): bool => Gate::allows('viewHorizon')),
                 NavigationItem::make('Log Laravel')
-                    ->group('Administrasi')
+                    ->group('Sistem')
                     ->sort(3)
                     ->icon(Heroicon::OutlinedDocumentText)
                     ->url(fn (): string => route('log-viewer.index'), shouldOpenInNewTab: true)
@@ -98,13 +105,37 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentShieldPlugin::make()
-                    ->navigationGroup('Data Master')
+                    ->navigationGroup('Pengguna & Akses')
                     ->navigationLabel('Hak Akses')
-                    ->navigationSort(4),
+                    ->navigationSort(2),
             ])
             ->authMiddleware([
                 Authenticate::class,
             ]);
+    }
+
+    /**
+     * Hijau logo LMS (#16A34A = shade 400), digeser lebih gelap dari palet Green bawaan. Tombol Filament memakai teks putih
+     * hanya bila shade 600 (latar) dan 500 (hover) sama-sama lolos kontras WCAG AA dengan putih; bila tidak, tombol jatuh ke
+     * shade 400 dengan teks gelap (hijau neon). Karena itu 600 = #15803D dan 500 = #16853F, hijau paling cerah yang masih lolos kontras dengan teks putih.
+     *
+     * @return array<int, string>
+     */
+    private static function green(): array
+    {
+        return array_map(Color::convertToOklch(...), [
+            50 => '#F0FDF4',
+            100 => '#DCFCE7',
+            200 => '#86EFAC',
+            300 => '#4ADE80',
+            400 => '#16A34A',
+            500 => '#16853F',
+            600 => '#15803D',
+            700 => '#166534',
+            800 => '#0F3F22',
+            900 => '#0B3019',
+            950 => '#052E16',
+        ]);
     }
 
     /**

@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Documents\Tables;
 
-use App\Filament\Resources\Documents\DocumentResource;
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Models\Document;
 use App\Services\DocumentSpreadsheetExporter;
@@ -16,7 +16,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -56,27 +55,29 @@ class DocumentsTable
             ->columns([
                 TextColumn::make('title')->label('Dokumen')->searchable(['title', 'document_number', 'counterparty'])->sortable()->weight('medium')->limit(45)->wrap()->width('28%')->tooltip(fn (Document $record): string => $record->title)
                     ->description(fn (Document $record): ?string => $record->document_number),
-                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap(),
-                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap(),
-                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->sortable(),
+                TextColumn::make('company.name')->label('Badan Usaha')->searchable()->sortable()->limit(30)->wrap()->visibleFrom('md')->formatStateUsing(fn (string $state, Document $record): string => $record->company?->displayName() ?? $state),
+                TextColumn::make('documentType.name')->label('Jenis Dokumen')->sortable()->limit(28)->wrap()->visibleFrom('md')->formatStateUsing(fn (string $state, Document $record): string => $record->documentType?->displayName() ?? $state),
+                TextColumn::make('currentVersion.expiry_date')->label('Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->sortable()->visibleFrom('md'),
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state, Document $record): string => $record->trashed() ? Document::DELETED_STATUS_LABEL : Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state, Document $record): string => $record->trashed() ? 'gray' : Document::EXPIRY_STATUS_COLORS[$state])
-                    ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null),
-                TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap()->placeholder('-'),
-                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->limit(30)->wrap(),
-                TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)
+                    ->icon(fn (Document $record): ?string => $record->trashed() ? 'heroicon-o-trash' : null)
+                    ->visibleFrom(TrashActions::statusVisibleFrom()),
+                TrashActions::deletedColumn(),
+                TextColumn::make('counterparty')->label('Pihak Lawan')->searchable()->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')->limit(30)->wrap()->placeholder('-'),
+                TextColumn::make('pic.name')->label('PIC')->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')->limit(30)->wrap()->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
+                TextColumn::make('currentVersion.stored_name')->label('Nama File')->toggleable(isToggledHiddenByDefault: true)->visibleFrom('md')
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->orWhereHas('currentVersion', fn (Builder $version): Builder => $version
                         ->whereRaw("lower(file_path) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%'])
                         ->orWhereRaw("lower(file_name) like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($search))).'%']))),
             ])
             ->filters([
-                SelectFilter::make('company')->label('Badan Usaha')->relationship('company', 'name')->searchable()->preload(),
-                SelectFilter::make('document_type')->label('Jenis Dokumen')->relationship('documentType', 'name')->searchable()->preload(),
+                SelectFilter::make('company')->label('Badan Usaha')->relationship('company', 'name', fn (Builder $query): Builder => $query->withoutTrashed())->searchable()->preload(),
+                SelectFilter::make('document_type')->label('Jenis Dokumen')->relationship('documentType', 'name', fn (Builder $query): Builder => $query->withoutTrashed())->searchable()->preload(),
                 SelectFilter::make('expiry_status')->label('Status')->options(Document::EXPIRY_STATUSES)
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->withExpiryStatus($data['value']) : $query),
-                SelectFilter::make('pic')->label('PIC')->relationship('pic', 'name')->searchable()->preload(),
+                SelectFilter::make('pic')->label('PIC')->relationship('pic', 'name', fn (Builder $query): Builder => $query->withoutTrashed())->searchable()->preload(),
                 Filter::make('counterparty')->label('Pihak Lawan')
                     ->schema([TextInput::make('counterparty')->label('Pihak Lawan')->maxLength(255)->placeholder('Sebagian nama pihak lawan')])
                     ->query(fn (Builder $query, array $data): Builder => filled($data['counterparty'] ?? null)
@@ -110,24 +111,26 @@ class DocumentsTable
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->whereHas('currentVersion', fn (Builder $version): Builder => $version->where('mime_type', $data['value']))
                         : $query),
-                TrashedFilter::make()->label('Dokumen Dihapus')
-                    ->placeholder('Tanpa dokumen dihapus')->trueLabel('Dengan dokumen dihapus')->falseLabel('Hanya dokumen dihapus'),
+                TrashActions::filter(),
             ], layout: FiltersLayout::Hidden)
             ->filtersFormColumns(1)
             ->deferFilters(false)
             ->recordActions([
-                ViewAction::make()->label('Lihat')->iconButton()->tooltip('Lihat dokumen'),
+                ViewAction::make()->label('Lihat dokumen')->icon('heroicon-o-eye')->iconButton()->tooltip('Lihat dokumen'),
                 EditAction::make()->label('Ubah')->iconButton()->tooltip('Ubah dokumen'),
                 Action::make('download')->label('Unduh')->icon('heroicon-o-arrow-down-tray')
                     ->iconButton()->tooltip('Unduh file')
                     ->url(fn (Document $record): string => route('documents.download', $record))->openUrlInNewTab()
                     ->visible(fn (Document $record): bool => ! $record->trashed() && Gate::allows('view', $record)),
-                DocumentResource::restoreAction()->iconButton()->tooltip('Pulihkan dokumen'),
+                TrashActions::delete('dokumen')->iconButton(),
+                TrashActions::restore('dokumen')->iconButton(),
+                TrashActions::forceDelete('dokumen')->iconButton(),
             ])
+            ->toolbarActions(TrashActions::bulkActions('dokumen'))
             ->defaultSort('created_at', 'desc')
-            ->emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
-                ? 'Dokumen tidak ditemukan' : 'Belum ada dokumen')
-            ->emptyStateDescription(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
-                ? 'Ubah kata pencarian atau reset filter untuk melihat dokumen lainnya.' : 'Tambahkan dokumen legal untuk mulai mengarsipkan.');
+            ->emptyStateHeading(TrashActions::emptyStateHeading(fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
+                ? 'Dokumen tidak ditemukan' : 'Belum ada dokumen'))
+            ->emptyStateDescription(TrashActions::emptyStateDescription('dokumen', fn (ListDocuments $livewire): string => filled($livewire->getTableSearch()) || $livewire->getTable()->getActiveFiltersCount() > 0
+                ? 'Ubah kata pencarian atau reset filter untuk melihat dokumen lainnya.' : 'Tambahkan dokumen legal untuk mulai mengarsipkan.'));
     }
 }

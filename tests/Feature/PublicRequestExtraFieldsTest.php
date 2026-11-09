@@ -30,7 +30,7 @@ class PublicRequestExtraFieldsTest extends TestCase
         Storage::fake('local');
         Http::preventStrayRequests();
         $this->seed(DummyAccountSeeder::class);
-        $this->reviewer = User::where('email', 'dummy-pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
+        $this->reviewer = User::where('email', 'pemeriksa@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
         $this->reviewer->update(['phone' => '081200000001']);
         $this->company = Company::factory()->create(['name' => 'PT Alur Lengkap', 'is_active' => true]);
     }

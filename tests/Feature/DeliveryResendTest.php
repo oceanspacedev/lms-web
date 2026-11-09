@@ -13,7 +13,7 @@ use App\Models\ReminderTemplate;
 use App\Models\User;
 use App\Services\DocumentReminderSender;
 use App\Services\DocumentRequestNotifier;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -31,7 +31,7 @@ class DeliveryResendTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 9)->setTime(8, 0));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         config(['services.waghub.url' => 'https://waghub.test', 'services.waghub.token' => 'test-token', 'services.waghub.purpose' => 'test-purpose']);
-        $this->seed(ReminderLogSeeder::class);
+        $this->seed(PermissionSeeder::class);
         ReminderTemplate::factory()->create(['schedule_mode' => 'specific_days', 'scheduled_days' => [30, 7], 'body' => ReminderTemplate::DEFAULT_BODY]);
         Http::preventStrayRequests();
         Http::fake(['waghub.test/*' => fn () => Http::response(['status' => 'x'], config('testing.waghub_status', 202))]);
@@ -266,5 +266,26 @@ class DeliveryResendTest extends TestCase
         $this->actingAs($this->staff());
 
         Livewire::test(WhatsAppDeliveryHistory::class)->call('resend', 'test', 1)->assertForbidden();
+    }
+
+    public function test_request_notification_command_fails_and_reports_when_delivery_fails(): void
+    {
+        $notification = $this->failedNotification();
+        $notification->update(['status' => 'pending', 'attempts' => 0, 'last_attempt_at' => null]);
+        config(['testing.waghub_status' => 503]);
+
+        $this->artisan('lms:send-request-notifications')->assertFailed();
+
+        $this->assertSame('failed', $notification->fresh()->status);
+    }
+
+    public function test_request_notification_command_succeeds_when_delivery_is_accepted(): void
+    {
+        $notification = $this->failedNotification();
+        $notification->update(['status' => 'pending', 'attempts' => 0, 'last_attempt_at' => null]);
+
+        $this->artisan('lms:send-request-notifications')->assertSuccessful();
+
+        $this->assertSame('accepted', $notification->fresh()->status);
     }
 }

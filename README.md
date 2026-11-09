@@ -52,19 +52,21 @@ Kredensial hanya di `.env`. File dokumen disimpan ke disk yang dipilih lewat `FI
 
 ## Akun dan permission
 
-Buat permission tanpa menambahkan data contoh:
-
 ```bash
-php artisan db:seed --class=CompanySeeder --no-interaction
-php artisan db:seed --class=DocumentTypeSeeder --no-interaction
-php artisan db:seed --class=DocumentSeeder --no-interaction
-php artisan db:seed --class=MonitoringPermissionSeeder --no-interaction
-php artisan db:seed --class=ReminderLogSeeder --no-interaction
-php artisan shield:generate --resource=RoleResource --panel=admin --option=permissions --no-interaction
+php artisan db:seed --no-interaction
 php artisan make:filament-user --panel=admin
 ```
 
-Perintah terakhir meminta nama, email, dan password secara interaktif. Setelah mengetahui ID pengguna, jalankan `php artisan shield:super-admin --user=ID --panel=admin --no-interaction` untuk menyinkronkan role admin dengan permission yang tersedia. Di instalasi yang sudah berjalan, atur permission baru melalui menu Hak Akses sesuai kebutuhan.
+`db:seed` aman dijalankan ulang dan berisi:
+
+| Seeder | Isi |
+|---|---|
+| `PermissionSeeder` | Semua permission yang dicek policy (`app/Policies`) ditambah custom permission di `config/filament-shield.php`; role `super_admin` mendapat semuanya. Cukup jalankan seeder ini saja untuk instalasi yang sudah berisi data: `php artisan db:seed --class=PermissionSeeder --no-interaction`. |
+| `DocumentTypeSeeder` | Tiga jenis dokumen awal. Jenis yang sudah ada tidak diubah. |
+| `ReminderTemplateSeeder` | Pengaturan pengingat global contoh, hanya di `local`/`testing`. |
+| `DummyAccountSeeder` | Hanya di `APP_ENV=local`: satu akun per role, email `{nama-role tanpa awalan dummy_}@test.com` (misalnya `legal@test.com`, `super-admin@test.com`) dan kata sandi `DummyAccountSeeder::PASSWORD`. Menolak berjalan di production. |
+
+`make:filament-user` meminta nama, email, dan password secara interaktif. Setelah mengetahui ID pengguna, jalankan `php artisan shield:super-admin --user=ID --panel=admin --no-interaction` untuk menyinkronkan role admin dengan permission yang tersedia. Di instalasi yang sudah berjalan, atur permission baru melalui menu Hak Akses sesuai kebutuhan.
 
 `ViewAny:Document` mengizinkan daftar/pencarian; `View:Document` mengizinkan detail, riwayat, pratinjau, dan unduhan. `Create:Document`, `Update:Document`, dan `Delete:Document` mengatur perubahan. Log Pengingat hanya memakai `ViewAny:ReminderLog` dan `View:ReminderLog`. `receive_reminder` menentukan penerima cadangan jika PIC tidak memiliki nomor WhatsApp valid. Isi nomor melalui menu profil. Horizon dan Log Laravel memiliki permission tersendiri.
 
@@ -78,21 +80,28 @@ Buka `http://127.0.0.1:8000/admin`. Untuk pengembangan frontend, jalankan `npm r
 
 ## WhatsApp dan scheduler
 
+Sama dengan dnd-web, gais-web, dan helpdesk-web, WagHub cukup diatur dengan URL dan token:
+
 ```dotenv
-WAGHUB_URL=https://waghub.mekayastudio.com
-WAGHUB_TOKEN=
-WAGHUB_PURPOSE=otp
-WAGHUB_OTP_PURPOSE=otp
-WAGHUB_MODE=sync
-WAGHUB_ROUTE_KEY=default
+WAG_URL=https://waghub.mekayastudio.com
+WAG_TOKEN=
 LMS_REMINDER_MAX_ATTEMPTS=3
 ```
 
-`otp` adalah nilai dari contoh API yang telah diterima WagHub pada uji integrasi; konfirmasikan purpose yang sesuai untuk pesan pengingat kepada pengelola WagHub sebelum penggunaan operasional. Token tidak boleh masuk kode, README, log, atau Git.
+Pengingat dan notifikasi dikirim dengan purpose `notification`, kode login dengan purpose `otp`, mode `sync`, dan route key `default`; pastikan Routing Policy aplikasi LMS di WagHub mencakup keduanya (atau purpose dikosongkan). Nama variabel lama (`WAGHUB_URL`, `WAGHUB_TOKEN`, `WAGHUB_PURPOSE`, dan seterusnya) masih dibaca, jadi server yang sudah berjalan tidak wajib mengubah `.env`. Token tidak boleh masuk kode, README, log, atau Git.
 
-### Login dengan kode WhatsApp
+### Login tanpa password (WhatsApp dan email)
 
-Selain email dan password, user bisa masuk lewat `/admin/login/whatsapp` (tombol "Masuk dengan kode WhatsApp" di halaman login): isi nomor WhatsApp di profil, lalu masukkan kode 6 digit yang dikirim lewat WagHub. Kode berlaku 5 menit, hangus setelah 5 kali salah, kirim ulang paling cepat 60 detik, maksimal 5 kode per jam per nomor dan 10 permintaan per 10 menit per IP. Hanya hash kode yang disimpan di tabel `login_codes`; record lebih dari 7 hari dihapus oleh `model:prune` harian. Kode hanya dikirim bila nomor milik tepat satu user yang berhak membuka panel, dan tampilan layar sama untuk nomor yang tidak terdaftar. Karena itu nomor WhatsApp harus unik per user (divalidasi di profil dan form User). Pesan memakai `WAGHUB_OTP_PURPOSE`; bila kosong, memakai `WAGHUB_PURPOSE`.
+Sama dengan dnd-web, gais-web, dan helpdesk-web: di bawah form email dan password ada "Atau masuk dengan" dengan tombol **WhatsApp** dan **Email**. Tombol WhatsApp (`/phone-login`) tampil bila `WAG_URL` dan `WAG_TOKEN` terisi; tombol Email (`/email-login`) tampil bila `MAIL_MAILER` benar-benar mengirim email (bukan `log`/`array`) dan `MAIL_FROM_ADDRESS` terisi.
+
+```dotenv
+EMAIL_LOGIN_EXPIRES_IN=600
+```
+
+- WhatsApp: isi nomor WhatsApp di profil, lalu masukkan kode 6 digit yang dikirim lewat WagHub. Kode berlaku 5 menit.
+- Email: satu email berisi kode 6 digit dan tombol magic link. Tampilannya meniru kartu halaman login (tema Filament Mekaya): nama aplikasi di atas kartu, ikon, judul, kode dalam kotak seperti input, dan tombol biru selebar kartu. Tema ada di `resources/views/vendor/mail` (`html/themes/lms.css` serta komponen `card-header` dan `code`) dan berlaku untuk semua email markdown. Keduanya berbagi satu kali pakai. Membuka URL link saja (mis. oleh pemindai email) tidak memakai token; token dipakai setelah halaman tampil di browser.
+- Kode hanya dikirim bila nomor/email milik tepat satu user aktif yang berhak membuka panel, sehingga nomor WhatsApp harus unik per user (divalidasi di profil dan form User). Kode hangus setelah 5 kali salah, saat kode baru diminta, atau saat nomor/email user diganti. Permintaan dibatasi 3 per 5 menit dan 10 per jam per nomor/email, serta 20 per menit per IP.
+- Hanya hash kode yang disimpan di tabel `whatsapp_otps` dan `email_otps`; record lebih dari 7 hari dihapus oleh `model:prune` harian.
 
 Scheduler mengirim pukul 08.00 Asia/Jakarta. Pastikan scheduler Laravel dijalankan oleh server:
 

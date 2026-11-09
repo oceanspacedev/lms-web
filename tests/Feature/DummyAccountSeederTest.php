@@ -7,6 +7,7 @@ use Database\Seeders\DummyAccountSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -17,7 +18,7 @@ class DummyAccountSeederTest extends TestCase
 
     private function dummyUser(string $role): User
     {
-        return User::where('email', str_replace('_', '-', $role).'@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
+        return User::where('email', Str::slug(Str::replaceStart('dummy_', '', $role)).'@'.DummyAccountSeeder::EMAIL_DOMAIN)->firstOrFail();
     }
 
     public function test_every_role_gets_one_dummy_account_that_can_open_the_panel(): void
@@ -39,12 +40,15 @@ class DummyAccountSeederTest extends TestCase
         }
     }
 
-    public function test_dummy_account_names_do_not_repeat_the_dummy_prefix(): void
+    public function test_dummy_account_names_and_emails_drop_the_dummy_prefix(): void
     {
         $this->seed(DummyAccountSeeder::class);
 
-        $this->assertSame('Dummy Pemeriksa', $this->dummyUser('dummy_pemeriksa')->name);
-        $this->assertSame('Dummy Super Admin', $this->dummyUser('super_admin')->name);
+        $this->assertSame('Pemeriksa', $this->dummyUser('dummy_pemeriksa')->name);
+        $this->assertSame('pemeriksa@test.com', $this->dummyUser('dummy_pemeriksa')->email);
+        $this->assertSame('Koordinator', $this->dummyUser('dummy_koordinator')->name);
+        $this->assertSame('koordinator@test.com', $this->dummyUser('dummy_koordinator')->email);
+        $this->assertSame('Super Admin', $this->dummyUser('super_admin')->name);
     }
 
     public function test_seeder_is_idempotent_and_resets_the_dummy_password(): void
@@ -71,11 +75,19 @@ class DummyAccountSeederTest extends TestCase
         $reviewer = $this->dummyUser('dummy_pemeriksa');
         $this->assertTrue($reviewer->can('Review:DocumentRequest'));
         $this->assertFalse($reviewer->can('Approve:DocumentRequest'));
+        $this->assertTrue($reviewer->can('Create:Document'));
 
         $approver = $this->dummyUser('dummy_penyetuju');
         $this->assertTrue($approver->can('Approve:DocumentRequest'));
         $this->assertTrue($approver->can('Create:Document'));
         $this->assertFalse($approver->can('Review:DocumentRequest'));
+
+        $coordinator = $this->dummyUser('dummy_koordinator');
+        $this->assertTrue($coordinator->can('ReceiveEscalation:DocumentRequest'));
+        $this->assertTrue($coordinator->can('ViewAll:DocumentRequest'));
+        $this->assertTrue($coordinator->can('ViewAny:Document'));
+        $this->assertFalse($coordinator->can('Create:Document'));
+        $this->assertFalse($coordinator->can('Review:DocumentRequest'));
 
         $requester = $this->dummyUser('dummy_pengaju');
         $this->assertTrue($requester->can('Create:DocumentRequest'));

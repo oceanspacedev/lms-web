@@ -9,7 +9,7 @@ use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -27,7 +27,7 @@ class IndonesianMessagesAndLocalTimeTest extends TestCase
         parent::setUp();
         Storage::fake('s3');
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     public function test_validation_messages_are_in_indonesian(): void
@@ -75,11 +75,11 @@ class IndonesianMessagesAndLocalTimeTest extends TestCase
         $this->actingAs($viewer);
 
         Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertSee('14/10/2026 10:36')
-            ->assertDontSee('14/10/2026 03:36');
+            ->assertSee('14 Okt 2026 10:36')
+            ->assertDontSee('14 Okt 2026 03:36');
 
         Livewire::test(VersionsRelationManager::class, ['ownerRecord' => $document, 'pageClass' => ViewDocument::class])
-            ->assertSee('14/10/2026 10:36')
-            ->assertDontSee('14/10/2026 03:36');
+            ->assertSee('14 Okt 2026 10:36')
+            ->assertDontSee('14 Okt 2026 03:36');
     }
 }

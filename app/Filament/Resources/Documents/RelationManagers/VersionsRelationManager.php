@@ -3,13 +3,13 @@
 namespace App\Filament\Resources\Documents\RelationManagers;
 
 use App\Models\DocumentVersion;
+use App\Support\FileSize;
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Number;
 use Livewire\Attributes\On;
 
 class VersionsRelationManager extends RelationManager
@@ -50,11 +50,11 @@ class VersionsRelationManager extends RelationManager
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Versi aktif' : 'Arsip')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
                 TextColumn::make('stored_name')->label('File')->searchable(['file_path', 'file_name'])->wrap()
-                    ->description(fn (DocumentVersion $record): string => Number::fileSize($record->file_size, precision: 1).' · Asli: '.$record->file_name),
-                TextColumn::make('issued_date')->label('Tanggal Terbit')->date('d/m/Y')->placeholder('Belum diisi')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('expiry_date')->label('Tanggal Berakhir')->date('d/m/Y')->placeholder('Tanpa masa berlaku')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('uploader.name')->label('Pengunggah')->wrap()
-                    ->description(fn (DocumentVersion $record): string => $record->created_at->timezone(config('lms.reminder_timezone'))->format('d/m/Y H:i')),
+                    ->description(fn (DocumentVersion $record): string => FileSize::format($record->file_size).' · Asli: '.$record->file_name),
+                TextColumn::make('issued_date')->label('Tanggal Terbit')->date('d M Y')->placeholder('Belum diisi')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('expiry_date')->label('Tanggal Berakhir')->date('d M Y')->placeholder('Tanpa masa berlaku')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('uploader.name')->label('Pengunggah')->formatStateUsing(fn (string $state, DocumentVersion $record): string => $record->uploader?->displayName() ?? $state)->wrap()
+                    ->description(fn (DocumentVersion $record): string => $record->created_at->timezone(config('lms.reminder_timezone'))->translatedFormat('d M Y H:i')),
                 TextColumn::make('change_note')->label('Catatan Perubahan')->wrap()->limit(80)
                     ->tooltip(fn (DocumentVersion $record): ?string => $record->change_note)->placeholder('Unggahan awal'),
             ])

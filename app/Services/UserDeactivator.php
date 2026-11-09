@@ -29,19 +29,13 @@ class UserDeactivator
     /** Pengganti PIC dan pemeriksa pengajuan, serta PIC dan pemeriksa pengajuan pada jenis dokumen. */
     public const GROUP_REVIEWER = 'reviewer';
 
-    /** Pengganti penyetuju pengajuan dan penyetuju pengajuan pada jenis dokumen. */
-    public const GROUP_APPROVER = 'approver';
-
-    /** Nilai pilihan "Tim persetujuan": penyetuju dikosongkan sehingga siapa saja yang berhak bisa menyetujui. */
-    public const APPROVAL_TEAM = 'team';
-
-    /** Pengajuan yang sudah selesai atau ditolak tidak dialihkan. */
-    public const CLOSED_REQUEST_STATUSES = ['archived', 'rejected'];
+    /** Pengajuan yang sudah selesai, ditolak, atau dibatalkan tidak dialihkan. */
+    public const CLOSED_REQUEST_STATUSES = ['archived', 'rejected', 'cancelled'];
 
     public function __construct(private WaghubService $waghub) {}
 
     /**
-     * Jumlah tugas user per data, untuk ringkasan di modal Nonaktifkan.
+     * Jumlah tugas user per data, untuk ringkasan di modal Nonaktifkan. Data di tempat sampah ikut dihitung karena ikut dialihkan.
      *
      * @return array{documents: int, requests: int, document_types: int, drafts: int}
      */
@@ -50,9 +44,9 @@ class UserDeactivator
         return [
             'documents' => Document::withTrashed()->where('pic_user_id', $user->id)->count(),
             'requests' => $this->openRequests()->where(fn (Builder $query): Builder => $query->where('pic_user_id', $user->id)
-                ->orWhere('reviewer_id', $user->id)->orWhere('approver_id', $user->id))->count(),
-            'document_types' => DocumentType::where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)
-                ->orWhere('request_reviewer_id', $user->id)->orWhere('request_approver_id', $user->id))->count(),
+                ->orWhere('reviewer_id', $user->id))->count(),
+            'document_types' => DocumentType::withTrashed()->where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)
+                ->orWhere('request_reviewer_id', $user->id))->count(),
             'drafts' => DocumentRequest::where('status', 'draft')->where('requester_id', $user->id)->count(),
         ];
     }
@@ -69,11 +63,8 @@ class UserDeactivator
             $groups[] = self::GROUP_DOCUMENT_PIC;
         }
         if ($this->openRequests()->where(fn (Builder $query): Builder => $query->where('pic_user_id', $user->id)->orWhere('reviewer_id', $user->id))->exists()
-            || DocumentType::where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)->orWhere('request_reviewer_id', $user->id))->exists()) {
+            || DocumentType::withTrashed()->where(fn (Builder $query): Builder => $query->where('request_pic_id', $user->id)->orWhere('request_reviewer_id', $user->id))->exists()) {
             $groups[] = self::GROUP_REVIEWER;
-        }
-        if ($this->openRequests()->where('approver_id', $user->id)->exists() || DocumentType::where('request_approver_id', $user->id)->exists()) {
-            $groups[] = self::GROUP_APPROVER;
         }
 
         return $groups;
@@ -92,23 +83,18 @@ class UserDeactivator
         return $users->filter(fn (User $candidate): bool => match ($group) {
             self::GROUP_REVIEWER => $candidate->can('Review:DocumentRequest')
                 && (! $this->replacesRequestPicOfDocumentType($user) || $this->waghub->normalizePhone($candidate->phone) !== null),
-            self::GROUP_APPROVER => $candidate->can('Approve:DocumentRequest'),
             default => true,
         })->values();
     }
 
     /**
-     * Pilihan Select pengganti. Kelompok penyetuju mendapat opsi "Tim persetujuan" (nilai null pada pengajuan).
+     * Pilihan Select pengganti.
      *
      * @return array<int|string, string>
      */
     public function candidateOptions(User $user, string $group): array
     {
-        $options = $this->candidates($user, $group)->pluck('name', 'id')->all();
-
-        return $group === self::GROUP_APPROVER && $options !== []
-            ? [self::APPROVAL_TEAM => 'Tim persetujuan (siapa saja yang berhak)'] + $options
-            : $options;
+        return $this->candidates($user, $group)->pluck('name', 'id')->all();
     }
 
     /** Pesan penolakan bila ada kelompok tugas yang belum punya kandidat pengganti, atau null bila semua tersedia. */
@@ -120,7 +106,6 @@ class UserDeactivator
                     self::GROUP_REVIEWER => 'Belum ada user aktif lain dengan izin "Periksa pengajuan"'
                         .($this->replacesRequestPicOfDocumentType($user) ? ' dan nomor WhatsApp valid' : '')
                         .' untuk menggantikan tugas pemeriksaan. Berikan izin tersebut lewat menu Hak Akses terlebih dahulu.',
-                    self::GROUP_APPROVER => 'Belum ada user aktif lain dengan izin "Setujui pengajuan" untuk menggantikan tugas persetujuan. Berikan izin tersebut lewat menu Hak Akses terlebih dahulu.',
                     default => 'Belum ada user aktif lain untuk menggantikan PIC dokumen. Tambahkan user terlebih dahulu.',
                 };
             }
@@ -142,10 +127,28 @@ class UserDeactivator
         };
     }
 
+    /**
+     * Alasan aksi Hapus tidak boleh dijalankan, atau null bila boleh, dengan kalimat "hapus".
+     * User aktif ikut dinonaktifkan, jadi mengikuti aturan Nonaktifkan (izin ubah user, super admin aktif terakhir);
+     * user yang sudah nonaktif hanya tidak boleh dihapus oleh dirinya sendiri, atau (bila super admin) oleh non-super-admin.
+     */
+    public function deletionDenialReason(User $actor, User $user): ?string
+    {
+        return match (true) {
+            $actor->is($user) => 'Anda tidak dapat menghapus akun sendiri.',
+            $user->isSuperAdmin() && ! $actor->isSuperAdmin() => 'Hanya super admin yang dapat menghapus super admin.',
+            ! $user->isActive() => null,
+            ! Gate::forUser($actor)->allows('update', $user) => 'User aktif ikut dinonaktifkan saat dihapus, dan Anda tidak berhak mengubah user.',
+            $user->isSuperAdmin() && ! $this->hasOtherActiveSuperAdmin($user) => 'Super admin aktif terakhir tidak dapat dihapus.',
+            default => null,
+        };
+    }
+
     /** Alasan aksi Aktifkan kembali tidak boleh dijalankan, atau null bila boleh. */
     public function reactivationDenialReason(User $actor, User $user): ?string
     {
         return match (true) {
+            $user->trashed() => 'User ini ada di tempat sampah. Pulihkan terlebih dahulu.',
             $user->isActive() => 'User ini sudah aktif.',
             ! Gate::forUser($actor)->allows('update', $user) => 'Anda tidak berhak mengubah user.',
             $user->isSuperAdmin() && ! $actor->isSuperAdmin() => 'Hanya super admin yang dapat mengaktifkan kembali super admin.',
@@ -157,7 +160,7 @@ class UserDeactivator
      * Alihkan semua tugas user ke pengganti lalu nonaktifkan user, dalam satu transaksi.
      * Riwayat (history) pengajuan sengaja tidak ditambah, karena jumlahnya dipakai sebagai kunci notifikasi dan pengingat.
      *
-     * @param  array<string, int|string|null>  $replacements  Kunci: document_pic, reviewer, approver (approver boleh "team").
+     * @param  array<string, int|string|null>  $replacements  Kunci: document_pic, reviewer.
      *
      * @throws ValidationException
      */
@@ -181,17 +184,16 @@ class UserDeactivator
                     ->update(['request_payload' => null]);
             }
 
-            $picRequestIds = DocumentRequest::where('pic_user_id', $user->id)->pluck('id');
+            $picRequestIds = DocumentRequest::withTrashed()->where('pic_user_id', $user->id)->pluck('id');
             if (array_key_exists(self::GROUP_REVIEWER, $resolved)) {
                 $this->openRequests()->where('pic_user_id', $user->id)->update(['pic_user_id' => $resolved[self::GROUP_REVIEWER]]);
                 $this->openRequests()->where('reviewer_id', $user->id)->update(['reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
-                DocumentType::where('request_pic_id', $user->id)->update(['request_pic_id' => $resolved[self::GROUP_REVIEWER]]);
-                DocumentType::where('request_reviewer_id', $user->id)->update(['request_reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
+                DocumentType::withTrashed()->where('request_pic_id', $user->id)->update(['request_pic_id' => $resolved[self::GROUP_REVIEWER]]);
+                DocumentType::withTrashed()->where('request_reviewer_id', $user->id)->update(['request_reviewer_id' => $resolved[self::GROUP_REVIEWER]]);
             }
-            if (array_key_exists(self::GROUP_APPROVER, $resolved)) {
-                $this->openRequests()->where('approver_id', $user->id)->update(['approver_id' => $resolved[self::GROUP_APPROVER]]);
-                DocumentType::where('request_approver_id', $user->id)->update(['request_approver_id' => $resolved[self::GROUP_APPROVER]]);
-            }
+            // Tahap persetujuan sudah dihapus dari alur; kolom penyetuju tidak lagi dipakai, cukup dikosongkan agar tidak menggantung.
+            $this->openRequests()->where('approver_id', $user->id)->update(['approver_id' => null]);
+            DocumentType::withTrashed()->where('request_approver_id', $user->id)->update(['request_approver_id' => null]);
 
             DocumentRequestNotification::whereIn('status', ['pending', 'failed'])
                 ->where(fn (Builder $query): Builder => $query
@@ -240,11 +242,6 @@ class UserDeactivator
         $resolved = [];
         foreach ($this->requiredGroups($user) as $group) {
             $value = $replacements[$group] ?? null;
-            if ($group === self::GROUP_APPROVER && $value === self::APPROVAL_TEAM) {
-                $resolved[$group] = null;
-
-                continue;
-            }
             $candidate = filled($value) ? $this->candidates($user, $group)->firstWhere('id', (int) $value) : null;
             if ($candidate === null) {
                 throw ValidationException::withMessages([$group => 'Pilih pengganti yang aktif dan memenuhi syarat.']);
@@ -257,7 +254,7 @@ class UserDeactivator
 
     private function replacesRequestPicOfDocumentType(User $user): bool
     {
-        return DocumentType::where('request_pic_id', $user->id)->exists();
+        return DocumentType::withTrashed()->where('request_pic_id', $user->id)->exists();
     }
 
     private function hasOtherActiveSuperAdmin(User $user): bool
@@ -265,9 +262,13 @@ class UserDeactivator
         return User::active()->role(config('filament-shield.super_admin.name'))->whereKeyNot($user->id)->exists();
     }
 
-    /** @return Builder<DocumentRequest> */
+    /**
+     * Pengajuan yang belum ditutup, termasuk yang di tempat sampah, supaya pengajuan yang kelak dipulihkan tidak menunjuk user yang sudah dihapus.
+     *
+     * @return Builder<DocumentRequest>
+     */
     private function openRequests(): Builder
     {
-        return DocumentRequest::whereNotIn('status', self::CLOSED_REQUEST_STATUSES);
+        return DocumentRequest::withTrashed()->whereNotIn('status', self::CLOSED_REQUEST_STATUSES);
     }
 }

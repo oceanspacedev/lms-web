@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Trashable;
 use App\Services\DocumentRequestNotifier;
 use App\Services\StorageFileName;
+use App\Services\WaghubService;
+use App\Support\ActiveReference;
 use Carbon\CarbonImmutable;
 use Database\Factories\DocumentRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -13,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -21,63 +25,145 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 use Throwable;
 
 #[Fillable(['company_id', 'document_type_id', 'pic_user_id', 'title', 'purpose', 'partner_name', 'partner_pic', 'partner_contact', 'start_date', 'expiry_date', 'target_date', 'has_cost', 'amount', 'payment_terms', 'details'])]
 class DocumentRequest extends Model
 {
     /** @use HasFactory<DocumentRequestFactory> */
-    use HasFactory;
+    use HasFactory, Trashable;
 
-    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'revision' => 'Perlu Revisi', 'approved' => 'Menunggu Tanda Tangan', 'rejected' => 'Ditolak', 'archived' => 'Selesai'];
+    public function trashSubject(): string
+    {
+        return 'document_request';
+    }
+
+    /** Nomor dan judul, misalnya "#14 · PKS Sewa Gudang": judul pengajuan sering mirip, nomornya yang membedakan. */
+    public function trashLabel(): string
+    {
+        return '#'.$this->getKey().' · '.$this->title;
+    }
+
+    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+
+    /** Label status tahap persetujuan lama; hanya untuk membaca data lama, tidak lagi menjadi status yang sah. */
+    private const LEGACY_STATUS_LABELS = ['review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan'];
+
+    /** Status setelah draf keluar yang boleh dilihat semua Staff Legal. */
+    public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
+
+    /** Batas hari menyerahkan dokumen fisik setelah scan pertama; pengingat lanjutan di hari ke-7, 14, 28. */
+    public const HANDOVER_DAYS = 7;
+
+    public const LATE_REMINDER_DAYS = [7, 14, 28];
+
+    public const SCAN_REMINDER_DAYS = 7;
 
     public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
 
-    /** Status saat pengajuan menunggu tindakan staf. */
-    public const WAITING_STATUSES = ['submitted', 'review'];
+    /** Status yang boleh dibatalkan tim legal: revisi yang ditinggal pengaju, atau setelah draft keluar. */
+    public const CANCELLABLE_STATUSES = ['revision', 'signing', 'handover'];
 
-    public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan', 'archived' => 'Selesai'];
+    /** Badge langkah yang belum beres, tampil di samping status (lihat pendingBadges()). */
+    public const BADGE_NO_SCAN = 'Belum scan';
+
+    public const BADGE_NOT_RECEIVED = 'Fisik belum diterima';
+
+    /** Status saat pengajuan menunggu tindakan staf. */
+    public const WAITING_STATUSES = ['submitted'];
+
+    public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'archived' => 'Selesai'];
 
     public const TIMELINE_LABELS = [
         'submitted' => 'Pengajuan diterima', 'review' => 'Diteruskan untuk persetujuan', 'approved' => 'Disetujui, menunggu tanda tangan',
-        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen final diarsipkan',
+        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen fisik diterima dan diarsipkan',
+        'signing' => 'Draft dokumen diterbitkan, menunggu tanda tangan', 'handover' => 'Scan diunggah, menunggu dokumen fisik', 'cancelled' => 'Dibatalkan',
     ];
+
+    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draft dokumen diganti', 'signed_replaced' => 'Scan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
 
     protected $attributes = ['details' => '{}', 'attachments' => '{}', 'requirements' => '{}', 'history' => '[]', 'status' => 'draft'];
 
     protected function casts(): array
     {
-        return ['details' => 'array', 'attachments' => 'array', 'requirements' => 'array', 'history' => 'array', 'status_changed_at' => 'datetime', 'has_cost' => 'boolean', 'start_date' => 'date', 'expiry_date' => 'date', 'target_date' => 'date', 'amount' => 'decimal:2'];
+        return ['details' => 'array', 'attachments' => 'array', 'requirements' => 'array', 'history' => 'array', 'status_changed_at' => 'datetime', 'draft_issued_at' => 'datetime', 'signed_uploaded_at' => 'datetime', 'physical_received_at' => 'datetime', 'has_cost' => 'boolean', 'start_date' => 'date', 'expiry_date' => 'date', 'target_date' => 'date', 'amount' => 'decimal:2'];
     }
 
     public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class)->withTrashed();
     }
 
     public function documentType(): BelongsTo
     {
-        return $this->belongsTo(DocumentType::class);
+        return $this->belongsTo(DocumentType::class)->withTrashed();
     }
 
     public function requester(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'requester_id');
+        return $this->belongsTo(User::class, 'requester_id')->withTrashed();
     }
 
     public function pic(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'pic_user_id');
+        return $this->belongsTo(User::class, 'pic_user_id')->withTrashed();
     }
 
     public function reviewer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reviewer_id');
+        return $this->belongsTo(User::class, 'reviewer_id')->withTrashed();
     }
 
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approver_id');
+        return $this->belongsTo(User::class, 'approver_id')->withTrashed();
+    }
+
+    /**
+     * Staf legal penerima notifikasi: pemeriksa pengajuan bila masih aktif (tidak di tempat sampah), punya izin Review, dan nomornya valid;
+     * kalau tidak, semua user aktif pemegang `Review:DocumentRequest` dengan nomor valid.
+     *
+     * @return Collection<int, User>
+     */
+    public function legalStaffRecipients(): Collection
+    {
+        $reviewer = $this->reviewer;
+        if ($reviewer !== null && $reviewer->isActive() && ! $reviewer->trashed() && $this->hasValidPhone($reviewer) && $this->canReview($reviewer)) {
+            return collect([$reviewer]);
+        }
+
+        return $this->usersWithPermission('Review:DocumentRequest');
+    }
+
+    /**
+     * Koordinator penerima eskalasi: user aktif pemegang `ReceiveEscalation:DocumentRequest` dengan nomor valid.
+     *
+     * @return Collection<int, User>
+     */
+    public function coordinatorRecipients(): Collection
+    {
+        return $this->usersWithPermission('ReceiveEscalation:DocumentRequest');
+    }
+
+    /** @return Collection<int, User> */
+    private function usersWithPermission(string $permission): Collection
+    {
+        try {
+            return User::permission($permission)->active()->orderBy('id')->get()->filter(fn (User $user): bool => $this->hasValidPhone($user))->values();
+        } catch (PermissionDoesNotExist) {
+            return collect();
+        }
+    }
+
+    private function canReview(User $user): bool
+    {
+        return $this->usersWithPermission('Review:DocumentRequest')->contains('id', $user->id);
+    }
+
+    private function hasValidPhone(User $user): bool
+    {
+        return app(WaghubService::class)->normalizePhone($user->phone) !== null;
     }
 
     /** Waktu masuk ke tahap saat ini: kolom status_changed_at, atau peristiwa terakhir di riwayat bila belum terisi. */
@@ -95,9 +181,120 @@ class DocumentRequest extends Model
             ->whereRaw('coalesce(document_requests.status_changed_at, document_requests.updated_at) <= ?', [now()->subDays($days)->toDateTimeString()]);
     }
 
+    public function lateReasons(): HasMany
+    {
+        return $this->hasMany(DocumentRequestLateReason::class)->orderBy('created_at');
+    }
+
+    /** Tenggat penyerahan dokumen fisik: 7 hari kalender (WIB) setelah scan pertama diunggah, atau null bila belum ada scan. */
+    public function handoverDueDate(): ?CarbonImmutable
+    {
+        return $this->jakartaDate($this->signed_uploaded_at)?->addDays(self::HANDOVER_DAYS);
+    }
+
+    /** Selisih hari kalender (WIB) sejak scan pertama diunggah. */
+    public function daysSinceSigned(?CarbonImmutable $today = null): ?int
+    {
+        return $this->daysSince($this->signed_uploaded_at, $today);
+    }
+
+    /** Selisih hari kalender (WIB) sejak draf pertama diterbitkan. */
+    public function daysSinceDraft(?CarbonImmutable $today = null): ?int
+    {
+        return $this->daysSince($this->draft_issued_at, $today);
+    }
+
+    public function isHandoverLate(?CarbonImmutable $today = null): bool
+    {
+        return $this->status === 'handover' && ($this->daysSinceSigned($today) ?? 0) > self::HANDOVER_DAYS;
+    }
+
+    /** Sisa waktu penyerahan fisik untuk tampilan: "Sisa 3 hari", "Batas hari ini", atau "Terlambat 2 hari". */
+    public function handoverRemainingLabel(): string
+    {
+        if ($this->isHandoverLate()) {
+            return 'Terlambat '.$this->daysLate().' hari';
+        }
+        $daysLeft = max(0, self::HANDOVER_DAYS - ($this->daysSinceSigned() ?? 0));
+
+        return $daysLeft === 0 ? 'Batas hari ini' : "Sisa {$daysLeft} hari";
+    }
+
+    /** Jumlah hari melewati tenggat; 0 bila tidak terlambat. */
+    public function daysLate(): int
+    {
+        return max(0, ($this->daysSinceSigned() ?? 0) - self::HANDOVER_DAYS);
+    }
+
+    /** Jumlah hari terlambat saat dokumen fisik diterima (kalender WIB, dihitung dari scan pertama); 0 bila tepat waktu atau tanpa scan. */
+    public function daysLateAtReceipt(): int
+    {
+        if ($this->signed_uploaded_at === null || $this->physical_received_at === null) {
+            return 0;
+        }
+
+        return max(0, ($this->daysSince($this->signed_uploaded_at, CarbonImmutable::parse($this->physical_received_at)) ?? 0) - self::HANDOVER_DAYS);
+    }
+
+    /** Pengajuan menunggu dokumen fisik yang belum melewati tenggat. */
+    public function scopeHandoverOnTime(Builder $query): Builder
+    {
+        return $query->where('status', 'handover')->where('signed_uploaded_at', '>=', self::lateBoundary());
+    }
+
+    /** Pengajuan menunggu dokumen fisik yang sudah melewati tenggat. */
+    public function scopeHandoverLate(Builder $query): Builder
+    {
+        return $query->where('status', 'handover')->where('signed_uploaded_at', '<', self::lateBoundary());
+    }
+
+    /** Pengajuan menunggu scan tanda tangan, draf terbit lebih dari 7 hari lalu. */
+    public function scopeScanOverdue(Builder $query): Builder
+    {
+        return $query->where('status', 'signing')->whereNull('signed_uploaded_at')->where('draft_issued_at', '<', self::lateBoundary());
+    }
+
+    /** Pengajuan terlambat yang belum punya alasan keterlambatan. */
+    public function scopeLateWithoutReason(Builder $query): Builder
+    {
+        return $query->handoverLate()->whereDoesntHave('lateReasons');
+    }
+
+    /**
+     * Batas awal hari WIB (dalam UTC) tujuh hari lalu; unggahan sebelum batas ini sudah terlambat.
+     * Perbandingan SQL mengasumsikan timestamp tersimpan dalam UTC (`config('app.timezone') === 'UTC'`).
+     */
+    private static function lateBoundary(): string
+    {
+        return CarbonImmutable::now(config('lms.reminder_timezone'))->startOfDay()->subDays(self::HANDOVER_DAYS)->utc()->toDateTimeString();
+    }
+
+    private function jakartaDate(mixed $at): ?CarbonImmutable
+    {
+        return $at === null ? null : CarbonImmutable::parse($at)->timezone(config('lms.reminder_timezone'))->startOfDay();
+    }
+
+    private function daysSince(mixed $at, ?CarbonImmutable $today): ?int
+    {
+        $start = $this->jakartaDate($at);
+        if ($start === null) {
+            return null;
+        }
+        $today = ($today ?? CarbonImmutable::now())->timezone(config('lms.reminder_timezone'))->startOfDay();
+
+        return (int) $start->diffInDays($today);
+    }
+
+    /** Label status; status tahap persetujuan lama dan status tak dikenal tidak boleh membuat tampilan error. */
+    public static function statusLabel(string $status): string
+    {
+        return self::STATUSES[$status] ?? self::LEGACY_STATUS_LABELS[$status] ?? $status;
+    }
+
+    /** Draf atau revisi milik pengaju sendiri; pengajuan di tempat sampah tidak bisa diubah sebelum dipulihkan. */
     public function editableBy(User $user): bool
     {
-        return $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
+        return ! $this->trashed() && $this->requester_id === $user->id && in_array($this->status, ['draft', 'revision'], true);
     }
 
     public function revisionNumber(): int
@@ -112,11 +309,11 @@ class DocumentRequest extends Model
      */
     public function progressSteps(): array
     {
-        $statusBeforeLast = collect($this->history)->slice(-2, 1)->first()['status'] ?? null;
         $stage = match ($this->status) {
-            'revision' => 'submitted',
-            'rejected' => $statusBeforeLast === 'review' ? 'review' : 'submitted',
-            default => $this->status,
+            'cancelled' => $this->lastStageBeforeCancellation(),
+            'approved' => 'signing',
+            'handover', 'signing', 'archived' => $this->status,
+            default => 'submitted',
         };
         $position = array_search($stage, array_keys(self::PROGRESS_STEPS), true);
         $position = $position === false ? 0 : $position;
@@ -125,7 +322,7 @@ class DocumentRequest extends Model
             $state = match (true) {
                 $index < $position => 'done',
                 $index === $position => match ($this->status) {
-                    'archived' => 'done', 'rejected' => 'stopped', default => 'current',
+                    'archived' => 'done', 'rejected', 'cancelled' => 'stopped', default => 'current',
                 },
                 default => 'pending',
             };
@@ -133,6 +330,26 @@ class DocumentRequest extends Model
         }
 
         return $steps;
+    }
+
+    /** Tahap terakhir yang dicapai sebelum pembatalan, dibaca dari riwayat status. */
+    private function lastStageBeforeCancellation(): string
+    {
+        $stage = 'submitted';
+        foreach ($this->history as $event) {
+            if (isset($event['event'])) {
+                continue;
+            }
+            $status = $event['status'] ?? null;
+            if ($status === 'approved') {
+                $status = 'signing';
+            }
+            if (in_array($status, ['signing', 'handover'], true)) {
+                $stage = $status;
+            }
+        }
+
+        return $stage;
     }
 
     /**
@@ -145,6 +362,24 @@ class DocumentRequest extends Model
         $entries = [];
         $previous = null;
         foreach ($this->history as $event) {
+            $kind = $event['event'] ?? null;
+            if ($kind !== null) {
+                if (isset(self::TIMELINE_EVENT_LABELS[$kind])) {
+                    $byApplicant = $this->isApplicantUpload($event);
+                    $entries[] = [
+                        'label' => $this->timelineEventLabel($event),
+                        'actor' => match ($kind) {
+                            'signed_replaced', 'late_reason' => $byApplicant ? 'Pengaju' : 'Tim legal',
+                            default => 'Tim legal',
+                        },
+                        'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
+                        'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
+                        'tone' => $kind === 'late_reason' ? 'warning' : 'normal',
+                    ];
+                }
+
+                continue;
+            }
             $status = $event['status'] ?? null;
             if ($status !== 'draft' && isset(self::TIMELINE_LABELS[$status])) {
                 $entries[] = [
@@ -154,12 +389,14 @@ class DocumentRequest extends Model
                         'review' => 'Pemeriksa',
                         'approved' => 'Penyetuju',
                         'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Pemeriksa',
+                        'handover' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim legal',
+                        'signing', 'archived', 'cancelled' => 'Tim legal',
                         default => 'Tim pemeriksa',
                     },
                     'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
                     'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
                     'tone' => match ($status) {
-                        'revision' => 'warning', 'rejected' => 'danger', default => 'normal',
+                        'revision' => 'warning', 'rejected', 'cancelled' => 'danger', default => 'normal',
                     },
                 ];
             }
@@ -167,6 +404,34 @@ class DocumentRequest extends Model
         }
 
         return array_reverse($entries);
+    }
+
+    /**
+     * Unggahan scan dianggap dari pengaju bila tanpa user (tautan publik) atau user-nya pengaju sendiri; selain itu dari tim legal.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function isApplicantUpload(array $event): bool
+    {
+        $userId = $event['user_id'] ?? null;
+
+        return $userId === null || $userId === $this->requester_id;
+    }
+
+    /**
+     * Label kegiatan tanpa perubahan status (ganti draft/scan, alasan terlambat), atau null bila bukan kegiatan yang ditampilkan.
+     * Alasan terlambat yang dicatat tim legal atas nama pengaju diberi label tersendiri.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    public function timelineEventLabel(array $event): ?string
+    {
+        $kind = $event['event'] ?? null;
+        if (! is_string($kind) || ! isset(self::TIMELINE_EVENT_LABELS[$kind])) {
+            return null;
+        }
+
+        return $kind === 'late_reason' && ! $this->isApplicantUpload($event) ? 'Alasan keterlambatan dicatat tim legal' : self::TIMELINE_EVENT_LABELS[$kind];
     }
 
     public function notifications(): HasMany
@@ -177,6 +442,24 @@ class DocumentRequest extends Model
     public function applicantName(): string
     {
         return $this->requester_name ?? $this->requester?->name ?? 'Pengaju';
+    }
+
+    /** Nama pengaju untuk tampilan admin: pengaju internal di tempat sampah diberi tanda "(dihapus)". Pesan dan riwayat memakai applicantName(). */
+    public function applicantDisplayName(): string
+    {
+        return $this->requester_name ?? $this->requester?->displayName() ?? 'Pengaju';
+    }
+
+    /** Pengaju internal di tempat sampah tidak menerima WhatsApp; pengaju publik memakai nomor yang tersimpan di pengajuan. */
+    public function applicantReceivesWhatsApp(): bool
+    {
+        return $this->requester_phone !== null || ! $this->requester?->trashed();
+    }
+
+    /** Nomor WhatsApp pengaju: nomor pengajuan publik, atau nomor user pengaju (null bila user itu di tempat sampah). */
+    public function applicantPhone(): ?string
+    {
+        return $this->requester_phone ?? $this->requester?->whatsAppRecipientPhone();
     }
 
     /**
@@ -218,7 +501,6 @@ class DocumentRequest extends Model
                     }
                     $request->pic_user_id = $pic->id;
                     $request->reviewer_id = $type->request_reviewer_id ?? $pic->id;
-                    $request->approver_id = $type->request_approver_id;
                     $request->public_token = Str::random(64);
                     $request->requirements = $type->publicRequirements();
                 }
@@ -230,7 +512,7 @@ class DocumentRequest extends Model
                 $request->requester_division = $data['requester_division'];
                 $request->request_reason = $data['request_reason'];
                 $request->other_business_name = $data['other_business_name'] ?? null;
-                Validator::make($request->attributesToArray(), ['company_id' => ['nullable', Rule::exists('companies', 'id')->where('is_active', true)], 'other_business_name' => [Rule::requiredIf($request->company_id === null), 'nullable', 'string', 'max:255']])->validate();
+                Validator::make($request->attributesToArray(), ['company_id' => ['nullable', ActiveReference::rule('companies', $existing?->company_id, ['is_active' => true])], 'other_business_name' => [Rule::requiredIf($request->company_id === null), 'nullable', 'string', 'max:255']])->validate();
                 $attachments = $request->attachments;
                 foreach ($request->requirements['attachments'] ?? [] as $item) {
                     $value = $data['attachments'][$item['key']] ?? null;
@@ -278,14 +560,13 @@ class DocumentRequest extends Model
                     $type = DocumentType::where('is_active', true)->findOrFail($data['document_type_id'] ?? null);
                     $request->requester_id = $user->id;
                     $request->reviewer_id = $type->request_reviewer_id;
-                    $request->approver_id = $type->request_approver_id;
                     $request->requirements = ['fields' => $type->request_fields, 'attachments' => $type->request_attachments, 'has_expiry' => $type->has_expiry];
                 }
                 $request->fill($data);
                 Validator::make($request->attributesToArray(), [
-                    'company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)],
-                    'document_type_id' => ['required', 'exists:document_types,id'],
-                    'pic_user_id' => ['required', 'exists:users,id,deactivated_at,NULL'], 'title' => ['required', 'string', 'max:255'],
+                    'company_id' => ['required', ActiveReference::rule('companies', $existing?->company_id, ['is_active' => true])],
+                    'document_type_id' => ['required', ActiveReference::rule('document_types', $existing?->document_type_id)],
+                    'pic_user_id' => ['required', ActiveReference::rule('users', $existing?->pic_user_id, ['deactivated_at' => null])], 'title' => ['required', 'string', 'max:255'],
                     'partner_name' => ['nullable', 'string', 'max:255'], 'purpose' => ['required', 'in:new,renewal,amendment'],
                     'partner_pic' => ['nullable', 'string', 'max:255'], 'partner_contact' => ['nullable', 'string', 'max:255'],
                     'start_date' => ['nullable', 'date'], 'expiry_date' => ['nullable', 'date', 'after_or_equal:start_date'],
@@ -330,10 +611,10 @@ class DocumentRequest extends Model
     private function storeAttachment(UploadedFile $file, array $item): string
     {
         $disk = Storage::disk('local');
-        $type = DocumentType::whereKey($this->document_type_id)->value('name');
+        $type = DocumentType::withTrashed()->whereKey($this->document_type_id)->value('name');
         $directory = 'lms/requests/'.StorageFileName::folder($type);
         $filename = StorageFileName::available($disk, $directory, StorageFileName::build([
-            StorageFileName::companyName(Company::find($this->company_id)) ?? $this->other_business_name,
+            StorageFileName::companyName(Company::withTrashed()->find($this->company_id)) ?? $this->other_business_name,
             $type,
             $item['label'] ?? $item['key'],
             $this->exists ? "pengajuan{$this->id}" : null,
@@ -383,28 +664,31 @@ class DocumentRequest extends Model
         Validator::make($this->attributesToArray(), $rules, ['required' => ':attribute wajib diisi.', 'date' => ':attribute harus berupa tanggal.', 'numeric' => ':attribute harus berupa angka.', 'after_or_equal' => ':attribute tidak boleh sebelum tanggal mulai.'], $labels)->validate();
     }
 
+    /**
+     * Pindahkan status: kirim pengajuan (`submitted`), revisi atau tolak saat diperiksa, atau batalkan saat revisi atau setelah draft keluar (`cancelled`).
+     * Pembatalan tidak menghapus draf maupun scan; keduanya tetap ada sebagai catatan.
+     */
     public function transition(string $next, User $user, ?string $note = null): void
     {
         DB::transaction(function () use ($next, $user, $note): void {
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             $allowed = match ($next) {
                 'submitted' => $request->editableBy($user),
-                'review' => $request->status === 'submitted' && $request->requester_id !== $user->id,
-                'approved' => $request->status === 'review' && $request->requester_id !== $user->id,
-                'revision', 'rejected' => in_array($request->status, ['submitted', 'review'], true) && $request->requester_id !== $user->id,
+                'revision', 'rejected' => $request->status === 'submitted' && $request->requester_id !== $user->id,
+                'cancelled' => in_array($request->status, self::CANCELLABLE_STATUSES, true),
                 default => false,
             };
             if (! $allowed) {
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
             }
             $ability = match ($next) {
-                'submitted' => 'submit', 'review' => 'review', 'approved' => 'approve', 'revision', 'rejected' => 'decide', default => abort(422)
+                'submitted' => 'submit', 'revision', 'rejected' => 'revise', 'cancelled' => 'cancel',
             };
             Gate::forUser($user)->authorize($ability, $request);
             if ($next === 'submitted') {
                 $request->validateSubmission();
             }
-            if (in_array($next, ['revision', 'rejected'], true)) {
+            if (in_array($next, ['revision', 'rejected', 'cancelled'], true)) {
                 Validator::make(['note' => $note], ['note' => ['required', 'string', 'max:4000']])->validate();
             }
             $request->status = $next;
@@ -415,22 +699,148 @@ class DocumentRequest extends Model
         $this->refresh();
     }
 
-    public function archiveSigned(UploadedFile $file, string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null): Document
+    /**
+     * Keluarkan draf: dari Diperiksa ke Menunggu Tanda Tangan. Selama scan belum diunggah, draf boleh diganti;
+     * penggantian tidak mengubah `draft_issued_at` sehingga hitungan pengingat scan tidak mengulang.
+     */
+    public function issueDraft(UploadedFile $file, User $user): void
     {
-        return DB::transaction(function () use ($file, $number, $issuedDate, $expiryDate, $user, $companyId): Document {
-            $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
-            Gate::forUser($user)->authorize('archive', $request);
-            if ($request->status !== 'approved') {
-                throw ValidationException::withMessages(['status' => 'Pengajuan belum disetujui.']);
+        $this->saveFlowFile($file, 'draft', function (self $request) use ($user): void {
+            $allowed = ($request->status === 'submitted' && $request->requester_id !== $user->id)
+                || ($request->status === 'signing' && $request->signed_path === null);
+            if (! $allowed) {
+                throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
             }
-            Validator::make(['number' => $number], ['number' => ['required', 'string', 'max:255']])->validate();
-            $companyId = $request->company_id ?? $companyId;
-            Validator::make(['company_id' => $companyId], ['company_id' => ['required', Rule::exists('companies', 'id')->where('is_active', true)]])->validate();
+            Gate::forUser($user)->authorize('issueDraft', $request);
+        }, function (self $request) use ($user): void {
+            $request->draft_issued_at ??= now();
+            if ($request->status === 'submitted') {
+                $request->status = 'signing';
+                $request->recordEvent('signing', $user);
+            } elseif ($request->getOriginal('draft_path') === null) {
+                // Pengajuan hasil migrasi berstatus signing tanpa draf: draf pertama diperlakukan sebagai penerbitan pertama.
+                $request->recordEvent('signing', $user);
+            } else {
+                $request->recordActivity('draft_replaced', $user);
+            }
+            $request->save();
+            app(DocumentRequestNotifier::class)->enqueue($request);
+        });
+    }
+
+    /**
+     * Unggah scan bertanda tangan: dari Menunggu Tanda Tangan ke Menunggu Dokumen Fisik. Scan boleh diganti selama fisik
+     * belum diterima; penggantian tidak mengubah `signed_uploaded_at` sehingga batas 7 hari tidak mengulang.
+     * `$user` null berarti dari tautan publik bertoken, yang otorisasinya dilakukan controller.
+     */
+    public function uploadSigned(UploadedFile $file, ?User $user): void
+    {
+        $this->saveFlowFile($file, 'signed', function (self $request) use ($user): void {
+            if (! in_array($request->status, ['signing', 'handover'], true)) {
+                throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
+            }
+            if ($user !== null) {
+                Gate::forUser($user)->authorize('uploadSigned', $request);
+            }
+        }, function (self $request) use ($user): void {
+            if ($request->status === 'signing') {
+                $request->status = 'handover';
+                $request->signed_uploaded_at ??= now();
+                $request->recordEvent('handover', $user);
+                $request->save();
+                app(DocumentRequestNotifier::class)->enqueue($request);
+
+                return;
+            }
+            $request->recordActivity('signed_replaced', $user);
+            $request->save();
+        });
+    }
+
+    /**
+     * Catat alasan keterlambatan penyerahan fisik. Boleh berkali-kali, tidak perlu disetujui, dan tidak memperpanjang batas.
+     * `$user` null berarti dari tautan publik bertoken.
+     */
+    public function addLateReason(string $reason, ?User $user): DocumentRequestLateReason
+    {
+        $lateReason = DB::transaction(function () use ($reason, $user): DocumentRequestLateReason {
+            $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if (! $request->isHandoverLate()) {
+                throw ValidationException::withMessages(['reason' => 'Alasan keterlambatan baru bisa diisi setelah batas penyerahan dokumen fisik lewat.']);
+            }
+            if ($user !== null) {
+                Gate::forUser($user)->authorize('addLateReason', $request);
+            }
+            Validator::make(['reason' => $reason], ['reason' => ['required', 'string', 'max:2000']], [], ['reason' => 'Alasan keterlambatan'])->validate();
+            $lateReason = $request->lateReasons()->create(['reason' => $reason, 'user_id' => $user?->id]);
+            $request->recordActivity('late_reason', $user, $reason);
+            $request->save();
+
+            return $lateReason;
+        });
+        $this->refresh();
+
+        return $lateReason;
+    }
+
+    /**
+     * Fisik diterima: arsipkan scan bertanda tangan sebagai dokumen lalu tandai pengajuan Selesai.
+     * Bila scan belum masuk, `$signedScan` disimpan dulu sebagai scan pengajuan dalam transaksi yang sama (tanpa pesan "menunggu dokumen fisik").
+     * Nomor dokumen boleh kosong (dilengkapi nanti di menu Dokumen); tanggal terbit dan berakhir diambil dari pengajuan bila tidak diberikan.
+     */
+    public function markReceived(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null, ?UploadedFile $signedScan = null): Document
+    {
+        /** @var list<array{0: string, 1: string}> $storedFiles */
+        $storedFiles = [];
+
+        try {
+            return $this->markReceivedInTransaction($number, $issuedDate, $expiryDate, $user, $companyId, $signedScan, $storedFiles);
+        } catch (Throwable $exception) {
+            // File sudah tersimpan di disk sebelum DB di-rollback; hapus agar tidak tertinggal.
+            foreach ($storedFiles as [$disk, $path]) {
+                try {
+                    Storage::disk($disk)->delete($path);
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            throw $exception;
+        }
+    }
+
+    /** @param list<array{0: string, 1: string}> $storedFiles */
+    private function markReceivedInTransaction(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?UploadedFile $signedScan, array &$storedFiles): Document
+    {
+        return DB::transaction(function () use ($number, $issuedDate, $expiryDate, $user, $companyId, $signedScan, &$storedFiles): Document {
+            $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($request->status, ['signing', 'handover'], true)) {
+                throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
+            }
+            Gate::forUser($user)->authorize('markReceived', $request);
+            if ($signedScan !== null && ! $request->hasSignedScan()) {
+                $request->takeSignedScanForReceipt($signedScan, $user, $storedFiles);
+            }
+            $file = $request->status === 'handover' ? $request->signedScanFile() : null;
+            if ($file === null) {
+                throw ValidationException::withMessages(['status' => 'Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.']);
+            }
+            $number = filled($number) ? $number : null;
+            Validator::make(['number' => $number], ['number' => ['nullable', 'string', 'max:255']])->validate();
+            $issuedDate ??= $request->start_date?->toDateString();
+            $expiryDate ??= $request->expiry_date?->toDateString();
+            $ownCompanyId = $request->company_id;
+            $companyId = $ownCompanyId ?? $companyId;
+            Validator::make(['company_id' => $companyId], ['company_id' => ['required', ActiveReference::rule('companies', $ownCompanyId, ['is_active' => true])]])->validate();
             $request->company_id = $companyId;
-            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user);
+            // Badan usaha dan jenis dokumen yang sudah terpasang pada pengajuan tetap sah walau kini nonaktif atau di tempat sampah.
+            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id ?? $request->reviewer_id ?? $user->id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
+            $storedFiles[] = [$document->currentVersion->disk, $document->currentVersion->file_path];
             $request->document_id = $document->id;
+            $request->physical_received_at = now();
             $request->status = 'archived';
-            $request->recordEvent('archived', $user);
+            $daysLate = $request->daysLateAtReceipt();
+            $request->recordEvent('archived', $user, $daysLate > 0 ? "Diterima terlambat {$daysLate} hari" : null);
             $request->save();
             app(DocumentRequestNotifier::class)->enqueue($request);
             $this->refresh();
@@ -439,10 +849,156 @@ class DocumentRequest extends Model
         });
     }
 
+    /**
+     * Simpan scan yang diunggah bersama Fisik Diterima, seperti uploadSigned tetapi tanpa pesan WhatsApp (pesan Selesai menyusul).
+     *
+     * @param  list<array{0: string, 1: string}>  $storedFiles
+     */
+    private function takeSignedScanForReceipt(UploadedFile $file, User $user, array &$storedFiles): void
+    {
+        Gate::forUser($user)->authorize('uploadSigned', $this);
+        Validator::make(['signed_scan' => $file], ['signed_scan' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]], [], ['signed_scan' => 'Scan dokumen bertanda tangan'])->validate();
+        $path = $this->storeFlowFile($file, 'signed');
+        $storedFiles[] = ['local', $path];
+        $this->signed_path = $path;
+        $this->signed_name = basename(str_replace('\\', '/', $file->getClientOriginalName()));
+        $this->signed_uploaded_at ??= now();
+        $this->status = 'handover';
+        $this->recordEvent('handover', $user);
+    }
+
+    /** Scan bertanda tangan yang tersimpan, sebagai berkas unggahan agar bisa diarsipkan; null bila belum ada. */
+    private function signedScanFile(): ?UploadedFile
+    {
+        $disk = Storage::disk('local');
+        if ($this->signed_path === null || ! $disk->exists($this->signed_path)) {
+            return null;
+        }
+
+        return new UploadedFile($disk->path($this->signed_path), $this->signed_name ?? basename($this->signed_path), null, null, true);
+    }
+
+    /** Scan bertanda tangan sudah masuk; bila belum, Fisik Diterima meminta scan diunggah sekaligus. */
+    public function hasSignedScan(): bool
+    {
+        return $this->status === 'handover' && filled($this->signed_path);
+    }
+
+    /**
+     * Badge tambahan di samping status agar langkah yang belum beres terlihat dari daftar: "Belum scan" saat menunggu tanda tangan,
+     * "Fisik belum diterima" saat menunggu dokumen fisik. Kosong untuk status lain dan untuk pengajuan di tempat sampah.
+     *
+     * @return list<string>
+     */
+    public function pendingBadges(): array
+    {
+        if ($this->trashed()) {
+            return [];
+        }
+
+        return match ($this->status) {
+            'signing' => blank($this->signed_path) ? [self::BADGE_NO_SCAN] : [],
+            'handover' => [self::BADGE_NOT_RECEIVED],
+            default => [],
+        };
+    }
+
+    /**
+     * Status ditambah badge langkah yang belum beres, untuk kolom Status di daftar dan Ringkasan di halaman detail.
+     *
+     * @return list<string>
+     */
+    public function statusBadges(): array
+    {
+        return [self::statusLabel($this->status), ...$this->pendingBadges()];
+    }
+
+    /** Warna satu badge dari statusBadges(): status mengikuti warnanya, badge langkah kuning, dan merah bila fisik sudah terlambat. */
+    public function statusBadgeColor(string $badge): string
+    {
+        return match ($badge) {
+            self::BADGE_NO_SCAN => 'warning',
+            self::BADGE_NOT_RECEIVED => $this->isHandoverLate() ? 'danger' : 'warning',
+            default => match ($this->status) {
+                'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info',
+            },
+        };
+    }
+
+    /**
+     * Simpan draf atau scan dalam transaksi terkunci. `$guard` memeriksa tahap dan izin sebelum file disimpan,
+     * `$apply` mengubah dan menyimpan pengajuan. File lama dihapus setelah commit; bila gagal, file baru yang dihapus.
+     *
+     * @param  'draft'|'signed'  $kind
+     * @param  callable(self): void  $guard
+     * @param  callable(self): void  $apply
+     */
+    private function saveFlowFile(UploadedFile $file, string $kind, callable $guard, callable $apply): void
+    {
+        $newPath = null;
+        $oldPath = null;
+        try {
+            DB::transaction(function () use ($file, $kind, $guard, $apply, &$newPath, &$oldPath): void {
+                $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+                $guard($request);
+                Validator::make(['file' => $file], ['file' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]])->validate();
+                $newPath = $request->storeFlowFile($file, $kind);
+                $oldPath = $request->{"{$kind}_path"};
+                $request->{"{$kind}_path"} = $newPath;
+                $request->{"{$kind}_name"} = basename(str_replace('\\', '/', $file->getClientOriginalName()));
+                $apply($request);
+            });
+        } catch (Throwable $exception) {
+            if ($newPath !== null) {
+                Storage::disk('local')->delete($newPath);
+            }
+            throw $exception;
+        }
+        if ($oldPath !== null && $oldPath !== $newPath) {
+            try {
+                Storage::disk('local')->delete($oldPath);
+            } catch (Throwable $cleanupException) {
+                report($cleanupException);
+            }
+        }
+        $this->refresh();
+    }
+
+    /**
+     * Simpan draf (`draft`) atau scan bertanda tangan (`signed`) di `lms/requests/{jenis-dokumen}/`.
+     *
+     * @param  'draft'|'signed'  $kind
+     */
+    private function storeFlowFile(UploadedFile $file, string $kind): string
+    {
+        $disk = Storage::disk('local');
+        $type = DocumentType::withTrashed()->whereKey($this->document_type_id)->value('name');
+        $directory = 'lms/requests/'.StorageFileName::folder($type);
+        $filename = StorageFileName::available($disk, $directory, StorageFileName::build([
+            StorageFileName::companyName(Company::withTrashed()->find($this->company_id)) ?? $this->other_business_name,
+            $type,
+            $kind === 'draft' ? 'draft' : 'ttd',
+            "pengajuan{$this->id}",
+        ], now(), $file->getClientOriginalExtension()));
+
+        $path = $file->storeAs($directory, $filename, ['disk' => 'local', 'visibility' => 'private']);
+        if ($path === false) {
+            throw new \RuntimeException('File gagal disimpan.');
+        }
+
+        return $path;
+    }
+
     private function recordEvent(string $status, ?User $user, ?string $note = null): void
     {
         $now = now();
         $this->history = [...$this->history, ['status' => $status, 'user' => $user?->name ?? $this->applicantName(), 'user_id' => $user?->id, 'at' => $now->toIso8601String(), 'note' => $note]];
         $this->status_changed_at = $now;
+    }
+
+    /** Catat kegiatan tanpa perubahan status (mis. `draft_replaced`, `signed_replaced`, `late_reason`); `status_changed_at` tidak berubah. */
+    private function recordActivity(string $event, ?User $user, ?string $note = null): void
+    {
+        $this->history = [...$this->history, ['event' => $event, 'status' => $this->status, 'user' => $user?->name ?? $this->applicantName(), 'user_id' => $user?->id, 'at' => now()->toIso8601String(), 'note' => $note]];
     }
 }

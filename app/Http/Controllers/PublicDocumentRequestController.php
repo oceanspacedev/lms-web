@@ -9,8 +9,11 @@ use App\Services\WaghubService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class PublicDocumentRequestController extends Controller
 {
@@ -67,6 +70,64 @@ class PublicDocumentRequestController extends Controller
         return $this->handleSubmission($request, $waghub, DocumentRequest::where('public_token', $token)->firstOrFail());
     }
 
+    /** Pemohon mengunggah scan bertanda tangan lewat tautan status; tautan bertoken menjadi otorisasinya. */
+    public function uploadScan(Request $request, string $token): RedirectResponse
+    {
+        return $this->handleSigningAction($request, $token, ['signing', 'handover'], function (DocumentRequest $submission) use ($request): string {
+            $file = $request->file('scan');
+            if (! $file instanceof UploadedFile || ! $file->isValid()) {
+                throw ValidationException::withMessages(['scan' => 'Pilih berkas scan dokumen bertanda tangan terlebih dahulu.']);
+            }
+            $submission->uploadSigned($file, null);
+            $due = $submission->refresh()->handoverDueDate()?->translatedFormat('d M Y');
+
+            return $submission->isHandoverLate()
+                ? 'Scan diterima. Batas penyerahan dokumen asli sudah lewat, segera serahkan ke tim legal.'
+                : 'Scan diterima. Serahkan dokumen asli ke tim legal paling lambat '.$due.'.';
+        });
+    }
+
+    /** Pemohon menulis alasan keterlambatan penyerahan dokumen fisik; boleh berkali-kali dan tidak memperpanjang batas. */
+    public function lateReason(Request $request, string $token): RedirectResponse
+    {
+        return $this->handleSigningAction($request, $token, ['handover'], function (DocumentRequest $submission) use ($request): string {
+            $reason = $request->input('reason');
+            $submission->addLateReason(is_string($reason) ? trim($reason) : '', null);
+
+            return 'Alasan keterlambatan terkirim ke tim legal. Tetap serahkan dokumen asli secepatnya.';
+        });
+    }
+
+    /**
+     * Jalankan aksi pemohon pada tahap tanda tangan atau penyerahan fisik, lalu kembali ke halaman status.
+     *
+     * @param  list<string>  $allowedStatuses
+     * @param  callable(DocumentRequest): string  $action  Mengembalikan pesan sukses untuk pemohon.
+     */
+    private function handleSigningAction(Request $request, string $token, array $allowedStatuses, callable $action): RedirectResponse
+    {
+        $submission = DocumentRequest::where('public_token', $token)->firstOrFail();
+        $statusUrl = route('requests.public.status', ['token' => $submission->public_token]);
+        if (! in_array($submission->status, $allowedStatuses, true)) {
+            return redirect($statusUrl)->withErrors(['status' => 'Pengajuan ini tidak sedang menunggu dokumen tersebut.'])->withHeaders($this->privateHeaders());
+        }
+
+        try {
+            $message = $action($submission);
+
+            return redirect($statusUrl)->with('status_done', $message)->withHeaders($this->privateHeaders());
+        } catch (ValidationException $exception) {
+            $exception->redirectTo($statusUrl);
+            throw $exception;
+        } catch (HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect($statusUrl)->withErrors(['submit' => 'Permintaan belum bisa diproses karena gangguan sistem. Coba lagi sebentar lagi.']);
+        }
+    }
+
     private function handleSubmission(Request $request, WaghubService $waghub, ?DocumentRequest $submission = null): RedirectResponse
     {
         try {
@@ -74,6 +135,15 @@ class PublicDocumentRequestController extends Controller
         } catch (ValidationException $exception) {
             $exception->redirectTo($submission ? route('requests.public.status', ['token' => $submission->public_token]) : route('requests.public.create'));
             throw $exception;
+        } catch (HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // Gangguan sistem (DB, penyimpanan): kembalikan ke form dengan isian terjaga, bukan halaman 500 yang mengosongkan form.
+            return redirect($submission ? route('requests.public.status', ['token' => $submission->public_token]) : route('requests.public.create'))
+                ->withInput($request->except(['attachments', 'website']))
+                ->withErrors(['submit' => 'Pengajuan belum bisa dikirim karena gangguan sistem. Coba kirim lagi sebentar lagi.']);
         }
     }
 

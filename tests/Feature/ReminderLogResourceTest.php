@@ -8,7 +8,7 @@ use App\Filament\Resources\ReminderLogs\Pages\ViewReminderLog;
 use App\Filament\Resources\ReminderLogs\ReminderLogResource;
 use App\Models\ReminderLog;
 use App\Models\User;
-use Database\Seeders\ReminderLogSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -22,7 +22,7 @@ class ReminderLogResourceTest extends TestCase
     {
         parent::setUp();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(ReminderLogSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     public function test_authorized_user_can_read_logs_without_mutating_actions(): void

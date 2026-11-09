@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Companies;
 
+use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Companies\Pages\CreateCompany;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
@@ -13,7 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
 class CompanyResource extends Resource
 {
@@ -30,6 +31,11 @@ class CompanyResource extends Resource
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        return TrashActions::routeBindingQuery(parent::getRecordRouteBindingEloquentQuery());
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -55,15 +61,5 @@ class CompanyResource extends Resource
             'create' => CreateCompany::route('/create'),
             'edit' => EditCompany::route('/{record}/edit'),
         ];
-    }
-
-    public static function canDelete(Model $record): bool
-    {
-        return false;
-    }
-
-    public static function canDeleteAny(): bool
-    {
-        return false;
     }
 }

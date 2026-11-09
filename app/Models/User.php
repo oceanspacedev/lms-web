@@ -3,6 +3,9 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Concerns\Trashable;
+use App\Services\WaghubService;
+use App\Support\ActiveReference;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -20,19 +23,69 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable;
+    use HasFactory, HasRoles, Notifiable, Trashable;
 
-    /** User nonaktif tidak bisa masuk (password maupun OTP) dan sesi yang masih terbuka ditolak oleh middleware panel. */
+    public function trashSubject(): string
+    {
+        return 'user';
+    }
+
+    public function trashLabel(): string
+    {
+        return (string) $this->name;
+    }
+
+    /**
+     * Kode login yang belum dipakai hangus saat nomor WhatsApp atau email diganti, agar tidak bisa dipakai pemilik lama.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            if ($user->wasChanged('phone')) {
+                WhatsappOtp::where('user_id', $user->getKey())->whereNull('verified_at')->update(['expires_at' => now()]);
+            }
+
+            if ($user->wasChanged('email')) {
+                EmailOtp::where('user_id', $user->getKey())->whereNull('verified_at')->update(['expires_at' => now()]);
+            }
+        });
+    }
+
+    /** User nonaktif atau di tempat sampah tidak bisa masuk (password maupun OTP) dan sesi yang masih terbuka ditolak oleh middleware panel. */
     public function canAccessPanel(Panel $panel): bool
     {
         return $panel->getId() === 'admin'
             && $this->isActive()
+            && ! $this->trashed()
             && ($this->roles()->exists() || $this->getAllPermissions()->isNotEmpty());
     }
 
     public function isActive(): bool
     {
         return $this->deactivated_at === null;
+    }
+
+    /** Nomor WhatsApp untuk pesan ke user ini, atau null bila user di tempat sampah: user di tempat sampah tidak pernah menerima WhatsApp. */
+    public function whatsAppRecipientPhone(): ?string
+    {
+        return $this->trashed() ? null : $this->phone;
+    }
+
+    /**
+     * Nomor WhatsApp (sudah dinormalisasi) yang hanya dimiliki user di tempat sampah. Dipakai saat mengirim pesan yang
+     * penerimanya sudah tersimpan (payload antre atau gagal), supaya pesan itu tidak pernah sampai ke user di tempat sampah.
+     */
+    public static function phoneBelongsOnlyToTrashedUsers(?string $normalizedPhone): bool
+    {
+        if ($normalizedPhone === null || strlen($normalizedPhone) < 3) {
+            return false;
+        }
+
+        $waghub = app(WaghubService::class);
+        $owners = static::withTrashed()->where('phone', 'like', '%'.substr($normalizedPhone, 2))->get(['id', 'phone', 'deleted_at'])
+            ->filter(fn (User $user): bool => $waghub->normalizePhone($user->phone) === $normalizedPhone);
+
+        return $owners->isNotEmpty() && $owners->every(fn (User $user): bool => $user->trashed());
     }
 
     public function isSuperAdmin(): bool
@@ -47,14 +100,13 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * User aktif, ditambah user yang sedang tersimpan pada form (walau sudah nonaktif) agar data lama tetap bisa disimpan.
+     * User aktif, ditambah user yang sedang tersimpan pada form (walau sudah nonaktif atau di tempat sampah) agar data lama tetap bisa disimpan.
      *
      * @param  Builder<User>  $query
      */
     public function scopeActiveOrKeep(Builder $query, int|string|null $keepId): Builder
     {
-        return $query->where(fn (Builder $query): Builder => $query->whereNull($query->qualifyColumn('deactivated_at'))
-            ->when(filled($keepId), fn (Builder $query): Builder => $query->orWhere($query->qualifyColumn('id'), $keepId)));
+        return ActiveReference::constrain($query, $keepId, ['deactivated_at' => null]);
     }
 
     public function deactivatedBy(): BelongsTo

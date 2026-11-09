@@ -191,9 +191,9 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
-            DocumentRequestResource::class => ['viewAny', 'view', 'create', 'update'],
+            DocumentRequestResource::class => ['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', 'restore', 'restoreAny', 'forceDelete', 'forceDeleteAny'],
             ReminderTemplateResource::class => ['viewAny', 'view', 'create', 'update'],
-            UserResource::class => ['viewAny', 'view', 'create', 'update'],
+            UserResource::class => ['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', 'restore', 'restoreAny', 'forceDelete', 'forceDeleteAny'],
             ReminderLogResource::class => ['viewAny', 'view'],
             RoleResource::class => [
                 'viewAny',
@@ -265,7 +265,8 @@ return [
     'custom_permissions' => [
         'ViewAll:DocumentRequest' => 'Lihat semua pengajuan',
         'Review:DocumentRequest' => 'Periksa pengajuan',
-        'Approve:DocumentRequest' => 'Setujui pengajuan',
+        'Approve:DocumentRequest' => 'Setujui pengajuan (tidak dipakai)',
+        'ReceiveEscalation:DocumentRequest' => 'Terima eskalasi pengajuan',
         'View:Horizon' => 'Horizon',
         'View:LogViewer' => 'Log Laravel',
         'receive_reminder' => 'Penerima cadangan pengingat WhatsApp',

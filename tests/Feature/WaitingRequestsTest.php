@@ -7,6 +7,7 @@ use App\Filament\Widgets\DocumentStatusOverview;
 use App\Filament\Widgets\ExpiringByCompany;
 use App\Filament\Widgets\ExpiringDocuments;
 use App\Filament\Widgets\ReminderHealthAlerts;
+use App\Filament\Widgets\TrashOverview;
 use App\Filament\Widgets\WaitingRequestsOverview;
 use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
@@ -59,9 +60,9 @@ class WaitingRequestsTest extends TestCase
     public function test_scope_selects_only_waiting_statuses_older_than_the_threshold_inclusively(): void
     {
         $exactly = $this->request('submitted', 2);
-        $older = $this->request('review', 9);
+        $older = $this->request('submitted', 9);
         $almost = $this->request('submitted', 2, ['status_changed_at' => now()->subDays(2)->addMinute()]);
-        $fresh = $this->request('review', 0);
+        $fresh = $this->request('submitted', 0);
         $others = collect(['draft', 'revision', 'approved', 'rejected', 'archived'])->map(fn (string $status): DocumentRequest => $this->request($status, 30));
 
         $ids = DocumentRequest::query()->waitingLongerThan(2)->pluck('id')->all();
@@ -93,14 +94,23 @@ class WaitingRequestsTest extends TestCase
 
     public function test_transition_stamps_status_changed_at_and_restarts_the_waiting_clock(): void
     {
+        $requester = $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Update:DocumentRequest']);
         $reviewer = $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest']);
-        $request = $this->request('submitted', 10, ['requester_id' => null, 'reviewer_id' => $reviewer->id, 'requester_name' => 'Pengaju', 'requester_phone' => '081234567890']);
+        $request = $this->request('submitted', 10, ['requester_id' => $requester->id, 'reviewer_id' => $reviewer->id, 'start_date' => '2026-11-01']);
         $this->assertCount(1, DocumentRequest::query()->waitingLongerThan(2)->get());
 
-        $request->transition('review', $reviewer);
+        $request->transition('revision', $reviewer, 'Lengkapi lampiran.');
 
         $request->refresh();
-        $this->assertSame('review', $request->status);
+        $this->assertSame('revision', $request->status);
+        $this->assertTrue($request->status_changed_at->equalTo(now()));
+        $this->assertSame(0, DocumentRequest::query()->waitingLongerThan(2)->count());
+        $this->travel(3)->days();
+
+        $request->transition('submitted', $requester);
+
+        $request->refresh();
+        $this->assertSame('submitted', $request->status);
         $this->assertTrue($request->status_changed_at->equalTo(now()));
         $this->assertSame(0, DocumentRequest::query()->waitingLongerThan(2)->count());
         $this->travel(3)->days();
@@ -112,13 +122,11 @@ class WaitingRequestsTest extends TestCase
         $this->signIn();
         $stale = $this->request('submitted', 4);
         $fresh = $this->request('submitted', 1);
-        $slowReview = $this->request('review', 3);
+        $slowReview = $this->request('submitted', 3);
 
         Livewire::test(ListDocumentRequests::class)->assertCanSeeTableRecords([$stale, $fresh, $slowReview])
             ->filterTable('waiting_long', true)
-            ->assertCanSeeTableRecords([$stale, $slowReview])->assertCanNotSeeTableRecords([$fresh])
-            ->filterTable('status', 'review')
-            ->assertCanSeeTableRecords([$slowReview])->assertCanNotSeeTableRecords([$stale, $fresh]);
+            ->assertCanSeeTableRecords([$stale, $slowReview])->assertCanNotSeeTableRecords([$fresh]);
 
         ReminderTemplate::factory()->create(['request_reminder_after_days' => 4]);
         Livewire::test(ListDocumentRequests::class)->filterTable('waiting_long', true)
@@ -131,19 +139,17 @@ class WaitingRequestsTest extends TestCase
         $this->signIn();
         $this->request('submitted', 5);
         $this->request('submitted', 0);
-        $this->request('review', 3);
+        $this->request('revision', 3);
         $this->request('approved', 30);
 
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke(Livewire::test(WaitingRequestsOverview::class)->instance());
 
-        $this->assertCount(2, $stats);
+        $this->assertCount(4, $stats);
         $this->assertSame('Menunggu Pemeriksaan', $stats[0]->getLabel());
         $this->assertSame(2, $stats[0]->getValue());
         $this->assertSame('1 menunggu lebih dari 2 hari', (string) $stats[0]->getDescription());
         $this->assertStringContainsString('waiting_long', rawurldecode($stats[0]->getUrl()));
-        $this->assertStringContainsString('submitted', rawurldecode($stats[0]->getUrl()));
-        $this->assertSame('Menunggu Persetujuan', $stats[1]->getLabel());
-        $this->assertSame(1, $stats[1]->getValue());
+        $this->assertStringContainsString('to_review', rawurldecode($stats[0]->getUrl()));
     }
 
     public function test_widget_without_stale_requests_does_not_link_to_the_stale_filter(): void
@@ -175,7 +181,7 @@ class WaitingRequestsTest extends TestCase
         $this->request('approved', 30);
         $this->assertFalse(WaitingRequestsOverview::canView());
 
-        $this->request('review', 0);
+        $this->request('submitted', 0);
         $this->assertTrue(WaitingRequestsOverview::canView());
         $this->assertContains(WaitingRequestsOverview::class, Livewire::test(Dashboard::class)->instance()->getVisibleWidgets());
 
@@ -195,7 +201,7 @@ class WaitingRequestsTest extends TestCase
 
         $widget->call('$refresh')->assertSuccessful()->assertSee('Menunggu Pemeriksaan');
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke($widget->instance());
-        $this->assertSame([0, 0], array_map(fn ($stat): int => $stat->getValue(), $stats));
+        $this->assertSame([0, 0, 0, 0], array_map(fn ($stat): int => $stat->getValue(), $stats));
 
         $this->actingAs(User::factory()->create());
         $widget->call('$refresh')->assertForbidden();
@@ -205,11 +211,13 @@ class WaitingRequestsTest extends TestCase
     {
         $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'ViewAll:DocumentRequest', 'ViewAny:Document']);
         $this->request('submitted', 1);
-        $expected = [ReminderHealthAlerts::class, WaitingRequestsOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
+        $expected = [ReminderHealthAlerts::class, WaitingRequestsOverview::class, TrashOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
 
-        $this->assertSame([0, 1, 2, 3, 4], array_map(fn (string $widget): int => $widget::getSort(), $expected));
+        $this->assertSame([0, 1, 2, 3, 4, 5], array_map(fn (string $widget): int => $widget::getSort(), $expected));
         $visible = Livewire::test(Dashboard::class)->instance()->getVisibleWidgets();
         $this->assertContains(WaitingRequestsOverview::class, $visible);
-        $this->assertSame(array_slice($expected, 1), array_values(array_intersect($visible, array_slice($expected, 1))));
+        // Kartu Tempat sampah khusus super admin; urutannya di dasbor super admin diuji di TrashOverviewTest.
+        $expectedVisible = [WaitingRequestsOverview::class, DocumentStatusOverview::class, ExpiringDocuments::class, ExpiringByCompany::class];
+        $this->assertSame($expectedVisible, array_values(array_intersect($visible, $expected)));
     }
 }

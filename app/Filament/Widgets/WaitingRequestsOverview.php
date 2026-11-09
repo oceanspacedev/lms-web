@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Gate;
 
 class WaitingRequestsOverview extends StatsOverviewWidget
 {
-    /** @var array<string, string> Status yang menunggu staf, beserta labelnya di kartu. */
-    public const STAGES = ['submitted' => 'Menunggu Pemeriksaan', 'review' => 'Menunggu Persetujuan'];
+    /** @var array<string, string> Tahap yang dipantau staf legal (nilai filter `stage`), beserta labelnya di kartu. */
+    public const STAGES = ['to_review' => 'Menunggu Pemeriksaan', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Fisik', 'late' => 'Terlambat'];
 
     protected static ?int $sort = 1;
 
@@ -22,7 +22,10 @@ class WaitingRequestsOverview extends StatsOverviewWidget
     public static function canView(): bool
     {
         return Gate::allows('viewAny', DocumentRequest::class)
-            && static::visibleRequests()->whereIn('status', DocumentRequest::WAITING_STATUSES)->exists();
+            && (static::visibleRequests()->whereIn('status', DocumentRequest::WAITING_STATUSES)->exists()
+                || static::visibleRequests()->where('status', 'signing')->exists()
+                || static::visibleRequests()->handoverOnTime()->exists()
+                || static::visibleRequests()->handoverLate()->exists());
     }
 
     public function mount(): void
@@ -50,17 +53,41 @@ class WaitingRequestsOverview extends StatsOverviewWidget
     {
         $days = ReminderTemplate::requestReminderSettings()['after_days'];
 
-        return collect(self::STAGES)->map(function (string $label, string $status) use ($days): Stat {
-            $total = static::visibleRequests()->where('status', $status)->count();
-            $waiting = static::visibleRequests()->where('status', $status)->waitingLongerThan($days)->count();
+        $waiting = static::visibleRequests()->whereIn('status', DocumentRequest::WAITING_STATUSES)->count();
+        $waitingLong = static::visibleRequests()->waitingLongerThan($days)->count();
+        $signing = static::visibleRequests()->where('status', 'signing')->count();
+        $scanOverdue = static::visibleRequests()->scanOverdue()->count();
+        $late = static::visibleRequests()->handoverLate()->count();
+        $lateWithoutReason = static::visibleRequests()->lateWithoutReason()->count();
+        $stageUrl = fn (string $stage, array $extra = []): string => DocumentRequestResource::getUrl('index', ['filters' => ['stage' => ['value' => $stage], ...$extra]]);
 
-            return Stat::make($label, $total)
-                ->description($waiting > 0 ? "{$waiting} menunggu lebih dari {$days} hari" : "Tidak ada yang menunggu lebih dari {$days} hari")
-                ->color($waiting > 0 ? 'warning' : 'gray')
-                ->url(DocumentRequestResource::getUrl('index', ['filters' => [
-                    'status' => ['value' => $status],
-                    ...($waiting > 0 ? ['waiting_long' => ['isActive' => true]] : []),
-                ]]));
-        })->values()->all();
+        return [
+            Stat::make(self::STAGES['to_review'], $waiting)
+                ->description($waitingLong > 0 ? "{$waitingLong} menunggu lebih dari {$days} hari" : "Tidak ada yang menunggu lebih dari {$days} hari")
+                ->color($waitingLong > 0 ? 'warning' : 'gray')
+                ->url($stageUrl('to_review', $waitingLong > 0 ? ['waiting_long' => ['isActive' => true]] : [])),
+            Stat::make(self::STAGES['signing'], $signing)
+                ->description($scanOverdue > 0 ? "{$scanOverdue} belum unggah scan lebih dari 7 hari" : 'Tidak ada scan yang tertunda lebih dari 7 hari')
+                ->color($scanOverdue > 0 ? 'warning' : 'gray')
+                ->url($stageUrl($scanOverdue > 0 ? 'scan_overdue' : 'signing')),
+            // Semua yang fisiknya belum diterima, termasuk yang terlambat; kartu Terlambat merinci yang lewat batas.
+            Stat::make(self::STAGES['handover'], static::visibleRequests()->where('status', 'handover')->count())
+                ->description($late > 0 ? "{$late} di antaranya terlambat" : 'Belum ada yang lewat batas 7 hari')
+                ->color($late > 0 ? 'warning' : 'gray')
+                ->url($stageUrl('handover')),
+            Stat::make(self::STAGES['late'], $late)
+                ->description(match (true) {
+                    $late === 0 => 'Tidak ada yang terlambat',
+                    $lateWithoutReason > 0 => "{$lateWithoutReason} belum ada alasan",
+                    default => 'Semua sudah memberi alasan',
+                })
+                ->color($lateWithoutReason > 0 ? 'danger' : ($late > 0 ? 'warning' : 'gray'))
+                ->url($stageUrl($lateWithoutReason > 0 ? 'late_no_reason' : 'late')),
+        ];
+    }
+
+    protected function getColumns(): int
+    {
+        return 4;
     }
 }

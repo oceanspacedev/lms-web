@@ -169,7 +169,7 @@ class DocumentRequestListScreenTest extends TestCase
     {
         $user = $this->signIn(['Review:DocumentRequest']);
         $mine = $this->request('submitted', ['requester_id' => User::factory()->create()->id, 'reviewer_id' => $user->id]);
-        $notMine = $this->request('review', ['requester_id' => User::factory()->create()->id]);
+        $notMine = $this->request('signing', ['requester_id' => User::factory()->create()->id]);
 
         $page = Livewire::test(ListDocumentRequests::class)->assertSet('activeTab', 'all')
             ->assertSee('Semua')->assertSee('Perlu tindakan saya')
@@ -195,30 +195,12 @@ class DocumentRequestListScreenTest extends TestCase
         $public = $this->request('submitted', ['requester_id' => null, 'requester_name' => 'Budi Publik', 'requester_phone' => '081234567890', 'reviewer_id' => $user->id]);
         $ownSubmission = $this->request('submitted', ['requester_id' => $user->id, 'reviewer_id' => null]);
         $assignedElsewhere = $this->request('submitted', ['requester_id' => $other->id, 'reviewer_id' => User::factory()->create()->id]);
-        $inApproval = $this->request('review', ['requester_id' => $other->id, 'reviewer_id' => $user->id]);
-        $approvedByOthers = $this->request('approved', ['requester_id' => $other->id]);
 
         $page = Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')
             ->assertCanSeeTableRecords([$unassigned, $assigned, $public])
-            ->assertCanNotSeeTableRecords([$ownSubmission, $assignedElsewhere, $inApproval, $approvedByOthers]);
+            ->assertCanNotSeeTableRecords([$ownSubmission, $assignedElsewhere]);
         $this->assertSame('3', $page->instance()->getCachedTabs()['actionable']->getBadge());
         $this->assertMatchesRegularExpression('/Perlu tindakan saya\s*<\/span>\s*<span\s+class="fi-badge[^>]*>\s*<span class="fi-badge-label-ctn">\s*<span class="fi-badge-label">\s*3\s*<\/span>/', $page->html());
-    }
-
-    public function test_approver_sees_requests_waiting_for_approval_that_are_theirs_or_unassigned(): void
-    {
-        $user = $this->signIn(['Approve:DocumentRequest']);
-        $other = User::factory()->create();
-        $unassigned = $this->request('review', ['requester_id' => $other->id, 'approver_id' => null]);
-        $assigned = $this->request('review', ['requester_id' => null, 'requester_name' => 'Budi Publik', 'requester_phone' => '081234567890', 'approver_id' => $user->id]);
-        $own = $this->request('review', ['requester_id' => $user->id, 'approver_id' => null]);
-        $elsewhere = $this->request('review', ['requester_id' => $other->id, 'approver_id' => User::factory()->create()->id]);
-        $stillChecking = $this->request('submitted', ['requester_id' => $other->id, 'reviewer_id' => null]);
-
-        Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')
-            ->assertCanSeeTableRecords([$unassigned, $assigned])
-            ->assertCanNotSeeTableRecords([$own, $elsewhere, $stillChecking]);
-        $this->assertSame('2', Livewire::test(ListDocumentRequests::class)->instance()->getCachedTabs()['actionable']->getBadge());
     }
 
     public function test_requester_sees_their_own_drafts_and_revisions_only(): void
@@ -245,32 +227,6 @@ class DocumentRequestListScreenTest extends TestCase
         Livewire::test(ListDocumentRequests::class)->assertCanSeeTableRecords([$draft])
             ->set('activeTab', 'actionable')->assertCanNotSeeTableRecords([$draft]);
         $this->assertSame('0', Livewire::test(ListDocumentRequests::class)->instance()->getCachedTabs()['actionable']->getBadge());
-    }
-
-    public function test_archiver_sees_approved_requests_only_when_the_archive_rule_allows_it(): void
-    {
-        $other = User::factory()->create();
-
-        $requesterArchiver = $this->signIn(['Create:Document']);
-        $ownApproved = $this->request('approved', ['requester_id' => $requesterArchiver->id]);
-        $othersApproved = $this->request('approved', ['requester_id' => $other->id, 'pic_user_id' => $requesterArchiver->id]);
-        $ownStillOpen = $this->request('review', ['requester_id' => $requesterArchiver->id]);
-        Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')
-            ->assertCanSeeTableRecords([$ownApproved])->assertCanNotSeeTableRecords([$othersApproved, $ownStillOpen]);
-        $this->assertSame('1', Livewire::test(ListDocumentRequests::class)->instance()->getCachedTabs()['actionable']->getBadge());
-
-        $approverArchiver = $this->signIn(['Create:Document', 'Approve:DocumentRequest']);
-        $unassignedApproved = $this->request('approved', ['requester_id' => $other->id, 'approver_id' => null]);
-        $assignedApproved = $this->request('approved', ['requester_id' => $other->id, 'approver_id' => $approverArchiver->id]);
-        $elsewhereApproved = $this->request('approved', ['requester_id' => $other->id, 'approver_id' => User::factory()->create()->id]);
-        $alreadyArchived = $this->request('archived', ['requester_id' => $other->id]);
-        Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')
-            ->assertCanSeeTableRecords([$unassignedApproved, $assignedApproved, $ownApproved, $othersApproved])
-            ->assertCanNotSeeTableRecords([$elsewhereApproved, $alreadyArchived]);
-
-        $this->signIn(['Approve:DocumentRequest']);
-        $approverWithoutArchive = $this->request('approved', ['requester_id' => $other->id, 'approver_id' => null]);
-        Livewire::test(ListDocumentRequests::class)->set('activeTab', 'actionable')->assertCanNotSeeTableRecords([$approverWithoutArchive]);
     }
 
     public function test_actionable_tab_follows_the_policy_and_not_the_wider_view_all_visibility(): void
@@ -300,10 +256,15 @@ class DocumentRequestListScreenTest extends TestCase
         $requesters = [null, $other->id, $users['everything']->id, $users['requester']->id, $users['archiver']->id];
         $assignments = [[null, null], [$other->id, $other->id], [$users['reviewer']->id, $users['approver']->id], [$users['everything']->id, $users['everything']->id], [$users['everything']->id, $other->id], [$other->id, $users['everything']->id]];
         $requests = [];
-        foreach (array_keys(DocumentRequest::STATUSES) as $status) {
+        // Status lama review/approved tidak lagi dipakai alur dan tidak punya aksi di kebijakan.
+        foreach (array_diff(array_keys(DocumentRequest::STATUSES), ['review', 'approved']) as $status) {
             foreach ($requesters as $requester) {
                 foreach ($assignments as [$reviewer, $approver]) {
-                    $requests[] = $this->request($status, [...$shared, 'requester_id' => $requester, 'requester_name' => $requester ? null : 'Pengaju Publik', 'requester_phone' => $requester ? null : '081234567890', 'reviewer_id' => $reviewer, 'approver_id' => $approver]);
+                    $attributes = [...$shared, 'requester_id' => $requester, 'requester_name' => $requester ? null : 'Pengaju Publik', 'requester_phone' => $requester ? null : '081234567890', 'reviewer_id' => $reviewer, 'approver_id' => $approver];
+                    $requests[] = $this->request($status, $attributes);
+                    if ($status === 'handover') {
+                        $requests[] = $this->request($status, [...$attributes, 'signed_uploaded_at' => now()->subDays(10)]);
+                    }
                 }
             }
         }
@@ -314,7 +275,9 @@ class DocumentRequestListScreenTest extends TestCase
             $this->actingAs($user);
             $visible = DocumentRequestResource::getEloquentQuery()->pluck('id')->all();
             $expected = collect($requests)->filter(fn (DocumentRequest $request): bool => in_array($request->id, $visible, true)
-                && ($policy->review($user, $request) || $policy->approve($user, $request) || $policy->archive($user, $request) || $policy->update($user, $request)))
+                && ($policy->revise($user, $request) || $policy->update($user, $request)
+                    || ($policy->uploadSigned($user, $request) && $request->requester_id === $user->id)
+                    || ($policy->markReceived($user, $request) && $request->status === 'handover' && $request->requester_id !== $user->id)))
                 ->map(fn (DocumentRequest $request): int => $request->id)->sort()->values()->all();
 
             $this->assertSame($expected, $this->actionableIds(), "Peran {$role}: tab 'Perlu tindakan saya' harus sama dengan kebijakan");
@@ -322,7 +285,7 @@ class DocumentRequestListScreenTest extends TestCase
             $sizes[$role] = count($expected);
         }
         $this->assertSame(0, $sizes['none']);
-        foreach (['reviewer', 'approver', 'requester', 'archiver', 'approver-archiver', 'everything', 'viewer-all'] as $role) {
+        foreach (['reviewer', 'requester', 'everything', 'viewer-all'] as $role) {
             $this->assertGreaterThan(0, $sizes[$role], "Peran {$role} seharusnya punya pengajuan yang bisa ditindaklanjuti");
         }
     }
@@ -359,7 +322,7 @@ class DocumentRequestListScreenTest extends TestCase
     {
         $this->signIn(['ViewAll:DocumentRequest']);
         $submitted = $this->request('submitted', ['title' => 'Menunggu Periksa Lama', 'status_changed_at' => now()->subDays(5)]);
-        $review = $this->request('review', ['title' => 'Menunggu Setuju Lama', 'status_changed_at' => now()->subDays(5)]);
+        $review = $this->request('revision', ['title' => 'Perlu Revisi Lama', 'status_changed_at' => now()->subDays(5)]);
         $fresh = $this->request('submitted', ['title' => 'Menunggu Periksa Baru', 'status_changed_at' => now()]);
 
         Livewire::withQueryParams(['filters' => ['status' => ['value' => 'submitted'], 'waiting_long' => ['isActive' => true]]])->test(ListDocumentRequests::class)
@@ -370,11 +333,10 @@ class DocumentRequestListScreenTest extends TestCase
         $this->assertStringContainsString('filters', $stats[0]->getUrl());
         $this->assertStringNotContainsString('tableFilters', $stats[0]->getUrl());
         $this->get($stats[0]->getUrl())->assertOk()
-            ->assertSee('Menunggu Periksa Lama')->assertDontSee('Menunggu Periksa Baru')->assertDontSee('Menunggu Setuju Lama');
-        $this->get($stats[1]->getUrl())->assertOk()
-            ->assertSee('Menunggu Setuju Lama')->assertDontSee('Menunggu Periksa Lama')->assertDontSee('Menunggu Periksa Baru');
+            ->assertSee('Menunggu Periksa Lama')->assertDontSee('Menunggu Periksa Baru')->assertDontSee('Perlu Revisi Lama');
+        $this->assertCount(4, $stats);
 
-        Livewire::withQueryParams(['tableFilters' => ['status' => ['value' => 'review']]])->test(ListDocumentRequests::class)
+        Livewire::withQueryParams(['tableFilters' => ['status' => ['value' => 'revision']]])->test(ListDocumentRequests::class)
             ->assertSet('activeTab', 'all')
             ->assertCanSeeTableRecords([$review])->assertCanNotSeeTableRecords([$submitted, $fresh]);
     }

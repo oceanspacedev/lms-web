@@ -100,6 +100,13 @@
                         this.running = true
                         try {
                             while (await $wire.processNextChunk()) {}
+                        } catch (error) {
+                            new FilamentNotification()
+                                .title('Impor terhenti')
+                                .body('Koneksi atau server bermasalah. Klik Lanjutkan impor; dokumen yang sudah masuk tidak diimpor dua kali.')
+                                .danger()
+                                .persistent()
+                                .send()
                         } finally {
                             this.running = false
                         }

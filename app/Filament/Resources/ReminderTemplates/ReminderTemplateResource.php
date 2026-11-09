@@ -4,7 +4,6 @@ namespace App\Filament\Resources\ReminderTemplates;
 
 use App\Filament\Resources\ReminderTemplates\Pages\ManageReminderTemplates;
 use App\Filament\Resources\ReminderTemplates\Pages\WhatsAppDeliveryHistory;
-use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
 use BackedEnum;
 use Filament\Forms\Components\Select;
@@ -47,7 +46,7 @@ class ReminderTemplateResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Pengaturan WhatsApp';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administrasi';
+    protected static string|\UnitEnum|null $navigationGroup = 'WhatsApp';
 
     /** Tepat di atas Log Pengingat (sort 1); Horizon dan Log Laravel di panel memakai 2 dan 3. */
     protected static ?int $navigationSort = 0;
@@ -94,7 +93,7 @@ class ReminderTemplateResource extends Resource
                 TextInput::make('request_reminder_max')->label('Maksimal')->suffix('kali')->numeric()->integer()->minValue(1)->maxValue(10)->default(3)->required(),
             ]),
             TextEntry::make('request_reminder_help')->hiddenLabel()
-                ->state('Pemeriksa diingatkan saat pengajuan menunggu di tahap Diperiksa, penyetuju saat menunggu persetujuan. Pengingat dikirim sekitar pukul '.config('lms.reminder_time').' dan berhenti begitu pengajuan berpindah tahap.'),
+                ->state('Tim legal diingatkan bila pengajuan menunggu di tahap Diperiksa terlalu lama. Pengingat dikirim sekitar pukul '.config('lms.reminder_time').' dan berhenti begitu pengajuan berpindah tahap.'),
         ];
     }
 
@@ -185,10 +184,7 @@ class ReminderTemplateResource extends Resource
     /** @return array<Component> */
     public static function requestTemplateFields(string $event): array
     {
-        return self::messageFields('request_templates.'.$event, ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], [
-            ...ReminderTemplate::REQUEST_EXAMPLE_VALUES,
-            'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa',
-        ], ReminderTemplate::REQUEST_VARIABLE_LABELS);
+        return self::messageFields('request_templates.'.$event, ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event], ReminderTemplate::requestExampleValues($event), ReminderTemplate::REQUEST_VARIABLE_LABELS);
     }
 
     /**

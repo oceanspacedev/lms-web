@@ -66,6 +66,39 @@ class DocumentTypeResourceTest extends TestCase
             ->assertSee('hanya berlaku di form Tambah Pengajuan internal (form publik selalu berupa pengajuan baru tanpa biaya).');
     }
 
+    public function test_document_type_form_hides_approver(): void
+    {
+        $this->signInWithPermissions(['ViewAny:DocumentType', 'Create:DocumentType', 'Update:DocumentType']);
+        $type = DocumentType::factory()->create();
+
+        Livewire::test(CreateDocumentType::class)->assertFormFieldDoesNotExist('request_approver_id')->assertFormFieldExists('request_reviewer_id');
+        Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])->assertFormFieldDoesNotExist('request_approver_id');
+    }
+
+    public function test_request_pic_without_whatsapp_number_still_shows_its_name(): void
+    {
+        $this->signInWithPermissions(['ViewAny:DocumentType', 'Update:DocumentType']);
+        $review = Permission::findOrCreate('Review:DocumentRequest', 'web');
+        $withPhone = User::factory()->create(['name' => 'Bayu Berponsel', 'phone' => '081234567890']);
+        $withoutPhone = User::factory()->create(['name' => 'Sari Tanpa Nomor', 'phone' => '081298765432']);
+        $other = User::factory()->create(['name' => 'Dodi Tanpa Nomor', 'phone' => null]);
+        foreach ([$withPhone, $withoutPhone, $other] as $user) {
+            $user->givePermissionTo($review);
+        }
+        $type = DocumentType::factory()->create(['request_pic_id' => $withoutPhone->id]);
+        // Nomor WhatsApp PIC dihapus belakangan dari menu User.
+        $withoutPhone->forceFill(['phone' => null])->save();
+
+        Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])
+            ->assertFormFieldExists('request_pic_id', function ($field) use ($withPhone, $withoutPhone, $other): bool {
+                $options = $field->getOptions();
+
+                return ($options[$withoutPhone->id] ?? null) === $withoutPhone->displayName()
+                    && isset($options[$withPhone->id])
+                    && ! isset($options[$other->id]);
+            });
+    }
+
     public function test_reminder_schedule_comes_from_the_global_template_for_expiring_types_only(): void
     {
         $expiring = DocumentType::factory()->create(['has_expiry' => true]);
@@ -138,11 +171,16 @@ class DocumentTypeResourceTest extends TestCase
         $type = DocumentType::factory()->create();
         Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])
             ->fillForm(['has_expiry' => false, 'is_active' => false])
-            ->call('save')->assertHasNoFormErrors()->assertActionDoesNotExist('delete');
+            ->call('save')->assertHasNoFormErrors()->assertActionHidden('delete');
         $this->assertSame([], $type->fresh()->reminder_days);
         $this->assertDatabaseHas('document_types', ['id' => $type->id, 'is_active' => false, 'has_expiry' => false]);
         $this->assertFalse(DocumentTypeResource::canDelete($type));
         $this->assertFalse(DocumentTypeResource::canDeleteAny());
+
+        auth()->user()->givePermissionTo(['Delete:DocumentType', 'DeleteAny:DocumentType']);
+        $this->assertTrue(DocumentTypeResource::canDelete($type));
+        $this->assertTrue(DocumentTypeResource::canDeleteAny());
+        Livewire::test(EditDocumentType::class, ['record' => $type->getRouteKey()])->assertActionVisible('delete');
     }
 
     public function test_search_and_filters_match_document_types(): void

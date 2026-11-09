@@ -26,6 +26,8 @@ class PublicRequestCounterpartyTest extends TestCase
 
     private Company $company;
 
+    private User $reviewer;
+
     private User $approver;
 
     protected function setUp(): void
@@ -36,8 +38,8 @@ class PublicRequestCounterpartyTest extends TestCase
         Storage::fake('s3');
         Http::preventStrayRequests();
         $this->seed(DummyAccountSeeder::class);
-        $reviewer = $this->dummy('dummy-pemeriksa', '081200000001');
-        $this->approver = $this->dummy('dummy-penyetuju', '081200000002');
+        $this->reviewer = $reviewer = $this->dummy('pemeriksa', '081200000001');
+        $this->approver = $this->dummy('penyetuju', '081200000002');
         $this->type = DocumentType::factory()->withoutExpiry()->create([
             'name' => 'Perjanjian Kerja Sama', 'request_pic_id' => $reviewer->id, 'request_reviewer_id' => $reviewer->id, 'request_approver_id' => $this->approver->id,
         ]);
@@ -66,13 +68,14 @@ class PublicRequestCounterpartyTest extends TestCase
         return DocumentRequest::latest('id')->firstOrFail();
     }
 
-    /** Menyetujui pengajuan lalu mengarsipkannya seperti yang dilakukan penyetuju. */
+    /** Mengeluarkan draf, mengunggah scan bertanda tangan, lalu menandai fisik diterima seperti yang dilakukan Staff Legal. */
     private function archive(DocumentRequest $request, ?int $companyId = null): Document
     {
-        $request->forceFill(['status' => 'approved'])->save();
         $pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
+        $request->issueDraft(UploadedFile::fake()->create('draf.pdf', 10, 'application/pdf'), $this->reviewer);
+        $request->uploadSigned(UploadedFile::fake()->createWithContent('final-ttd.pdf', $pdf), null);
 
-        return $request->fresh()->archiveSigned(UploadedFile::fake()->createWithContent('final-ttd.pdf', $pdf), 'PKS/2026/001', '2026-10-09', null, $this->approver, $companyId);
+        return $request->markReceived('PKS/2026/001', '2026-10-09', null, $this->reviewer, $companyId);
     }
 
     public function test_form_shows_an_optional_counterparty_field_in_the_document_section(): void

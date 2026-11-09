@@ -14,35 +14,49 @@ use function Illuminate\Support\defer;
 
 class DocumentRequestNotifier
 {
+    private int $failedInRun = 0;
+
     public function __construct(private WaghubService $waghub) {}
+
+    /** Jumlah notifikasi yang gagal terkirim pada pemanggilan run() terakhir. */
+    public function failedInLastRun(): int
+    {
+        return $this->failedInRun;
+    }
 
     public function enqueue(DocumentRequest $request): void
     {
+        $last = collect($request->history)->last();
+        // Ganti scan dan alasan terlambat hanya dicatat; tidak ada pesan, dan pesan yang masih antre tidak ikut dibatalkan.
+        if (in_array($last['event'] ?? null, ['signed_replaced', 'late_reason'], true)) {
+            return;
+        }
         $event = count($request->history);
         $request->notifications()->whereIn('status', ['pending', 'failed'])->where('event_key', 'not like', "lms-request-{$request->id}-{$event}-%")->update(['status' => 'cancelled']);
-        $recipients = ['applicant' => $request->requester_phone ?? $request->requester?->phone];
+        $adminLink = route('filament.admin.resources.document-requests.edit', ['record' => $request->id]);
+        $applicantLink = $request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : $adminLink;
         $setting = ReminderTemplate::globalSetting();
-        if ($request->status === 'submitted') {
-            $recipients['pic'] = $request->pic?->phone;
+        $applicantEvent = ($last['event'] ?? null) === 'draft_replaced' ? 'draft_replaced' : $request->status;
+        // User di tempat sampah (pengaju internal, PIC, staf legal) tidak pernah dijadikan penerima.
+        $targets = [];
+        if ($request->applicantReceivesWhatsApp()) {
+            $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->applicantPhone(), 'template' => $request->status === 'handover' ? 'handover' : $applicantEvent, 'link' => $applicantLink];
         }
-        foreach ($recipients as $kind => $number) {
-            $key = "lms-request-{$request->id}-{$event}-{$kind}";
-            $phone = $this->waghub->normalizePhone($number);
-            $link = $kind === 'pic'
-                ? route('filament.admin.resources.document-requests.edit', ['record' => $request->id])
-                : ($request->public_token ? route('requests.public.status', ['token' => $request->public_token]) : route('filament.admin.resources.document-requests.edit', ['record' => $request->id]));
-            $note = collect($request->history)->last()['note'] ?? null;
-            $templateEvent = $kind === 'pic' ? 'pic' : $request->status;
-            $body = $setting?->requestTemplate($templateEvent) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$templateEvent] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
-            $text = ReminderTemplate::renderBody($body, [
-                'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
-                'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
-                'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
-                'status' => DocumentRequest::STATUSES[$request->status], 'catatan' => (string) $note,
-                'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
-            ]);
+        if ($request->status === 'handover') {
+            foreach ($request->legalStaffRecipients() as $user) {
+                $targets[] = ['kind' => 'legal', 'suffix' => "u{$user->id}", 'phone' => $user->whatsAppRecipientPhone(), 'template' => 'handover_staff', 'link' => $adminLink];
+            }
+        }
+        if ($request->status === 'submitted' && ! $request->pic?->trashed()) {
+            $targets[] = ['kind' => 'pic', 'suffix' => 'pic', 'phone' => $request->pic?->phone, 'template' => 'pic', 'link' => $adminLink];
+        }
+        $note = $last['note'] ?? null;
+        foreach ($targets as $target) {
+            $key = "lms-request-{$request->id}-{$event}-{$target['suffix']}";
+            $phone = $this->waghub->normalizePhone($target['phone']);
+            $text = self::renderTemplate($request, $target['template'], $target['link'], $note, $setting);
             DocumentRequestNotification::firstOrCreate(['event_key' => $key], [
-                'document_request_id' => $request->id, 'recipient_kind' => $kind, 'recipient_phone' => $phone,
+                'document_request_id' => $request->id, 'recipient_kind' => $target['kind'], 'recipient_phone' => $phone,
                 'payload' => ['recipient' => ['type' => 'phone', 'value' => $phone], 'message' => ['type' => 'text', 'text' => $text],
                     'purpose' => config('services.waghub.purpose'), 'mode' => config('services.waghub.mode'), 'route_key' => config('services.waghub.route_key'),
                     'expires_at' => now()->addDay()->toIso8601String(), 'client_reference' => $key],
@@ -57,6 +71,24 @@ class DocumentRequestNotifier
                 }
             });
         });
+    }
+
+    /** Isi pesan dari templat pengajuan (pengaturan global atau bawaan) dengan variabel pengajuan. */
+    public static function renderTemplate(DocumentRequest $request, string $templateKey, string $link, ?string $note = null, ?ReminderTemplate $setting = null): string
+    {
+        $setting ??= ReminderTemplate::globalSetting();
+        $body = $setting?->requestTemplate($templateKey) ?? ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$templateKey] ?? "Pengajuan #{nomor_pengajuan}\n{judul}\n{status}{baris_catatan}\n{tautan}";
+
+        return ReminderTemplate::renderBody($body, [
+            'nomor_pengajuan' => (string) $request->id, 'judul' => $request->title,
+            'pengaju' => $request->applicantName(), 'perusahaan' => $request->company?->name ?? $request->other_business_name ?? '-',
+            'jenis_dokumen' => $request->documentType?->name ?? '-', 'pic' => $request->pic?->name ?? '-',
+            'status' => DocumentRequest::statusLabel($request->status), 'catatan' => (string) $note,
+            'baris_catatan' => filled($note) ? "\nCatatan: {$note}" : '', 'tautan' => $link,
+            'batas_waktu' => $request->handoverDueDate()?->translatedFormat('d M Y') ?? '-', 'hari_terlambat' => (string) $request->daysLate(),
+            'alasan_terlambat' => str_contains($body, '{alasan_terlambat}')
+                ? ($request->lateReasons()->reorder()->latest('id')->value('reason') ?? 'belum ada') : '',
+        ]);
     }
 
     /**
@@ -86,29 +118,68 @@ class DocumentRequestNotifier
         };
     }
 
+    /**
+     * Nomor tersimpan yang hanya dimiliki user di tempat sampah tidak dikirimi lagi. Nomor pengaju publik tidak diperiksa,
+     * karena pengaju publik bukan user.
+     */
+    private function isForTrashedUser(DocumentRequestNotification $notification, DocumentRequest $request): bool
+    {
+        if ($notification->recipient_kind === 'applicant' && $request->requester_phone !== null) {
+            return false;
+        }
+
+        return User::phoneBelongsOnlyToTrashedUsers($notification->recipient_phone);
+    }
+
     private function currentPhone(DocumentRequestNotification $notification): ?string
     {
         $request = DocumentRequest::find($notification->document_request_id);
         $number = match ($notification->recipient_kind) {
-            'applicant' => $request?->requester_phone ?? $request?->requester?->phone,
-            'pic' => $request?->pic?->phone,
+            'applicant' => $request?->applicantPhone(),
+            'pic' => $request?->pic?->whatsAppRecipientPhone(),
             default => preg_match('/-u(\d+)$/', $notification->event_key, $matches) === 1 ? User::find((int) $matches[1])?->phone : null,
         };
 
         return $this->waghub->normalizePhone($number);
     }
 
+    /**
+     * Notifikasi sudah usang bila dibuat sebelum perubahan status terakhir. Kegiatan tanpa perubahan status
+     * (ganti scan, alasan terlambat) menambah riwayat tetapi tidak membuat notifikasi yang antre menjadi usang.
+     */
+    private function isSuperseded(DocumentRequestNotification $notification, DocumentRequest $request): bool
+    {
+        if (preg_match('/^lms-request-'.$request->id.'-(\d+)-/', $notification->event_key, $matches) !== 1) {
+            return true;
+        }
+        $history = array_values($request->history);
+        $stageStart = 0;
+        foreach ($history as $index => $entry) {
+            if (! isset($entry['event'])) {
+                $stageStart = $index + 1;
+            }
+        }
+
+        return (int) $matches[1] < $stageStart || (int) $matches[1] > count($history);
+    }
+
     public function run(?int $requestId = null, ?int $notificationId = null): int
     {
         $accepted = 0;
+        $this->failedInRun = 0;
         DocumentRequestNotification::whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)
             ->when($requestId, fn (Builder $query): Builder => $query->where('document_request_id', $requestId))
             ->when($notificationId, fn (Builder $query): Builder => $query->whereKey($notificationId))
             ->where(fn (Builder $query): Builder => $query->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', now()->subMinutes(5)))
             ->orderBy('id')->limit(50)->get()->each(function (DocumentRequestNotification $notification) use (&$accepted): void {
                 $request = DocumentRequest::find($notification->document_request_id);
-                if (! $request || ! str_starts_with($notification->event_key, 'lms-request-'.$request->id.'-'.count($request->history).'-')) {
+                if (! $request || $this->isSuperseded($notification, $request)) {
                     $notification->update(['status' => 'cancelled']);
+
+                    return;
+                }
+                if ($this->isForTrashedUser($notification, $request)) {
+                    $notification->update(['status' => 'cancelled', 'error_message' => DocumentRequestNotification::RECIPIENT_TRASHED_MESSAGE]);
 
                     return;
                 }
@@ -134,6 +205,8 @@ class DocumentRequestNotifier
                     $notification->update(['status' => 'accepted', 'accepted_at' => now(), 'error_message' => null]);
                     $accepted++;
                 } catch (Throwable $exception) {
+                    report($exception);
+                    $this->failedInRun++;
                     $notification->update(['status' => 'failed', 'error_message' => 'Pengiriman WhatsApp gagal. Akan dicoba kembali.']);
                 }
             });

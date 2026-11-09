@@ -120,7 +120,7 @@ class WhatsAppToolsTest extends TestCase
         $this->assertSame('accepted', $result['status']);
         $log = DB::table('whatsapp_test_messages')->sole();
         $this->assertSame('overdue', $log->template_event);
-        $this->assertSame("[PESAN UJI]\nUji lewat 3 hari Kontrak Dummy", $log->message);
+        $this->assertSame("[PESAN UJI]\nUji lewat 3 hari PKS Sewa Gudang Cikarang", $log->message);
     }
 
     public function test_request_reminder_test_message_uses_saved_template_with_example_values(): void

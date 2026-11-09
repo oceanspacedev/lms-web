@@ -32,7 +32,44 @@ class WhatsAppTemplateSettingsTest extends TestCase
 
     public static function statuses(): array
     {
-        return array_map(fn (string $status): array => [$status], ['submitted', 'review', 'approved', 'revision', 'rejected', 'archived']);
+        return array_map(fn (string $status): array => [$status], ['submitted', 'revision', 'rejected', 'signing', 'archived', 'cancelled']);
+    }
+
+    public function test_template_with_removed_stage_key_is_rejected(): void
+    {
+        foreach (['approved', 'review'] as $removed) {
+            try {
+                ReminderTemplate::factory()->create(['request_templates' => [$removed => 'Halo {judul}']]);
+                $this->fail("Kunci {$removed} seharusnya ditolak.");
+            } catch (ValidationException) {
+            }
+        }
+        $this->assertSame(0, ReminderTemplate::count());
+    }
+
+    public static function newTemplateEvents(): array
+    {
+        return array_map(fn (string $event): array => [$event], ['signing', 'draft_replaced', 'handover_staff', 'scan_reminder', 'late_7', 'late_14', 'late_28', 'cancelled']);
+    }
+
+    #[DataProvider('newTemplateEvents')]
+    public function test_settings_page_previews_edits_and_test_sends_new_templates(string $event): void
+    {
+        $this->authorizeSettings();
+        $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
+        $component = 'notification_settings.template_navigation.'.$event.'.template_'.$event;
+        Livewire::test(ManageReminderTemplates::class)
+            ->assertSee(ReminderTemplate::REQUEST_TEMPLATE_LABELS[$event])
+            ->mountAction(TestAction::make('edit_'.$event)->schemaComponent($component, 'content'))
+            ->assertActionDataSet(['request_templates' => [$event => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES[$event]]])
+            ->setActionData(['request_templates' => [$event => 'Uji {judul} batas {batas_waktu} telat {hari_terlambat} hari.']])
+            ->callMountedAction()->assertHasNoActionErrors();
+        $this->assertSame('Uji {judul} batas {batas_waktu} telat {hari_terlambat} hari.', $setting->fresh()->request_templates[$event]);
+
+        Livewire::test(ManageReminderTemplates::class)
+            ->callAction(TestAction::make('test_'.$event)->schemaComponent($component, 'content'), ['phone' => '081234567890'])
+            ->assertHasNoActionErrors();
+        Http::assertSent(fn ($outgoing): bool => $outgoing['message']['text'] === "[PESAN UJI]\nUji PKS Sewa Gudang Cikarang batas 11 Nov 2030 telat 3 hari.");
     }
 
     #[DataProvider('statuses')]
@@ -110,7 +147,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
             ->assertActionDataSet(['request_templates' => ['revision' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES['revision']]])
             ->setActionData(['request_templates' => ['revision' => 'Revisi: {judul}. {catatan} {tautan}']])
             ->callMountedAction()->assertHasNoActionErrors()
-            ->assertSee('Revisi: Pengajuan Kontrak Dummy. Mohon lengkapi lampiran.');
+            ->assertSee('Revisi: PKS Sewa Gudang Cikarang. Mohon lengkapi lampiran.');
         $this->assertSame('Revisi: {judul}. {catatan} {tautan}', $setting->fresh()->request_templates['revision']);
         $this->assertSame($setting->body, $setting->fresh()->body);
         $this->assertArrayNotHasKey('rejected', $setting->fresh()->request_templates);
@@ -148,7 +185,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
             ->assertActionDataSet(['overdue_body' => ReminderTemplate::DEFAULT_OVERDUE_BODY])
             ->setActionData(['overdue_body' => 'LEGAL: {dokumen} lewat {hari_terlambat} hari. PIC {pic}'])
             ->callMountedAction()->assertHasNoActionErrors()
-            ->assertSee('LEGAL: Kontrak Dummy lewat 3 hari. PIC PIC Dummy');
+            ->assertSee('LEGAL: PKS Sewa Gudang Cikarang lewat 3 hari. PIC Sari Kusuma');
         $this->assertSame('LEGAL: {dokumen} lewat {hari_terlambat} hari. PIC {pic}', $setting->fresh()->overdue_body);
         $this->assertSame($setting->body, $setting->fresh()->body);
 
@@ -176,7 +213,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
         $setting = ReminderTemplate::factory()->create(['schedule_mode' => 'interval']);
         $component = 'notification_settings.request_reminder';
         Livewire::test(ManageReminderTemplates::class)
-            ->assertSee('Pengingat pengajuan menggantung')->assertSee('2 hari')->assertSee('3 kali')
+            ->assertSee('Pengingat pengajuan yang belum diperiksa')->assertSee('2 hari')->assertSee('3 kali')
             ->mountAction(TestAction::make('edit_request_reminder_settings')->schemaComponent($component, 'content'))
             ->assertActionDataSet(['request_reminder_enabled' => true, 'request_reminder_after_days' => 2, 'request_reminder_interval_days' => 2, 'request_reminder_max' => 3])
             ->setActionData(['request_reminder_enabled' => false, 'request_reminder_after_days' => 1, 'request_reminder_interval_days' => 3, 'request_reminder_max' => 5])
@@ -202,7 +239,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
             ->assertActionDataSet(['request_reminder_body' => ReminderTemplate::DEFAULT_REQUEST_REMINDER_BODY])
             ->setActionData(['request_reminder_body' => 'SEGERA: {judul} menunggu {hari_menunggu} hari'])
             ->callMountedAction()->assertHasNoActionErrors()
-            ->assertSee('SEGERA: Pengajuan Kontrak Dummy menunggu 3 hari');
+            ->assertSee('SEGERA: PKS Sewa Gudang Cikarang menunggu 3 hari');
         $this->assertSame('SEGERA: {judul} menunggu {hari_menunggu} hari', $setting->fresh()->request_reminder_body);
 
         Livewire::test(ManageReminderTemplates::class)
@@ -267,10 +304,36 @@ class WhatsAppTemplateSettingsTest extends TestCase
         $this->authorizeSettings();
         ReminderTemplate::factory()->create(['schedule_mode' => 'interval', 'start_before_days' => 30, 'interval_days' => 7]);
         $response = $this->get(route('filament.admin.resources.reminder-templates.index'));
-        $response->assertSuccessful()->assertSee('whatsapp-settings-tabs')->assertSee('Kontrak Dummy')->assertSee('Contoh pesan')
+        $response->assertSuccessful()->assertSee('whatsapp-settings-tabs')->assertSee('PKS Sewa Gudang Cikarang')->assertSee('Contoh pesan')
             ->assertSee('content.expiry_settings.reminder_schedule', false)
             ->assertSee('Notifikasi status pengajuan')
             ->assertDontSee('notification_settings.template_navigation.reminder', false);
+    }
+
+    public function test_settings_page_explains_schedule_and_recipients_in_plain_words(): void
+    {
+        $this->authorizeSettings();
+        ReminderTemplate::factory()->create(['is_active' => true, 'schedule_mode' => 'interval', 'start_before_days' => 30, 'interval_days' => 7, 'overdue_days' => [1, 7]]);
+
+        Livewire::test(ManageReminderTemplates::class)->assertSuccessful()
+            ->assertSee('Pengaturan bawaan sudah siap dipakai')
+            ->assertSee('Dikirim pukul 08:00 WIB, mulai 30 hari sebelum dokumen berakhir, lalu diulang setiap 7 hari. Setelah kedaluwarsa, dikirim lagi pada hari ke-1, 7.')
+            ->assertSee(ReminderTemplate::REQUEST_TEMPLATE_HINTS['late_28'])
+            ->assertSee('Terlambat 3 minggu')->assertSee('Lewat batas')->assertDontSee('Terlambat 4 minggu')
+            ->assertDontSee('Dummy');
+    }
+
+    public function test_inactive_schedule_summary_says_reminders_are_off(): void
+    {
+        $this->authorizeSettings();
+        ReminderTemplate::factory()->create(['is_active' => false, 'schedule_mode' => 'interval', 'start_before_days' => 30, 'interval_days' => 7]);
+
+        Livewire::test(ManageReminderTemplates::class)->assertSee('Pengingat otomatis sedang nonaktif.');
+    }
+
+    public function test_every_request_message_explains_who_receives_it(): void
+    {
+        $this->assertSame(array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS), array_keys(ReminderTemplate::REQUEST_TEMPLATE_HINTS));
     }
 
     public function test_editor_displays_draggable_data_and_saves_inserted_variables(): void

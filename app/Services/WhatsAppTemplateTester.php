@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\DocumentRequest;
 use App\Models\ReminderTemplate;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
@@ -47,7 +46,7 @@ class WhatsAppTemplateTester
                 'reminder' => ReminderTemplate::EXAMPLE_VALUES,
                 'overdue' => ReminderTemplate::OVERDUE_EXAMPLE_VALUES,
                 'request_reminder' => ReminderTemplate::REQUEST_REMINDER_EXAMPLE_VALUES,
-                default => [...ReminderTemplate::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$event] ?? 'Diperiksa'],
+                default => ReminderTemplate::requestExampleValues($event),
             };
             $message = "[PESAN UJI]\n".ReminderTemplate::renderBody($body, $values);
             $key = (string) Str::uuid();

@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Gate;
 
 class ExpiringDocuments extends TableWidget
 {
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 4;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -43,13 +43,13 @@ class ExpiringDocuments extends TableWidget
             })
             ->columns([
                 TextColumn::make('title')->label('Judul')->searchable(),
-                TextColumn::make('company.name')->label('Badan Usaha'),
-                TextColumn::make('documentType.name')->label('Jenis Dokumen'),
-                TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d/m/Y'),
+                TextColumn::make('company.name')->label('Badan Usaha')->formatStateUsing(fn (string $state, Document $record): string => $record->company?->displayName() ?? $state),
+                TextColumn::make('documentType.name')->label('Jenis Dokumen')->formatStateUsing(fn (string $state, Document $record): string => $record->documentType?->displayName() ?? $state),
+                TextColumn::make('currentVersion.expiry_date')->label('Tanggal Berakhir')->date('d M Y'),
                 TextColumn::make('expiry_status')->label('Status')->badge()
                     ->formatStateUsing(fn (string $state): string => Document::EXPIRY_STATUSES[$state])
                     ->color(fn (string $state): string => Document::EXPIRY_STATUS_COLORS[$state]),
-                TextColumn::make('pic.name')->label('PIC'),
+                TextColumn::make('pic.name')->label('PIC')->formatStateUsing(fn (string $state, Document $record): string => $record->pic?->displayName() ?? $state),
             ])
             ->headerActions([
                 Action::make('exportExcel')->label('Ekspor Excel')->icon('heroicon-o-table-cells')->color('gray')

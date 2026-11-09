@@ -402,8 +402,8 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 **Tujuan:** Pengujian manual (oleh developer maupun agen) dapat memakai akun dari setiap role tanpa membuat akun satu per satu.
 
 **Cakupan:**
-- Seeder `DummyAccountSeeder`, dijalankan manual: `php artisan db:seed --class=DummyAccountSeeder`. Tidak dipanggil oleh `DatabaseSeeder` dan menolak berjalan di production.
-- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@dummy.test` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
+- Seeder `DummyAccountSeeder`, dijalankan manual: `php artisan db:seed --class=DummyAccountSeeder`, atau otomatis oleh `DatabaseSeeder` bila `APP_ENV=local` (sejak WORK 54). Menolak berjalan di production.
+- Satu akun per role yang ada di database (termasuk role buatan sendiri): email `{nama-role}@test.com` (garis bawah menjadi tanda hubung), kata sandi dummy tetap yang tertulis di seeder. Aman dijalankan ulang; kata sandi dikembalikan ke nilai dummy.
 - Role dasar berawalan `dummy_` agar tidak menimpa role buatan sendiri, dengan izin untuk menguji alur dokumen dan pengajuan: `dummy_legal` (kelola dokumen, lihat master, log, template, pemeriksa pengajuan, penerima pengingat), `dummy_viewer` (lihat dokumen), `dummy_pemeriksa` (periksa pengajuan), `dummy_penyetuju` (setujui pengajuan dan arsipkan dokumen final), `dummy_pengaju` (buat dan ubah pengajuan). Izin role buatan sendiri tidak diubah.
 - Nomor WhatsApp akun dummy dikosongkan agar pesan tidak sampai ke nomor sungguhan. Variabel `.env` `LMS_DUMMY_PHONE` mengisi nomor milik sendiri untuk menguji pengiriman.
 
@@ -554,6 +554,8 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 
 ### WORK 51: Login dengan Kode OTP WhatsApp
 
+> Digantikan WORK 54: halaman, tabel, dan batasan di bawah tidak berlaku lagi.
+
 **Tujuan:** User bisa masuk ke panel tanpa password dengan kode yang dikirim ke WhatsApp, sebagai pilihan tambahan di samping email dan password.
 
 **Cakupan:**
@@ -596,6 +598,23 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 - Deploy: batas unggah PHP (`upload_max_filesize`, `post_max_size`) dan web server harus menampung ukuran ZIP.
 
 **Definition of Done:** Tes mencakup template, dry run tanpa penyimpanan, tiap jenis error baris, duplikat dan impor ulang, hasil impor (dokumen, versi, file, aktivitas, catatan), format tanggal, keamanan ZIP dan batas ukuran, proses bertahap yang dapat dilanjutkan, opsi lewati pengingat, izin, dan unduhan baris gagal. Commit: `feat(work-53): impor dokumen lama dari Excel dan ZIP`.
+
+---
+
+### WORK 54: Login WhatsApp dan Email Seragam, Seeder Dirapikan
+
+**Tujuan:** Halaman login LMS sama dengan dnd-web, gais-web, dan helpdesk-web: selain email dan password, user bisa masuk tanpa password lewat WhatsApp atau email. Seeder mudah dipahami dan langsung menghasilkan data yang bisa dipakai.
+
+**Cakupan:**
+- Di bawah form login ada "Atau masuk dengan" dengan tombol **WhatsApp** (`/phone-login`, tampil bila WagHub dikonfigurasi) dan **Email** (`/email-login`, tampil bila `MAIL_MAILER` bukan `log`/`array`). Halaman OTP memakai kartu auth Mekaya yang sama.
+- WagHub cukup `WAG_URL` dan `WAG_TOKEN` di `.env`, sama dengan aplikasi lain. Purpose `notification` untuk pengingat dan `otp` untuk kode login; variabel lama `WAGHUB_*` tetap dibaca. `lms:check-production` tidak lagi memeriksa purpose.
+- WhatsApp: isi nomor, kode 6 digit dikirim lewat WagHub, berlaku 5 menit.
+- Email: kode 6 digit dan tombol magic link dalam satu email, berlaku `EMAIL_LOGIN_EXPIRES_IN` detik (bawaan 600). Kode dan link berbagi satu kali pakai; membuka URL link saja (pemindai email) tidak memakai token. Tampilan email meniru kartu halaman login Mekaya (tema `lms`: bingkai mky-card, ikon dan judul di kepala kartu, kode dalam kotak seperti input, tombol primary selebar kartu, footer berbahasa Indonesia).
+- Hanya user aktif yang nomor/emailnya milik tepat satu user dan berhak membuka panel. Kode hangus setelah 5 kali salah, saat kode baru diminta, atau saat nomor/email user diganti. Permintaan dibatasi 3 per 5 menit dan 10 per jam per nomor/email, 20 per menit per IP.
+- Tabel `whatsapp_otps` dan `email_otps` hanya menyimpan hash; dibersihkan setelah 7 hari lewat `model:prune` harian. Tabel `login_codes` dihapus.
+- Seeder: `PermissionSeeder` membuat semua permission yang dicek policy ditambah custom permission dan memberikannya ke `super_admin` (menggantikan delapan seeder permission terpisah). `DatabaseSeeder` memanggil `PermissionSeeder`, `DocumentTypeSeeder` (data jenis dokumen saja), `ReminderTemplateSeeder`, dan `DummyAccountSeeder` khusus di local.
+
+**Definition of Done:** Tes mencakup tombol di halaman login dan penyembunyiannya, alur kirim dan verifikasi WhatsApp/email, magic link (sekali pakai, tidak terpakai oleh GET, kedaluwarsa), batas percobaan dan permintaan, nomor/email tidak terdaftar/ganda/nonaktif, kegagalan WagHub/SMTP, penggantian nomor/email, pruning, serta seeder (permission sama dengan policy, idempoten, super admin, akun dummy di local).
 
 ---
 
@@ -650,5 +669,6 @@ Prinsip: identitas dokumen ada di `documents`, sedangkan file dan masa berlaku a
 | 51 | Login dengan kode OTP WhatsApp | `ahtar-dev` |
 | 52 | Nonaktifkan user dan alih tugas | `ahtar-dev` |
 | 53 | Impor dokumen lama | `ahtar-dev` |
+| 54 | Login WhatsApp dan email seragam, seeder dirapikan | `ahtar-dev` |
 
 > **Tidak ada commit ke `staging` atau `main` dalam proyek ini.**

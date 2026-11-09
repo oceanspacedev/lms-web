@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Trashable;
 use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,7 +13,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Company extends Model
 {
     /** @use HasFactory<CompanyFactory> */
-    use HasFactory;
+    use HasFactory, Trashable;
+
+    public function trashSubject(): string
+    {
+        return 'company';
+    }
+
+    public function trashLabel(): string
+    {
+        return (string) $this->name;
+    }
 
     public function documents(): HasMany
     {

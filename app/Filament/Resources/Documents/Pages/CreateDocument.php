@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Documents\Pages;
 
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Document;
+use App\Support\StorageFailure;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Support\Exceptions\Halt;
@@ -35,7 +36,7 @@ class CreateDocument extends CreateRecord
                 ->all());
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Dokumen belum tersimpan')->body('Upload ke penyimpanan gagal. Periksa konfigurasi S3 atau coba lagi.')->danger()->send();
+            Notification::make()->title('Dokumen belum tersimpan')->body(StorageFailure::message($exception, 'Terjadi gangguan sistem. Tidak ada yang tersimpan; coba lagi. Bila berulang, hubungi admin.'))->danger()->send();
 
             throw new Halt;
         }

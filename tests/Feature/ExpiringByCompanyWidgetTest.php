@@ -9,7 +9,7 @@ use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\User;
-use Database\Seeders\DocumentSeeder;
+use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,7 +26,7 @@ class ExpiringByCompanyWidgetTest extends TestCase
         parent::setUp();
         $this->travelTo(now()->setDate(2026, 10, 9)->setTime(9, 0));
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->seed(DocumentSeeder::class);
+        $this->seed(PermissionSeeder::class);
         $user = User::factory()->create();
         $user->givePermissionTo(['ViewAny:Document', 'View:Document']);
         $this->actingAs($user);
