@@ -4,16 +4,21 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\Documents\Pages\ListDocuments;
 use App\Filament\Widgets\ExpiringDocuments;
+use App\Jobs\ExportDocuments;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\ReminderTemplate;
 use App\Models\User;
+use App\Services\DocumentExportStore;
 use App\Services\DocumentSpreadsheetExporter;
 use Database\Seeders\PermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use OpenSpout\Reader\XLSX\Reader;
 use Tests\TestCase;
@@ -257,5 +262,52 @@ class DocumentExcelExportTest extends TestCase
 
         Livewire::test(ListDocuments::class)->assertForbidden();
         $this->assertFalse(ExpiringDocuments::canView());
+    }
+
+    public function test_large_export_is_built_in_the_background_and_only_the_owner_can_download_it(): void
+    {
+        Storage::fake('local');
+        config(['lms.export_direct_max_rows' => 1]);
+        $this->signIn();
+        $owner = auth()->user();
+        $second = $this->document('Kontrak B', '2026-11-10');
+        $first = $this->document('Kontrak A', '2026-11-10');
+        $this->document('Arsip Lain', '2026-11-10');
+
+        // Lebih dari batas: tidak diunduh langsung, tetapi diantrekan dengan urutan dan filter tabel saat diklik.
+        $job = Queue::fakeFor(function () use ($first, $second): ExportDocuments {
+            Livewire::test(ListDocuments::class)->searchTable('Kontrak')->sortTable('title')
+                ->callTableAction('exportExcel')->assertNoFileDownloaded()->assertNotified('Ekspor sedang disiapkan');
+            Queue::assertPushed(ExportDocuments::class, 1);
+
+            return tap(Queue::pushed(ExportDocuments::class)->sole(), fn (ExportDocuments $job) => $this->assertSame([$first->id, $second->id], $job->documentIds));
+        }, [ExportDocuments::class]);
+
+        $job->handle(app(DocumentSpreadsheetExporter::class), app(DocumentExportStore::class));
+        $notification = $owner->notifications()->sole();
+        $this->assertSame('File ekspor siap diunduh', $notification->data['title']);
+        $url = $notification->data['actions'][0]['url'];
+
+        $response = $this->get($url)->assertOk()->assertDownload();
+        file_put_contents($this->path, $response->streamedContent());
+        $this->assertSame(['Kontrak A', 'Kontrak B'], collect($this->readSheet()[1])->skip(1)->pluck(0)->values()->all());
+
+        $this->actingAs(User::factory()->create())->get($url)->assertNotFound();
+    }
+
+    public function test_old_background_exports_are_cleaned_up(): void
+    {
+        Storage::fake('local');
+        $store = app(DocumentExportStore::class);
+        $old = $store->directoryFor(1, (string) Str::uuid());
+        $fresh = $store->directoryFor(1, (string) Str::uuid());
+        Storage::disk('local')->put($old.'/lama.xlsx', 'x');
+        Storage::disk('local')->put($fresh.'/baru.xlsx', 'x');
+        touch(Storage::disk('local')->path($old), now()->subHours(DocumentExportStore::KEEP_HOURS + 1)->getTimestamp());
+
+        $this->artisan('lms:clean-export-files')->assertSuccessful();
+
+        Storage::disk('local')->assertMissing($old.'/lama.xlsx');
+        Storage::disk('local')->assertExists($fresh.'/baru.xlsx');
     }
 }

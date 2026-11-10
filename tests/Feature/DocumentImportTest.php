@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Filament\Resources\Documents\DocumentResource;
 use App\Filament\Resources\Documents\Pages\ImportDocuments;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
+use App\Jobs\CheckDocumentImport;
+use App\Jobs\ProcessDocumentImport;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentImport;
@@ -23,6 +25,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -523,6 +526,7 @@ class DocumentImportTest extends TestCase
         $rows = array_map(fn (): array => $this->row(), range(1, 5));
         $import = $this->check($rows);
         $importer = app(DocumentImporter::class);
+        Queue::fake();
         $importer->start($import, true);
 
         $importer->processChunk($import, $this->user, 2);
@@ -534,12 +538,16 @@ class DocumentImportTest extends TestCase
         $this->assertSame(2, $import->refresh()->processedCount());
         $lock->release();
 
+        // Belum ada kemajuan beberapa menit (worker berhenti): halaman menawarkan "Lanjutkan impor" yang mengantrekan sisa baris.
+        $this->travel(4)->minutes();
         $component = Livewire::withQueryParams(['batch' => $import->id])->test(ImportDocuments::class)->assertSee('Lanjutkan impor')->assertSee('2 dari 5 dokumen diproses');
-        $component->call('processNextChunk');
+        $component->call('resumeImport')->assertNotified('Impor dilanjutkan');
+        Queue::assertPushed(ProcessDocumentImport::class, 2);
+        (new ProcessDocumentImport($import->id))->handle(app(DocumentImporter::class));
         $this->assertSame('completed', $import->refresh()->status);
         $this->assertSame(5, $import->imported_count);
         $this->assertDatabaseCount('documents', 5);
-        $component->assertSee('Laporan impor');
+        $component->call('$refresh')->assertSee('Laporan impor');
     }
 
     public function test_master_data_changed_after_checking_fails_the_row_with_a_message(): void
@@ -626,9 +634,11 @@ class DocumentImportTest extends TestCase
         $this->assertSame([], collect(Storage::disk('local')->files('livewire-tmp'))->reject(fn (string $file): bool => str_ends_with($file, '.json'))->values()->all());
         $this->assertDatabaseCount('documents', 0);
 
-        $component->set('skipPastReminders', false)->call('startImport')->call('processNextChunk');
+        // Impor berjalan di antrean (sinkron di tes) dan pemiliknya diberi notifikasi lonceng saat selesai.
+        $component->set('skipPastReminders', false)->call('startImport');
 
         $import->refresh();
+        $this->assertSame('Impor selesai', $this->user->notifications()->sole()->data['title']);
         $this->assertSame('completed', $import->status);
         $this->assertFalse($import->skip_past_reminders);
         $this->assertDatabaseCount('documents', 4);
@@ -646,7 +656,48 @@ class DocumentImportTest extends TestCase
             ->call('check')->assertHasFormErrors(['excel']);
 
         Livewire::test(ImportDocuments::class)->call('check')->assertHasFormErrors(['excel' => 'required', 'zips' => 'required']);
-        $this->assertDatabaseCount('document_imports', 0);
+        // Batch yang gagal diperiksa tercatat "check_failed" tanpa file sementara; tidak ada batch yang bisa diimpor.
+        $this->assertSame(['check_failed'], DocumentImport::pluck('status')->all());
+        $this->assertSame([], Storage::disk('local')->directories(DocumentImporter::DIRECTORY));
+    }
+
+    public function test_check_runs_in_the_background_and_the_page_waits_for_it(): void
+    {
+        Queue::fake();
+        $rows = [$this->row()];
+        $component = Livewire::test(ImportDocuments::class)
+            ->fillForm([
+                'excel' => UploadedFile::fake()->createWithContent('arsip.xlsx', file_get_contents($this->xlsx($rows))),
+                'zips' => [UploadedFile::fake()->createWithContent('dokumen.zip', file_get_contents($this->zipFor($rows)))],
+            ])
+            ->call('check')->assertHasNoFormErrors()
+            ->assertSee('Memeriksa file')->assertSee('Halaman ini boleh ditutup')->assertSeeHtml('wire:poll.3s');
+
+        $import = DocumentImport::sole();
+        $this->assertSame('checking', $import->status);
+        Queue::assertPushed(CheckDocumentImport::class, fn (CheckDocumentImport $job): bool => $job->importId === $import->id);
+        Storage::disk('local')->assertExists($import->notes['upload']['excel']);
+
+        (new CheckDocumentImport($import->id))->handle(app(DocumentImporter::class));
+        $component->call('$refresh')->assertSee('Hasil pemeriksaan')->assertDontSeeHtml('wire:poll.3s');
+        $this->assertSame('checked', $import->refresh()->status);
+        Storage::disk('local')->assertMissing($import->directory().'/upload');
+
+        $component->call('startImport');
+        Queue::assertPushed(ProcessDocumentImport::class, fn (ProcessDocumentImport $job): bool => $job->importId === $import->id);
+        $component->call('$refresh')->assertSee('Impor berjalan di latar belakang')->assertSeeHtml('wire:poll.3s');
+    }
+
+    public function test_check_that_dies_in_the_worker_is_marked_failed_and_offers_a_new_upload(): void
+    {
+        $import = DocumentImport::factory()->create(['user_id' => $this->user->id, 'status' => 'checking', 'rows' => []]);
+
+        (new CheckDocumentImport($import->id))->failed(new \RuntimeException('timeout'));
+
+        $this->assertSame('check_failed', $import->refresh()->status);
+        Livewire::withQueryParams(['batch' => $import->id])->test(ImportDocuments::class)
+            ->assertSee('File belum bisa diimpor')->assertSee('Pemeriksaan terhenti sebelum selesai')
+            ->call('startOver')->assertSet('importId', null);
     }
 
     public function test_failed_rows_can_be_downloaded_and_imported_again_after_fixing(): void

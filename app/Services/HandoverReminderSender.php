@@ -70,7 +70,7 @@ class HandoverReminderSender
             if ($stage >= 14) {
                 $targets = [...$targets, ...$this->userTargets($request->legalStaffRecipients(), 'legal', $adminLink, 'late_staff')];
             }
-            if ($stage >= 28) {
+            if ($stage >= DocumentRequest::ESCALATION_DAYS) {
                 $targets = [...$targets, ...$this->userTargets($request->coordinatorRecipients(), 'coordinator', $adminLink, 'late_staff')];
             }
 

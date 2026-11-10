@@ -44,6 +44,40 @@ class DocumentSpreadsheetExporter
     /** @param Builder<Document> $query */
     public function write(Builder $query, string $target): void
     {
+        if ($query->getQuery()->orders === null || $query->getQuery()->orders === []) {
+            $query->orderBy($query->getModel()->getQualifiedKeyName());
+        }
+
+        $this->writeDocuments($query->with(self::RELATIONS)->lazy(self::CHUNK_SIZE), $target);
+    }
+
+    /**
+     * Tulis dokumen dengan urutan ID yang diberikan (urutan tabel saat tombol ekspor diklik). Dipakai ekspor di antrean,
+     * karena query tabel (filter, pencarian, urutan) tidak bisa dibawa ke job; dokumen yang sudah dihapus permanen dilewati.
+     *
+     * @param  list<int>  $ids
+     */
+    public function writeInOrder(array $ids, string $target): void
+    {
+        $documents = (function () use ($ids): \Generator {
+            foreach (array_chunk($ids, self::CHUNK_SIZE) as $chunk) {
+                $found = Document::withTrashed()->with(self::RELATIONS)->whereKey($chunk)->get()->keyBy('id');
+                foreach ($chunk as $id) {
+                    if ($found->has($id)) {
+                        yield $found->get($id);
+                    }
+                }
+            }
+        })();
+
+        $this->writeDocuments($documents, $target);
+    }
+
+    private const RELATIONS = ['company', 'documentType', 'pic', 'currentVersion'];
+
+    /** @param iterable<Document> $documents */
+    private function writeDocuments(iterable $documents, string $target): void
+    {
         $options = new Options;
         foreach ([1 => 40, 2 => 22, 3 => 28, 4 => 24, 5 => 28, 6 => 22, 7 => 16, 8 => 16, 9 => 20, 10 => 11, 11 => 12, 12 => 36, 13 => 18] as $column => $width) {
             $options->setColumnWidth($width, $column);
@@ -56,11 +90,8 @@ class DocumentSpreadsheetExporter
         $dateStyle = (new Style)->setFormat('dd/mm/yyyy');
         $timezone = config('lms.reminder_timezone');
         $today = CarbonImmutable::today($timezone);
-        if ($query->getQuery()->orders === null || $query->getQuery()->orders === []) {
-            $query->orderBy($query->getModel()->getQualifiedKeyName());
-        }
 
-        $query->with(['company', 'documentType', 'pic', 'currentVersion'])->lazy(self::CHUNK_SIZE)->each(function (Document $document) use ($writer, $dateStyle, $timezone, $today): void {
+        foreach ($documents as $document) {
             $version = $document->currentVersion;
             $expiry = $version?->expiry_date ? CarbonImmutable::parse($version->expiry_date->toDateString(), $timezone) : null;
             $isDeleted = $document->trashed();
@@ -80,7 +111,7 @@ class DocumentSpreadsheetExporter
                 $this->textCell($version?->stored_name),
                 $this->dateCell($document->created_at?->timezone($timezone)->toDateString(), $timezone, $dateStyle),
             ]));
-        });
+        }
 
         $writer->close();
     }

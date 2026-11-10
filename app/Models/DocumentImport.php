@@ -19,12 +19,17 @@ class DocumentImport extends Model
     use HasFactory;
 
     public const STATUSES = [
+        'checking' => 'Sedang diperiksa',
+        'check_failed' => 'Gagal diperiksa',
         'checked' => 'Sudah diperiksa',
         'importing' => 'Sedang diimpor',
         'completed' => 'Selesai',
         'cancelled' => 'Dibatalkan',
         'expired' => 'Kedaluwarsa',
     ];
+
+    /** Batch yang belum selesai: ditawarkan dilanjutkan dan file sementaranya tidak dihapus pembersihan harian. */
+    public const UNFINISHED_STATUSES = ['checking', 'checked', 'importing'];
 
     public const ROW_STATUSES = [
         'ready' => 'Siap',
@@ -68,7 +73,13 @@ class DocumentImport extends Model
 
     public function isUnfinished(): bool
     {
-        return in_array($this->status, ['checked', 'importing'], true);
+        return in_array($this->status, self::UNFINISHED_STATUSES, true);
+    }
+
+    /** Sedang dikerjakan di antrean (queue worker); halaman impor memantau sampai statusnya berubah. */
+    public function isRunningInBackground(): bool
+    {
+        return in_array($this->status, ['checking', 'importing'], true);
     }
 
     /** Jumlah baris dengan salah satu status yang diberikan. */

@@ -4,10 +4,12 @@
         $unfinished = $this->unfinishedImport();
         $status = $import?->status;
         $step = match (true) {
-            $import === null => 2,
-            $status === 'checked' => 3,
+            $import === null, $status === 'check_failed' => 2,
+            in_array($status, ['checking', 'checked'], true) => 3,
             default => 4,
         };
+        // Impor dianggap macet bila tidak ada kemajuan beberapa menit (mis. worker berhenti); tawarkan dilanjutkan.
+        $stalled = $status === 'importing' && $import->updated_at->lt(now()->subMinutes(3));
         $statusLabels = \App\Models\DocumentImport::ROW_STATUSES;
         $statusColors = \App\Models\DocumentImport::ROW_STATUS_COLORS;
     @endphp
@@ -43,9 +45,11 @@
         .dark .doc-import td { border-color: var(--gray-800); }
         .dark .doc-import th { background: var(--gray-800); color: var(--gray-200); }
         .dark .doc-import__progress { background: var(--gray-700); }
+        .doc-import__running { display: flex; gap: .75rem; align-items: center; }
+        .doc-import__spinner { width: 1.5rem; height: 1.5rem; flex: none; color: var(--color-primary-600, #16a34a); }
     </style>
 
-    <div class="doc-import">
+    <div class="doc-import" @if ($import?->isRunningInBackground()) wire:poll.3s @endif>
         <ol class="doc-import__steps" aria-label="Langkah impor">
             @foreach ([1 => 'Unduh template', 2 => 'Unggah', 3 => 'Periksa', 4 => 'Impor'] as $number => $label)
                 <li @if ($number === $step) aria-current="step" @elseif ($number < $step) class="is-done" @endif>
@@ -80,6 +84,24 @@
                     </div>
                 </form>
             </x-filament::section>
+        @elseif ($status === 'checking')
+            <x-filament::section heading="3. Memeriksa file" :description="'Batch #'.$import->id.' · '.$import->excel_name.' · '.implode(', ', $import->zip_names)">
+                <div class="doc-import__running" role="status" aria-live="polite">
+                    <x-filament::loading-indicator class="doc-import__spinner" />
+                    <p class="doc-import__text" style="margin: 0;">Excel dan ZIP sedang diperiksa di latar belakang. Halaman ini boleh ditutup; buka lagi menu Impor untuk melihat hasilnya.</p>
+                </div>
+            </x-filament::section>
+        @elseif ($status === 'check_failed')
+            <x-filament::section heading="2. Unggah file" :description="'Batch #'.$import->id.' · '.$import->excel_name">
+                <x-filament::callout color="danger" icon="heroicon-o-exclamation-triangle" heading="File belum bisa diimpor">
+                    <x-slot name="description">
+                        <ul class="doc-import__messages">@foreach (collect($import->notes['check_errors'] ?? [])->flatten() as $message)<li>{{ $message }}</li>@endforeach</ul>
+                    </x-slot>
+                </x-filament::callout>
+                <div class="doc-import__actions">
+                    <x-filament::button icon="heroicon-o-arrow-up-tray" wire:click="startOver">Unggah ulang</x-filament::button>
+                </div>
+            </x-filament::section>
         @else
             @php
                 $ready = $import->countRows('ready');
@@ -92,31 +114,7 @@
             @endphp
             <div
                 wire:key="document-import-{{ $import->id }}"
-                x-data="{
-                    running: false,
-                    onlyProblems: false,
-                    async run() {
-                        if (this.running) return
-                        this.running = true
-                        try {
-                            while (await $wire.processNextChunk()) {}
-                        } catch (error) {
-                            new FilamentNotification()
-                                .title('Impor terhenti')
-                                .body('Koneksi atau server bermasalah. Klik Lanjutkan impor; dokumen yang sudah masuk tidak diimpor dua kali.')
-                                .danger()
-                                .persistent()
-                                .send()
-                        } finally {
-                            this.running = false
-                        }
-                    },
-                    async start() {
-                        if (this.running) return
-                        if (await $wire.startImport()) await this.run()
-                    },
-                }"
-                x-on:beforeunload.window="if (running) { $event.preventDefault(); $event.returnValue = '' }"
+                x-data="{ onlyProblems: false }"
                 class="doc-import"
             >
                 @if ($status === 'checked')
@@ -149,7 +147,7 @@
                         @endif
 
                         <div class="doc-import__actions">
-                            <x-filament::button icon="heroicon-o-arrow-up-tray" x-on:click="start()" x-bind:disabled="running || {{ $ready === 0 ? 'true' : 'false' }}">{{ $ready === 0 ? 'Tidak ada dokumen yang bisa diimpor' : "Impor {$ready} dokumen" }}</x-filament::button>
+                            <x-filament::button icon="heroicon-o-arrow-up-tray" wire:click="startImport" wire:loading.attr="disabled" :disabled="$ready === 0">{{ $ready === 0 ? 'Tidak ada dokumen yang bisa diimpor' : "Impor {$ready} dokumen" }}</x-filament::button>
                             @if ($problemCount > 0)
                                 <x-filament::button color="gray" icon="heroicon-o-arrow-down-tray" wire:click="downloadFailedRows">Unduh baris bermasalah</x-filament::button>
                             @endif
@@ -160,11 +158,12 @@
                     <x-filament::section heading="4. Impor" :description="'Batch #'.$import->id.' · '.$import->excel_name">
                         <p class="doc-import__text" aria-live="polite">{{ $processed }} dari {{ $checkedReady }} dokumen diproses ({{ $percent }}%).</p>
                         <div class="doc-import__progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $percent }}"><span style="width: {{ $percent }}%"></span></div>
-                        <p class="doc-import__text" x-show="running" style="margin-top: 1rem;">Sedang mengimpor {{ \App\Services\DocumentImporter::CHUNK_SIZE }} dokumen per tahap. Jangan tutup halaman ini.</p>
-                        <div x-show="! running">
-                            <p class="doc-import__text" style="margin-top: 1rem;">Impor berhenti sebelum selesai (misalnya koneksi terputus). Lanjutkan untuk memproses sisa dokumen; dokumen yang sudah masuk tidak akan diimpor dua kali.</p>
-                            <x-filament::button icon="heroicon-o-play" x-on:click="run()">Lanjutkan impor</x-filament::button>
-                        </div>
+                        @if ($stalled)
+                            <p class="doc-import__text" style="margin-top: 1rem;">Impor tidak bergerak beberapa menit (misalnya proses latar belakang dimulai ulang). Lanjutkan untuk memproses sisa dokumen; dokumen yang sudah masuk tidak akan diimpor dua kali.</p>
+                            <x-filament::button icon="heroicon-o-play" wire:click="resumeImport">Lanjutkan impor</x-filament::button>
+                        @else
+                            <p class="doc-import__text" style="margin-top: 1rem;">Impor berjalan di latar belakang. Halaman ini boleh ditutup; Anda akan mendapat notifikasi di ikon lonceng saat selesai.</p>
+                        @endif
                     </x-filament::section>
                 @else
                     <x-filament::section heading="Laporan impor" :description="'Batch #'.$import->id.' · '.$import->excel_name.' · '.\App\Models\DocumentImport::STATUSES[$status]">

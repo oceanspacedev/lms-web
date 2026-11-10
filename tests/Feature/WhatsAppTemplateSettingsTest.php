@@ -49,7 +49,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
 
     public static function newTemplateEvents(): array
     {
-        return array_map(fn (string $event): array => [$event], ['signing', 'draft_replaced', 'handover_staff', 'scan_reminder', 'late_7', 'late_14', 'late_28', 'cancelled']);
+        return array_map(fn (string $event): array => [$event], ['signing', 'draft_replaced', 'handover_staff', 'scan_reminder', 'late_7', 'late_14', 'late_21', 'cancelled']);
     }
 
     #[DataProvider('newTemplateEvents')]
@@ -318,8 +318,8 @@ class WhatsAppTemplateSettingsTest extends TestCase
         Livewire::test(ManageReminderTemplates::class)->assertSuccessful()
             ->assertSee('Pengaturan bawaan sudah siap dipakai')
             ->assertSee('Dikirim pukul 08:00 WIB, mulai 30 hari sebelum dokumen berakhir, lalu diulang setiap 7 hari. Setelah kedaluwarsa, dikirim lagi pada hari ke-1, 7.')
-            ->assertSee(ReminderTemplate::REQUEST_TEMPLATE_HINTS['late_28'])
-            ->assertSee('Terlambat 3 minggu')->assertSee('Lewat batas')->assertDontSee('Terlambat 4 minggu')
+            ->assertSee(ReminderTemplate::REQUEST_TEMPLATE_HINTS['late_21'])
+            ->assertSee('Terlambat 2 minggu')->assertSee('Lewat batas')->assertDontSee('Terlambat 3 minggu')
             ->assertDontSee('Dummy');
     }
 
