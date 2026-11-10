@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Documents\Tables;
 
 use App\Filament\Concerns\TrashActions;
 use App\Filament\Resources\Documents\Pages\ListDocuments;
+use App\Jobs\ExportDocuments;
 use App\Models\Document;
 use App\Services\DocumentSpreadsheetExporter;
 use Carbon\CarbonImmutable;
@@ -12,6 +13,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
@@ -34,8 +36,23 @@ class DocumentsTable
                     ->visible(fn (): bool => Gate::allows('viewAny', Document::class))
                     ->action(function (ListDocuments $livewire) {
                         Gate::authorize('viewAny', Document::class);
+                        $query = $livewire->getTableQueryForExport();
+                        $total = (clone $query)->count();
 
-                        return app(DocumentSpreadsheetExporter::class)->download($livewire->getTableQueryForExport(), 'dokumen');
+                        if ($total <= config('lms.export_direct_max_rows')) {
+                            return app(DocumentSpreadsheetExporter::class)->download($query, 'dokumen');
+                        }
+
+                        // Ekspor besar dibuat di antrean supaya request tidak menunggu lama; tautannya dikirim ke lonceng.
+                        if ($query->getQuery()->orders === null || $query->getQuery()->orders === []) {
+                            $query->orderBy($query->getModel()->getQualifiedKeyName());
+                        }
+                        ExportDocuments::dispatch((int) auth()->id(), $query->pluck($query->getModel()->getQualifiedKeyName())->map(fn (mixed $id): int => (int) $id)->all(), 'dokumen');
+                        Notification::make()->title('Ekspor sedang disiapkan')
+                            ->body("{$total} dokumen diekspor di latar belakang. Tautan unduh akan muncul di ikon lonceng.")
+                            ->info()->send();
+
+                        return null;
                     }),
                 Action::make('tableView')->label('Tabel')->icon('heroicon-o-list-bullet')
                     ->color(fn (ListDocuments $livewire): string => $livewire->isGridView() ? 'gray' : 'primary')

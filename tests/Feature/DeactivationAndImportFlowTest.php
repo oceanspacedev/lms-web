@@ -9,6 +9,7 @@ use App\Filament\Resources\Documents\Pages\ImportDocuments;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
+use App\Jobs\ProcessDocumentImport;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentActivity;
@@ -29,9 +30,11 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Notifications\SendQueuedNotifications;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -347,18 +350,28 @@ class DeactivationAndImportFlowTest extends TestCase
         $this->assertCount($storedBefore, Storage::disk('s3')->allFiles());
         Http::assertNothingSent();
 
-        // 4. Impor bertahap 20 baris per langkah, seperti browser; koneksi putus setelah langkah pertama.
-        $page->call('startImport')->assertReturned(true)->call('processNextChunk')->assertReturned(true);
-        $import->refresh();
-        $this->assertSame(['importing', 20, 5, 21], [$import->status, $import->processedCount(), $import->countRows('ready'), Document::count()]);
+        // 4–5. Impor berjalan di antrean 20 baris per tahap; worker berhenti setelah tahap pertama. Tanpa kemajuan beberapa
+        // menit, halaman menawarkan melanjutkan, lalu sisa baris diproses tanpa duplikat. Hanya job impor & notifikasi yang dipalsukan.
+        $report = Queue::fakeFor(function () use ($page, $import): Testable {
+            $page->call('startImport')->assertReturned(true);
+            Queue::assertPushed(ProcessDocumentImport::class, 1);
+            (new ProcessDocumentImport($import->id))->handle(app(DocumentImporter::class));
+            $import->refresh();
+            $this->assertSame(['importing', 20, 5, 21], [$import->status, $import->processedCount(), $import->countRows('ready'), Document::count()]);
+            Queue::assertPushed(ProcessDocumentImport::class, 2);
 
-        // 5. Halaman dibuka lagi: impor yang belum selesai ditawarkan, lalu dilanjutkan lewat ?batch= tanpa duplikat.
-        Livewire::test(ImportDocuments::class)->assertSee('Ada impor yang belum selesai')->assertSee("Buka batch #{$import->id}");
-        $report = Livewire::withQueryParams(['batch' => $import->id])->test(ImportDocuments::class)
-            ->assertSee('Lanjutkan impor')->assertSee('20 dari 25 dokumen diproses')
-            ->call('processNextChunk')->assertReturned(false)
-            ->assertNotified('Impor selesai')
-            ->assertSee('Laporan impor')->assertSee('Unduh baris gagal (Excel)');
+            DocumentImport::whereKey($import->id)->toBase()->update(['updated_at' => now()->subMinutes(4)]);
+            Livewire::test(ImportDocuments::class)->assertSee('Ada impor yang belum selesai')->assertSee("Buka batch #{$import->id}");
+            $report = Livewire::withQueryParams(['batch' => $import->id])->test(ImportDocuments::class)
+                ->assertSee('Lanjutkan impor')->assertSee('20 dari 25 dokumen diproses')
+                ->call('resumeImport')->assertNotified('Impor dilanjutkan');
+            Queue::assertPushed(ProcessDocumentImport::class, 3);
+            (new ProcessDocumentImport($import->id))->handle(app(DocumentImporter::class));
+            // Notifikasi lonceng "Impor selesai" ikut diantrekan untuk pembuat batch.
+            Queue::assertPushed(SendQueuedNotifications::class, fn (SendQueuedNotifications $job): bool => $job->notifiables->contains($this->legal));
+
+            return $report->call('$refresh')->assertSee('Laporan impor')->assertSee('Unduh baris gagal (Excel)');
+        }, [ProcessDocumentImport::class, SendQueuedNotifications::class]);
         $import->refresh();
         $this->assertSame(['completed', 25, 2, 3], [$import->status, $import->imported_count, $import->skipped_count, $import->failed_count]);
         $this->assertNotNull($import->completed_at);
@@ -444,8 +457,7 @@ class DeactivationAndImportFlowTest extends TestCase
             ->assertSee('2 dokumen akan langsung dikirimi pengingat, 1 sudah kedaluwarsa.')
             ->set('skipPastReminders', false)
             ->call('startImport')->assertReturned(true)
-            ->call('processNextChunk')->assertReturned(false)
-            ->assertNotified('Impor selesai');
+            ->call('$refresh')->assertSee('Laporan impor');
 
         $import = DocumentImport::sole();
         $this->assertSame(['completed', false, 3], [$import->status, $import->skip_past_reminders, $import->imported_count]);
@@ -479,7 +491,7 @@ class DeactivationAndImportFlowTest extends TestCase
         $this->actingAs($this->legal);
         $rows = [$this->row(['title' => 'Sewa Gudang Barat', 'document_number' => 'SGB-01', 'pic_email' => $leaver->email, 'expiry_date' => '18/11/2026'])];
         $this->checkThroughPage($rows, ['dokumen.zip' => $this->zipFor($rows)])
-            ->call('startImport')->assertReturned(true)->call('processNextChunk')->assertReturned(false);
+            ->call('startImport')->assertReturned(true);
         $document = Document::where('title', 'Sewa Gudang Barat')->sole();
         $this->assertSame($leaver->id, $document->pic_user_id);
 

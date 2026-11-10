@@ -2,6 +2,7 @@
 
 use App\Models\EmailOtp;
 use App\Models\WhatsappOtp;
+use App\Services\DocumentExportStore;
 use App\Services\DocumentImporter;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -33,3 +34,9 @@ Schedule::command('lms:send-request-reminders')
 Schedule::command('model:prune', ['--model' => [WhatsappOtp::class, EmailOtp::class]])->daily();
 
 Schedule::command('lms:clean-import-files')->daily();
+
+Artisan::command('lms:clean-export-files', function (DocumentExportStore $store) {
+    $this->info('File ekspor lama yang dihapus: '.$store->cleanup());
+})->purpose('Hapus file ekspor Excel dari antrean yang lebih dari 24 jam');
+
+Schedule::command('lms:clean-export-files')->hourly();

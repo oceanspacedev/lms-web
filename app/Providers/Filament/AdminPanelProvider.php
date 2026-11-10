@@ -38,6 +38,9 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(fn (): View => view('filament.brand'))
             ->brandLogoHeight('2rem')
             ->favicon(asset('images/logo.svg'))
+            // Lonceng notifikasi untuk pekerjaan latar belakang (impor selesai, file ekspor siap diunduh).
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->path('admin')
             // Tema Mekaya (sama dengan member-web): sidebar, topbar, kartu, tabel yang ringkas.
             // Pengaturan auth & tema di bawah dipanggil setelah plugin supaya menimpa bawaan Mekaya.

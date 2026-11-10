@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Jobs\CheckDocumentImport;
+use App\Jobs\ProcessDocumentImport;
 use App\Models\Company;
 use App\Models\Document;
 use App\Models\DocumentImport;
@@ -87,37 +89,138 @@ class DocumentImporter
      */
     public function check(string $excelPath, string $excelName, array $zips, User $user): DocumentImport
     {
-        $rows = $this->readRows($excelPath);
-        $uuid = (string) Str::uuid();
-        $directory = self::DIRECTORY.'/'.$uuid;
-        $disk = Storage::disk(self::DISK);
-        $disk->makeDirectory($directory.'/files');
+        $import = $this->newImport($excelName, array_column($zips, 'name'), $user);
 
         try {
-            $referenced = collect($rows)->map(fn (array $row): string => Str::lower((string) $this->baseName($this->text($row['values']['file_name'] ?? null))))
-                ->filter()->unique()->values()->all();
-            $files = $this->extractZips($zips, $directory, $referenced);
-            $unused = collect($files)->reject(fn (array $file, string $key): bool => in_array($key, $referenced, true))->pluck('name')->values();
-
-            $import = new DocumentImport([
-                'user_id' => $user->id,
-                'uuid' => $uuid,
-                'excel_name' => basename(str_replace('\\', '/', $excelName)),
-                'zip_names' => array_map(fn (array $zip): string => basename(str_replace('\\', '/', $zip['name'])), $zips),
-                'status' => 'checked',
-                'skip_past_reminders' => true,
-                'notes' => ['unused_files' => $unused->take(20)->all(), 'unused_count' => $unused->count()],
-            ]);
-            $import->rows = $this->evaluateRows($rows, $files);
-            $import->refreshCounts();
-            $import->save();
-
-            return $import;
+            return $this->evaluate($import, $excelPath, $zips);
         } catch (Throwable $exception) {
-            $disk->deleteDirectory($directory);
+            Storage::disk(self::DISK)->deleteDirectory($import->directory());
 
             throw $exception;
         }
+    }
+
+    /**
+     * Simpan file unggahan ke folder batch lalu periksa di antrean (CheckDocumentImport), supaya ZIP besar tidak
+     * dibongkar di dalam request. Batch berstatus "checking" sampai pemeriksaan selesai atau gagal ("check_failed").
+     *
+     * @param  list<UploadedFile>  $zips
+     */
+    public function queueCheck(UploadedFile $excel, array $zips, User $user): DocumentImport
+    {
+        $import = $this->newImport($excel->getClientOriginalName(), array_map(fn (UploadedFile $zip): string => $zip->getClientOriginalName(), $zips), $user);
+        $disk = Storage::disk(self::DISK);
+        $upload = $import->directory().'/upload';
+        $disk->makeDirectory($upload);
+
+        try {
+            $stored = ['excel' => $this->keepUpload($excel, $upload.'/excel.xlsx'), 'zips' => []];
+            foreach (array_values($zips) as $index => $zip) {
+                $stored['zips'][] = ['path' => $this->keepUpload($zip, $upload."/{$index}.zip"), 'name' => $zip->getClientOriginalName()];
+            }
+            $import->notes = ['upload' => $stored];
+            $import->save();
+        } catch (Throwable $exception) {
+            $disk->deleteDirectory($import->directory());
+
+            throw $exception;
+        }
+
+        CheckDocumentImport::dispatch($import->id);
+
+        return $import->refresh();
+    }
+
+    /**
+     * Jalankan pemeriksaan batch "checking" (dipanggil dari antrean). Masalah file dicatat sebagai pesan pada batch
+     * berstatus "check_failed" dan folder sementaranya dihapus.
+     */
+    public function runCheck(DocumentImport $import): void
+    {
+        if ($import->status !== 'checking') {
+            return;
+        }
+        $disk = Storage::disk(self::DISK);
+        $upload = $import->notes['upload'] ?? null;
+        $errors = null;
+
+        try {
+            if (! is_array($upload) || ! $disk->exists($upload['excel'] ?? '')) {
+                throw ValidationException::withMessages(['excel' => 'File unggahan sudah tidak ada. Unggah ulang Excel dan ZIP.']);
+            }
+            $this->evaluate($import, $disk->path($upload['excel']), array_map(fn (array $zip): array => ['path' => $disk->path($zip['path']), 'name' => $zip['name']], $upload['zips'] ?? []));
+            $disk->deleteDirectory($import->directory().'/upload');
+        } catch (ValidationException $exception) {
+            $errors = $exception->errors();
+        } catch (Throwable $exception) {
+            report($exception);
+            $errors = ['excel' => ['File tidak bisa diperiksa karena gangguan sistem. Coba lagi; bila berulang, hubungi admin.']];
+        }
+
+        if ($errors !== null) {
+            // Lepas galat (dan pembaca XLSX yang ikut tersimpan di jejaknya) sebelum folder unggahan dihapus.
+            unset($exception);
+            $this->markCheckFailed($import, $errors);
+        }
+    }
+
+    /** @param list<string> $zipNames */
+    private function newImport(string $excelName, array $zipNames, User $user): DocumentImport
+    {
+        return new DocumentImport([
+            'user_id' => $user->id,
+            'uuid' => (string) Str::uuid(),
+            'excel_name' => basename(str_replace('\\', '/', $excelName)),
+            'zip_names' => array_map(fn (string $name): string => basename(str_replace('\\', '/', $name)), $zipNames),
+            'status' => 'checking',
+            'skip_past_reminders' => true,
+            'rows' => [],
+        ]);
+    }
+
+    /** Pindahkan file unggahan sementara (Livewire) ke folder batch; disalin bila beda disk/partisi. */
+    private function keepUpload(UploadedFile $file, string $target): string
+    {
+        $destination = Storage::disk(self::DISK)->path($target);
+        if (! @rename($file->getRealPath(), $destination) && ! copy($file->getRealPath(), $destination)) {
+            throw new \RuntimeException('File unggahan tidak bisa disimpan.');
+        }
+
+        return $target;
+    }
+
+    /** @param array<string, list<string>> $messages Pesan per isian form (`excel` atau `zips`). */
+    private function markCheckFailed(DocumentImport $import, array $messages): void
+    {
+        // Pembaca XLSX yang berhenti karena galat bisa masih memegang file unggahan sampai dibersihkan; di Windows file itu tak bisa dihapus.
+        gc_collect_cycles();
+        Storage::disk(self::DISK)->deleteDirectory($import->directory());
+        $import->update(['status' => 'check_failed', 'notes' => ['check_errors' => $messages]]);
+    }
+
+    /**
+     * Baca Excel, bongkar ZIP, dan nilai setiap baris; batch disimpan berstatus "checked".
+     *
+     * @param  list<array{path: string, name: string}>  $zips
+     */
+    private function evaluate(DocumentImport $import, string $excelPath, array $zips): DocumentImport
+    {
+        $rows = $this->readRows($excelPath);
+        $directory = $import->directory();
+        Storage::disk(self::DISK)->makeDirectory($directory.'/files');
+
+        $referenced = collect($rows)->map(fn (array $row): string => Str::lower((string) $this->baseName($this->text($row['values']['file_name'] ?? null))))
+            ->filter()->unique()->values()->all();
+        $files = $this->extractZips($zips, $directory, $referenced);
+        $unused = collect($files)->reject(fn (array $file, string $key): bool => in_array($key, $referenced, true))->pluck('name')->values();
+
+        $import->status = 'checked';
+        $import->notes = ['unused_files' => $unused->take(20)->all(), 'unused_count' => $unused->count()];
+        $import->rows = $this->evaluateRows($rows, $files);
+        $import->refreshCounts();
+        $import->save();
+
+        return $import;
     }
 
     /** Mulai impor batch yang sudah diperiksa. Mengembalikan false bila tidak ada baris "Siap". */
@@ -128,8 +231,17 @@ class DocumentImporter
         }
 
         $import->update(['status' => 'importing', 'skip_past_reminders' => $skipPastReminders]);
+        ProcessDocumentImport::dispatch($import->id);
 
         return true;
+    }
+
+    /** Kirim ulang batch "importing" ke antrean, misalnya setelah worker berhenti di tengah. Baris yang sudah diproses tidak diulang. */
+    public function resume(DocumentImport $import): void
+    {
+        if ($import->status === 'importing') {
+            ProcessDocumentImport::dispatch($import->id);
+        }
     }
 
     /**
@@ -203,7 +315,7 @@ class DocumentImporter
         $cutoff = now()->subHours(self::STALE_HOURS);
         $deleted = 0;
 
-        DocumentImport::whereIn('status', ['checked', 'importing'])->where('updated_at', '<', $cutoff)
+        DocumentImport::whereIn('status', DocumentImport::UNFINISHED_STATUSES)->where('updated_at', '<', $cutoff)
             ->each(fn (DocumentImport $import): bool => $import->update(['status' => 'expired']));
 
         $root = $disk->path(self::DIRECTORY);

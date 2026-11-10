@@ -8,6 +8,8 @@ return [
     // Impor dokumen lama: jumlah baris Excel (dan file di ZIP) per batch, serta batas ukuran per ZIP dan total isi ZIP setelah diekstrak.
     'import_max_rows' => (int) env('LMS_IMPORT_MAX_ROWS', 200),
     'import_max_zip_kb' => (int) env('LMS_IMPORT_MAX_ZIP_KB', 512000),
+    // Ekspor Excel daftar dokumen: sampai sebanyak ini langsung diunduh; lebih dari itu dibuat di antrean lalu tautannya dikirim ke lonceng.
+    'export_direct_max_rows' => (int) env('LMS_EXPORT_DIRECT_MAX_ROWS', 1000),
     'signed_url_minutes' => 5,
     'allowed_extensions' => ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
     'allowed_mime_types' => [

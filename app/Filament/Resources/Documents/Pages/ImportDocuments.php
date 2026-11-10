@@ -18,8 +18,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
- * Impor dokumen lama: 1 unduh template, 2 unggah Excel + ZIP, 3 periksa (dry run), 4 impor bertahap dari browser.
- * Proses impor dipanggil per CHUNK_SIZE baris oleh browser (tanpa queue worker) dan bisa dilanjutkan lewat ?batch=ID.
+ * Impor dokumen lama: 1 unduh template, 2 unggah Excel + ZIP, 3 periksa (dry run), 4 impor bertahap.
+ * Pemeriksaan dan impor berjalan di antrean (queue worker), jadi halaman boleh ditutup; batch bisa dibuka lagi lewat ?batch=ID.
  */
 class ImportDocuments extends Page
 {
@@ -97,7 +97,7 @@ class ImportDocuments extends Page
             return null;
         }
 
-        return DocumentImport::where('user_id', auth()->id())->whereIn('status', ['checked', 'importing'])->latest('id')->first();
+        return DocumentImport::where('user_id', auth()->id())->whereIn('status', DocumentImport::UNFINISHED_STATUSES)->latest('id')->first();
     }
 
     public function downloadTemplate(): StreamedResponse
@@ -115,14 +115,8 @@ class ImportDocuments extends Page
         }
 
         try {
-            $import = app(DocumentImporter::class)->check(
-                $excel->getRealPath(),
-                $excel->getClientOriginalName(),
-                array_map(fn (UploadedFile $zip): array => ['path' => $zip->getRealPath(), 'name' => $zip->getClientOriginalName()], $zips),
-                auth()->user(),
-            );
-        } catch (ValidationException $exception) {
-            throw ValidationException::withMessages(collect($exception->errors())->mapWithKeys(fn (array $messages, string $field): array => ['data.'.$field => $messages])->all());
+            // File dipindah ke folder batch lalu diperiksa di antrean; halaman memantau sampai pemeriksaan selesai.
+            $import = app(DocumentImporter::class)->queueCheck($excel, $zips, auth()->user());
         } catch (Throwable $exception) {
             report($exception);
             throw ValidationException::withMessages(['data.excel' => 'File tidak bisa diperiksa karena gangguan sistem. Coba lagi; bila berulang, hubungi admin.']);
@@ -132,11 +126,19 @@ class ImportDocuments extends Page
             rescue(fn () => $file->delete(), report: false);
         }
         $this->form->fill();
-        $this->importId = $import->id;
         $this->skipPastReminders = true;
+
+        // Antrean sinkron (tes, atau server tanpa worker) sudah selesai memeriksa: tampilkan masalah file di form seperti biasa.
+        if ($import->status === 'check_failed') {
+            throw ValidationException::withMessages(collect($import->notes['check_errors'] ?? [])->mapWithKeys(fn (array $messages, string $field): array => ['data.'.$field => $messages])->all());
+        }
+        $this->importId = $import->id;
     }
 
-    /** Mulai impor; browser lalu memanggil processNextChunk() berulang sampai selesai. */
+    /**
+     * Mulai impor di antrean (ProcessDocumentImport). Halaman ini boleh ditutup; kemajuan dipantau lewat polling dan
+     * notifikasi lonceng dikirim saat selesai.
+     */
     public function startImport(): bool
     {
         $import = $this->import();
@@ -145,24 +147,13 @@ class ImportDocuments extends Page
         return app(DocumentImporter::class)->start($import, $this->skipPastReminders);
     }
 
-    /**
-     * Proses CHUNK_SIZE baris berikutnya. Mengembalikan true bila masih ada baris yang menunggu; false juga bila tahap ini
-     * tidak memproses apa pun (batch sedang diproses tab lain), supaya browser berhenti dan menampilkan tombol lanjutkan.
-     */
-    public function processNextChunk(): bool
+    /** Antrekan ulang impor yang berhenti di tengah (misalnya worker dimulai ulang). Baris yang sudah masuk tidak diulang. */
+    public function resumeImport(): void
     {
         $import = $this->import();
         abort_if($import === null, 404);
-        $processedBefore = $import->processedCount();
-        $import = app(DocumentImporter::class)->processChunk($import, auth()->user());
-
-        if ($import->status === 'completed') {
-            Notification::make()->title('Impor selesai')
-                ->body("{$import->imported_count} berhasil, {$import->skipped_count} dilewati, {$import->failed_count} gagal.")
-                ->success()->send();
-        }
-
-        return $import->status === 'importing' && $import->countRows('ready') > 0 && $import->processedCount() > $processedBefore;
+        app(DocumentImporter::class)->resume($import);
+        Notification::make()->title('Impor dilanjutkan')->body('Sisa dokumen diproses di latar belakang.')->info()->send();
     }
 
     public function cancelImport(): void

@@ -5,6 +5,7 @@ use App\Filament\Auth\Pages\PhoneLogin;
 use App\Http\Controllers\DocumentDownloadController;
 use App\Http\Controllers\DocumentRequestAttachmentController;
 use App\Http\Controllers\DocumentRequestFileController;
+use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\PanduanVideoController;
 use App\Http\Controllers\PublicDocumentRequestController;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -29,6 +30,9 @@ Route::middleware([
 
 Route::get('/admin/documents/{document}/download', DocumentDownloadController::class)
     ->middleware('auth:web')->name('documents.download');
+
+Route::get('/admin/exports/{export}', ExportDownloadController::class)
+    ->whereUuid('export')->middleware('auth:web')->name('exports.download');
 
 Route::get('/admin/panduan/video/{file}', PanduanVideoController::class)
     ->where('file', '[0-9]{2}-[a-z0-9-]+\.(mp4|jpg)')->middleware('auth:web')->name('panduan.video');
