@@ -45,6 +45,32 @@ class PublicRequestSigningTest extends TestCase
         return UploadedFile::fake()->create('scan.pdf', 50, 'application/pdf');
     }
 
+    public function test_finished_request_still_lets_the_applicant_download_draft_and_signed_scan(): void
+    {
+        Storage::disk('local')->put('lms/requests/perjanjian/signed.pdf', 'ttd');
+        $this->request('archived', ['signed_path' => 'lms/requests/perjanjian/signed.pdf', 'signed_name' => 'kontrak-ttd.pdf', 'signed_uploaded_at' => now()->subDay(), 'physical_received_at' => now()]);
+        $draft = route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'draft']);
+        $signed = route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'signed']);
+
+        $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
+            ->assertSee('Dokumen pengajuan')
+            ->assertSee($draft, false)->assertSee('Unduh draft dokumen')
+            ->assertSee($signed, false)->assertSee('Unduh dokumen bertanda tangan')->assertSee('kontrak-ttd.pdf')
+            ->assertDontSee('<form method="post" enctype="multipart/form-data"', false);
+
+        $this->get($draft)->assertOk()->assertDownload('draft.pdf');
+        $this->get($signed)->assertOk()->assertDownload('kontrak-ttd.pdf');
+    }
+
+    public function test_lookup_page_never_offers_file_downloads(): void
+    {
+        Storage::disk('local')->put('lms/requests/perjanjian/signed.pdf', 'ttd');
+        $submission = $this->request('archived', ['signed_path' => 'lms/requests/perjanjian/signed.pdf', 'signed_name' => 'kontrak-ttd.pdf', 'physical_received_at' => now()]);
+
+        $this->post(route('requests.public.lookup.submit'), ['submission_id' => (string) $submission->id, 'requester_phone' => '081234567890'])->assertOk()
+            ->assertDontSee('Dokumen pengajuan')->assertDontSee(self::TOKEN);
+    }
+
     public function test_public_page_offers_draft_download_and_scan_upload_when_signing(): void
     {
         $this->request('signing');

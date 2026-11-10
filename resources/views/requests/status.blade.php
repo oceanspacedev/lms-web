@@ -49,6 +49,17 @@
         $acceptAttribute = implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions')));
         $canSign = ! $lookup && in_array($submission->status, ['signing', 'handover'], true);
     @endphp
+    @if(! $lookup && $submission->status === 'archived' && ($submission->draft_path || $submission->signed_path))
+        {{-- Setelah selesai, pengaju tetap bisa mengunduh draft dan dokumen bertanda tangan untuk arsipnya sendiri. --}}
+        <div class="notice success" role="region" aria-labelledby="request-files-heading">
+            <strong id="request-files-heading">Dokumen pengajuan</strong>
+            <p>Pengajuan sudah selesai. File berikut tetap bisa diunduh lewat tautan status ini.</p>
+            <p>
+                @if($submission->draft_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'draft']) }}">Unduh draft dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif<br>@endif
+                @if($submission->signed_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh dokumen bertanda tangan</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif @endif
+            </p>
+        </div>
+    @endif
     @if($canSign)
         @php($draftLink = $submission->draft_path ? route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'draft']) : null)
         @if($submission->status === 'signing')
