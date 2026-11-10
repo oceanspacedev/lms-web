@@ -104,20 +104,41 @@ class HandoverReminderTest extends TestCase
         $this->assertStringContainsString('Alasan terakhir: Direktur dinas luar kota', $texts['legal']);
     }
 
-    public function test_day_twenty_nine_reminds_applicant_staff_and_coordinator(): void
+    public function test_day_twenty_two_reminds_applicant_staff_and_coordinator(): void
     {
         $legal = $this->staff('Review:DocumentRequest', '082222222222');
         $coordinator = $this->staff('ReceiveEscalation:DocumentRequest', '083333333333');
-        $request = $this->handover(29);
+        // Hari ke-21 masih tahap "Terlambat 1 minggu"; tahap "Terlambat 2 minggu" (dan koordinator) mulai hari ke-22.
+        $dayTwentyOne = $this->handover(21);
+        $request = $this->handover(22);
 
-        $this->assertSame(3, $this->send());
+        $this->assertSame(5, $this->send());
+        $this->assertSame(["lms-request-{$dayTwentyOne->id}-2-late14-applicant", "lms-request-{$dayTwentyOne->id}-2-late14-u{$legal->id}"], $this->keys($dayTwentyOne));
 
         $this->assertSame([
-            "lms-request-{$request->id}-2-late28-applicant",
-            "lms-request-{$request->id}-2-late28-u{$legal->id}",
-            "lms-request-{$request->id}-2-late28-u{$coordinator->id}",
+            "lms-request-{$request->id}-2-late21-applicant",
+            "lms-request-{$request->id}-2-late21-u{$legal->id}",
+            "lms-request-{$request->id}-2-late21-u{$coordinator->id}",
         ], $this->keys($request));
         $this->assertSame(['applicant', 'legal', 'coordinator'], $request->notifications()->orderBy('id')->pluck('recipient_kind')->all());
+    }
+
+    public function test_moving_the_last_stage_to_day_21_keeps_custom_text_and_does_not_resend(): void
+    {
+        $request = $this->handover(30);
+        $request->notifications()->create([
+            'event_key' => "lms-request-{$request->id}-2-late28-applicant", 'recipient_kind' => 'applicant', 'recipient_phone' => '6281111111111',
+            'payload' => ['message' => ['type' => 'text', 'text' => 'lama']], 'status' => 'accepted',
+        ]);
+        // Data lama disimpan sebelum aturan berubah, jadi ditulis langsung (validasi model sekarang menolak kunci late_28).
+        $setting = ReminderTemplate::factory()->create();
+        ReminderTemplate::whereKey($setting->id)->toBase()->update(['request_templates' => json_encode(['late_28' => 'Pesan khusus terlambat'])]);
+
+        (require database_path('migrations/2026_11_10_041909_move_late_handover_stage_from_day_28_to_day_21.php'))->up();
+
+        $this->assertSame(['late_21' => 'Pesan khusus terlambat'], $setting->refresh()->request_templates);
+        $this->assertSame(["lms-request-{$request->id}-2-late21-applicant"], $this->keys($request));
+        $this->assertSame(0, $this->send());
     }
 
     public function test_runs_twice_without_duplicates(): void
@@ -135,7 +156,7 @@ class HandoverReminderTest extends TestCase
         $request = $this->handover(30);
 
         $this->assertSame(1, $this->send());
-        $this->assertSame(["lms-request-{$request->id}-2-late28-applicant"], $this->keys($request));
+        $this->assertSame(["lms-request-{$request->id}-2-late21-applicant"], $this->keys($request));
     }
 
     public function test_stages_advance_one_by_one_when_scheduler_runs_daily(): void
@@ -149,7 +170,7 @@ class HandoverReminderTest extends TestCase
         $this->assertSame(["lms-request-{$request->id}-2-late7-applicant", "lms-request-{$request->id}-2-late14-applicant"], $this->keys($request));
     }
 
-    public function test_no_reminders_for_cancelled_archived_or_after_day_28_stage(): void
+    public function test_no_reminders_for_cancelled_archived_or_after_day_21_stage(): void
     {
         $this->handover(30, ['status' => 'cancelled']);
         $this->handover(30, ['status' => 'archived']);

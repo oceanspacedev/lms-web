@@ -208,9 +208,9 @@ class DocumentRequestTrashTest extends TestCase
         $this->assertSame([
             "lms-request-{$request->id}-2-late14-applicant" => 'cancelled',
             "lms-request-{$request->id}-2-late14-u{$legal->id}" => 'cancelled',
-            "lms-request-{$request->id}-2-late28-applicant" => 'accepted',
-            "lms-request-{$request->id}-2-late28-u{$legal->id}" => 'accepted',
-            "lms-request-{$request->id}-2-late28-u{$coordinator->id}" => 'accepted',
+            "lms-request-{$request->id}-2-late21-applicant" => 'accepted',
+            "lms-request-{$request->id}-2-late21-u{$legal->id}" => 'accepted',
+            "lms-request-{$request->id}-2-late21-u{$coordinator->id}" => 'accepted',
         ], $this->notificationStatuses($request));
     }
 

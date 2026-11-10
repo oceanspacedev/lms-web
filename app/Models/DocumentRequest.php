@@ -53,10 +53,14 @@ class DocumentRequest extends Model
     /** Status setelah draf keluar yang boleh dilihat semua Staff Legal. */
     public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
 
-    /** Batas hari menyerahkan dokumen fisik setelah scan pertama; pengingat lanjutan di hari ke-7, 14, 28. */
+    /** Batas hari menyerahkan dokumen fisik setelah scan pertama; pengingat lanjutan di hari ke-7, 14, 21. */
     public const HANDOVER_DAYS = 7;
 
-    public const LATE_REMINDER_DAYS = [7, 14, 28];
+    /** Tahap pengingat (hari setelah scan): lewat batas, terlambat 1 minggu, terlambat 2 minggu (ikut ke koordinator). */
+    public const LATE_REMINDER_DAYS = [7, 14, 21];
+
+    /** Mulai tahap ini koordinator ikut dikabari: tahap terakhir pengingat (terlambat 2 minggu). */
+    public const ESCALATION_DAYS = 21;
 
     public const SCAN_REMINDER_DAYS = 7;
 
