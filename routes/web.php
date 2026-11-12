@@ -48,7 +48,7 @@ Route::post('/pengajuan/{token}', [PublicDocumentRequestController::class, 'revi
 Route::get('/admin/document-requests/{documentRequest}/attachments/{key}', DocumentRequestAttachmentController::class)
     ->middleware('auth:web')->withTrashed()->name('requests.attachment');
 Route::get('/admin/document-requests/{documentRequest}/files/{kind}', DocumentRequestFileController::class)
-    ->whereIn('kind', ['draft', 'signed'])->middleware('auth:web')->withTrashed()->name('requests.file');
+    ->whereIn('kind', ['draft', 'signed', 'scan'])->middleware('auth:web')->withTrashed()->name('requests.file');
 Route::get('/pengajuan/{token}/berkas/{kind}', [DocumentRequestFileController::class, 'publicDownload'])->where('token',
     '[A-Za-z0-9]{64}')->middleware('throttle:public-request-status')->name('requests.public.file');
 Route::post('/pengajuan/{token}/scan', [PublicDocumentRequestController::class, 'uploadScan'])->where('token',

@@ -160,17 +160,23 @@ class FullLifecycleFlowTest extends TestCase
         $this->deliver();
         $this->assertCount(2, array_filter($this->messagesTo('6281200000001'), fn (array $m): bool => str_contains($m['text'], 'Pengajuan baru')));
 
-        // 6. Pemeriksa mengeluarkan draf; pengaju diberi tahu, lalu mengunggah scan bertanda tangan.
+        // 6. Pemeriksa memproses lalu mengeluarkan draf; pengaju diberi tahu, lalu mengunggah soft file bertanda tangan.
         $applicantMessages = count($this->messagesTo('6281355550000'));
-        $request->refresh()->issueDraft(UploadedFile::fake()->createWithContent('draf-pks.pdf', $this->pdfContent()), $this->reviewer);
-        $this->assertSame('signing', $request->status);
+        $request->refresh()->transition('drafting', $this->reviewer);
+        $this->assertSame('drafting', $request->status);
         $this->deliver();
         $this->assertCount($applicantMessages + 1, $this->messagesTo('6281355550000'));
+        $request->issueDraft(UploadedFile::fake()->createWithContent('draf-pks.pdf', $this->pdfContent()), $this->reviewer);
+        $this->assertSame('signing', $request->status);
+        $this->deliver();
+        $this->assertCount($applicantMessages + 2, $this->messagesTo('6281355550000'));
         $request->uploadSigned(UploadedFile::fake()->createWithContent('final-ttd.pdf', $this->pdfContent()), null);
         $this->assertSame('handover', $request->status);
 
-        // 7. Dokumen fisik diterima Staff Legal; scan bertanda tangan diarsipkan.
-        $request->markReceived('PKS/2026/001', '2026-10-09', '2026-10-29', $this->reviewer);
+        // 7. Dokumen fisik diterima Staff Legal, discan, lalu scannya diarsipkan dan bisa diunduh pengaju.
+        $request->markReceived($this->reviewer);
+        $this->assertSame('scanning', $request->status);
+        $request->completeWithScan(UploadedFile::fake()->createWithContent('scan-asli.pdf', $this->pdfContent()), $this->reviewer, '2026-10-29', null, 'PKS/2026/001', '2026-10-09');
         $request->refresh();
         $this->assertSame('archived', $request->status);
         $document = Document::sole();
@@ -183,7 +189,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->assertSame(1, $document->currentVersion->version_number);
         Storage::disk('s3')->assertExists($document->currentVersion->file_path);
         $this->deliver();
-        $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()->assertSee('Selesai, dokumen fisik diterima dan diarsipkan')->assertDontSee('aria-current="step"', false);
+        $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()->assertSee('Selesai, dokumen sudah diarsipkan')->assertSee('Unduh scan dokumen asli')->assertDontSee('aria-current="step"', false);
 
         // 8. Dokumen sampai ke tim legal dan masuk daftar.
         $this->actingAs($this->legal);

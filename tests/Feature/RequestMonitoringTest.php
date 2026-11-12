@@ -74,7 +74,8 @@ class RequestMonitoringTest extends TestCase
         DocumentRequestLateReason::factory()->create(['document_request_id' => $withReasons->id, 'reason' => 'Kurir tertunda', 'created_at' => now()->subDays(2)]);
         DocumentRequestLateReason::factory()->create(['document_request_id' => $withReasons->id, 'reason' => 'Menunggu stempel basah', 'created_at' => now()->subDay()]);
         $onTime = DocumentRequest::factory()->handover(3)->create();
-        $scanOverdue = DocumentRequest::factory()->signing(8)->create();
+        $scanOverdue = DocumentRequest::factory()->signing(15)->create();
+        $notYetOverdue = DocumentRequest::factory()->signing(14)->create();
         $freshSigning = DocumentRequest::factory()->signing(2)->create();
         $archived = DocumentRequest::factory()->create(['status' => 'archived']);
 
@@ -82,7 +83,8 @@ class RequestMonitoringTest extends TestCase
             ->assertTableColumnStateSet('handover_note', 'Terlambat 2 hari · belum ada alasan', $withoutReason)
             ->assertTableColumnStateSet('handover_note', 'Terlambat 3 hari · Menunggu stempel basah', $withReasons)
             ->assertTableColumnStateSet('handover_note', 'Sisa 4 hari', $onTime)
-            ->assertTableColumnStateSet('handover_note', 'Belum unggah scan > 7 hari', $scanOverdue)
+            ->assertTableColumnStateSet('handover_note', 'Belum unggah soft file > 14 hari', $scanOverdue)
+            ->assertTableColumnStateSet('handover_note', null, $notYetOverdue)
             ->assertTableColumnStateSet('handover_note', null, $freshSigning)
             ->assertTableColumnStateSet('handover_note', null, $archived);
 
@@ -148,14 +150,14 @@ class RequestMonitoringTest extends TestCase
         DocumentRequest::factory()->cancelled()->create();
         DocumentRequest::factory()->signing(1)->create();
 
-        $scanOverdue = DocumentRequest::factory()->signing(9)->create(['title' => 'Scan Belum Masuk']);
+        $scanOverdue = DocumentRequest::factory()->signing(15)->create(['title' => 'Scan Belum Masuk']);
 
         $stats = (new ReflectionMethod(WaitingRequestsOverview::class, 'getStats'))->invoke(Livewire::test(WaitingRequestsOverview::class)->instance());
 
         $this->assertSame(['Menunggu Pemeriksaan', 'Menunggu Tanda Tangan', 'Menunggu Fisik', 'Terlambat'], array_map(fn ($stat): string => (string) $stat->getLabel(), $stats));
         // Menunggu Fisik menghitung semua yang belum diterima fisiknya, termasuk yang terlambat, agar angkanya tidak tampak nol saat ada yang menunggu.
         $this->assertSame([2, 2, 5, 2], array_map(fn ($stat): int => $stat->getValue(), $stats));
-        $this->assertSame('1 belum unggah scan lebih dari 7 hari', (string) $stats[1]->getDescription());
+        $this->assertSame('1 belum unggah soft file lebih dari 14 hari', (string) $stats[1]->getDescription());
         $this->assertSame('2 di antaranya terlambat', (string) $stats[2]->getDescription());
         $this->assertSame('1 belum ada alasan', (string) $stats[3]->getDescription());
         $this->assertSame('danger', $stats[3]->getColor());

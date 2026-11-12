@@ -38,8 +38,9 @@ class DocumentRequestNotifier
         $setting = ReminderTemplate::globalSetting();
         $applicantEvent = ($last['event'] ?? null) === 'draft_replaced' ? 'draft_replaced' : $request->status;
         // User di tempat sampah (pengaju internal, PIC, staf legal) tidak pernah dijadikan penerima.
+        // Fisik diterima (Scanning) tidak mengirim pesan; pesan yang masih antre tetap dibatalkan di atas, dan pengaju dikabari saat selesai.
         $targets = [];
-        if ($request->applicantReceivesWhatsApp()) {
+        if ($request->applicantReceivesWhatsApp() && $request->status !== 'scanning') {
             $targets[] = ['kind' => 'applicant', 'suffix' => 'applicant', 'phone' => $request->applicantPhone(), 'template' => $request->status === 'handover' ? 'handover' : $applicantEvent, 'link' => $applicantLink];
         }
         if ($request->status === 'handover') {

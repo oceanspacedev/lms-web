@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/** Unduh draf dan scan bertanda tangan pengajuan (disk `local`) sebagai file unduhan, untuk staf (policy `view`) dan pengaju lewat tautan bertoken. */
+/** Unduh draf, soft file bertanda tangan, dan scan dokumen fisik pengajuan (disk `local`) sebagai file unduhan, untuk staf (policy `view`) dan pengaju lewat tautan bertoken. */
 class DocumentRequestFileController extends Controller
 {
     public function __invoke(DocumentRequest $documentRequest, string $kind): StreamedResponse
@@ -29,7 +29,7 @@ class DocumentRequestFileController extends Controller
 
     private function respond(DocumentRequest $documentRequest, string $kind): StreamedResponse
     {
-        abort_unless(in_array($kind, ['draft', 'signed'], true), 404);
+        abort_unless(in_array($kind, ['draft', 'signed', 'scan'], true), 404);
         $path = $documentRequest->{"{$kind}_path"};
         abort_unless(is_string($path) && str_starts_with($path, 'lms/requests/') && ! str_contains($path, '..') && Storage::disk('local')->exists($path), 404);
         $name = $documentRequest->{"{$kind}_name"};

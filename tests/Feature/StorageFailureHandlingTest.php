@@ -118,20 +118,22 @@ class StorageFailureHandlingTest extends TestCase
         Exceptions::assertReported(UnableToWriteFile::class);
     }
 
-    public function test_mark_received_shows_storage_message_and_keeps_request_waiting(): void
+    public function test_complete_with_scan_shows_storage_message_and_keeps_request_in_scanning(): void
     {
         $legal = $this->signIn(['ViewAny:DocumentRequest', 'View:DocumentRequest', 'Review:DocumentRequest', 'Create:Document']);
-        $request = DocumentRequest::factory()->handover(1)->create(['reviewer_id' => $legal->id]);
-        Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
+        $request = DocumentRequest::factory()->scanning()->create(['reviewer_id' => $legal->id]);
         $this->breakS3();
 
         Livewire::test(ListDocumentRequests::class)
-            ->callAction(TestAction::make('markReceived')->table($request), ['expiry_date' => '2027-10-09'])->assertHasNoActionErrors()
-            ->assertNotified($this->storageNotification('Fisik belum ditandai diterima'));
+            ->callAction(TestAction::make('completeWithScan')->table($request), [
+                'scan' => UploadedFile::fake()->createWithContent('scan.pdf', "%PDF-1.4\n%%EOF\n"), 'expiry_date' => '2027-10-09',
+            ])->assertHasNoActionErrors()
+            ->assertNotified($this->storageNotification('Pengajuan belum diselesaikan'));
 
         $request->refresh();
-        $this->assertSame('handover', $request->status);
+        $this->assertSame('scanning', $request->status);
         $this->assertNull($request->document_id);
+        $this->assertNull($request->scan_path);
         $this->assertDatabaseCount('documents', 0);
         Exceptions::assertReported(UnableToWriteFile::class);
     }

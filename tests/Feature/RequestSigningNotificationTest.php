@@ -115,13 +115,13 @@ class RequestSigningNotificationTest extends TestCase
 
         $applicant = $this->texts($request, 'applicant');
         $this->assertCount(2, $applicant, 'Pemohon menerima pesan draft lalu konfirmasi scan.');
-        $this->assertStringContainsString('Scan bertanda tangan sudah diterima', $applicant[1]);
+        $this->assertStringContainsString('Soft file bertanda tangan sudah diterima', $applicant[1]);
         $this->assertStringContainsString('paling lambat 16 Okt 2026', $applicant[1]);
         $staff = $request->notifications()->where('recipient_kind', 'legal')->get();
         $this->assertCount(1, $staff);
         $this->assertSame("lms-request-{$request->id}-3-u{$legal->id}", $staff->sole()->event_key);
         $this->assertSame('6281200000002', $staff->sole()->recipient_phone);
-        $this->assertStringContainsString('Scan bertanda tangan masuk', $staff->sole()->payload['message']['text']);
+        $this->assertStringContainsString('Soft file bertanda tangan masuk', $staff->sole()->payload['message']['text']);
         $this->assertStringContainsString('16 Okt 2026', $staff->sole()->payload['message']['text']);
         $before = $request->notifications()->count();
 
@@ -183,17 +183,20 @@ class RequestSigningNotificationTest extends TestCase
         $archived = $this->request($legal);
         $archived->issueDraft($this->pdf('draf.pdf'), $legal);
         $archived->uploadSigned($this->pdf('scan.pdf'), null);
-        $archived->markReceived('PKS-001', null, null, $legal);
+        $before = $this->texts($archived, 'applicant')->count();
+        $archived->markReceived($legal);
+        $this->assertCount($before, $this->texts($archived, 'applicant'), 'Fisik diterima tidak mengirim pesan ke pengaju.');
+        $archived->completeWithScan($this->pdf('scan-asli.pdf'), $legal, null, null, 'PKS-001');
 
         $text = $this->texts($archived, 'applicant')->last();
-        $this->assertStringContainsString('Dokumen fisik sudah diterima', $text);
+        $this->assertStringContainsString('Dokumen fisik sudah discan tim legal', $text);
         $this->assertSame('archived', $archived->fresh()->status);
     }
 
     public function test_template_labels_and_variables_cover_new_stages(): void
     {
         $this->assertSame(
-            ['pic', 'submitted', 'revision', 'rejected', 'signing', 'draft_replaced', 'scan_reminder', 'handover', 'handover_staff', 'late_7', 'late_14', 'late_21', 'late_staff', 'archived', 'cancelled'],
+            ['pic', 'submitted', 'revision', 'rejected', 'drafting', 'signing', 'draft_replaced', 'scan_reminder', 'handover', 'handover_staff', 'late_7', 'late_14', 'late_21', 'late_staff', 'archived', 'cancelled'],
             array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS),
         );
         $this->assertSame(array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS), array_keys(ReminderTemplate::DEFAULT_REQUEST_TEMPLATES));

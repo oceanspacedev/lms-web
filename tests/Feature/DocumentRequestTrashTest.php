@@ -219,12 +219,12 @@ class DocumentRequestTrashTest extends TestCase
         $actor = User::factory()->create();
         $request = DocumentRequest::factory()->signing(3)->create(['requester_phone' => '081111111111', 'history' => [['status' => 'signing', 'at' => now()->subDays(3)->toIso8601String()]]]);
         $this->manager()->trash($request, $actor);
-        $this->travel(10)->days();
+        $this->travel(17)->days();
 
         $this->manager()->restore($request, $actor);
 
         $this->assertSame(0, app(HandoverReminderSender::class)->run());
-        $this->assertSame(["lms-request-{$request->id}-1-scan7-applicant" => 'cancelled'], $this->notificationStatuses($request));
+        $this->assertSame(["lms-request-{$request->id}-1-scan14-applicant" => 'cancelled'], $this->notificationStatuses($request));
     }
 
     public function test_restore_before_any_stage_is_due_creates_no_placeholders(): void

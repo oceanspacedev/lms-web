@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DocumentRequests\Tables;
 
 use App\Filament\Concerns\TrashActions;
+use App\Filament\Resources\DocumentRequests\Actions\CompleteWithScanAction;
 use App\Filament\Resources\DocumentRequests\Actions\MarkReceivedAction;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\DocumentRequests\Pages\ListDocumentRequests;
@@ -59,11 +60,13 @@ class DocumentRequestsTable
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
             SelectFilter::make('stage')->label('Tahap')->options([
-                'to_review' => 'Perlu diperiksa', 'signing' => 'Menunggu tanda tangan', 'scan_overdue' => 'Belum unggah scan > 7 hari',
+                'to_review' => 'Perlu diperiksa', 'drafting' => 'Proses drafting', 'signing' => 'Menunggu tanda tangan', 'scan_overdue' => 'Belum unggah soft file > 14 hari',
                 'handover' => 'Menunggu dokumen fisik (semua)', 'handover_on_time' => 'Menunggu fisik (belum lewat batas)', 'late' => 'Terlambat', 'late_no_reason' => 'Terlambat, belum ada alasan',
-                'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
+                'scanning' => 'Scanning (scan belum diunggah)', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
             ])->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                 'to_review' => $query->where('status', 'submitted'),
+                'drafting' => $query->where('status', 'drafting'),
+                'scanning' => $query->where('status', 'scanning'),
                 'signing' => $query->where('status', 'signing'),
                 'scan_overdue' => $query->scanOverdue(),
                 'handover' => $query->where('status', 'handover'),
@@ -81,8 +84,9 @@ class DocumentRequestsTable
             TrashActions::filter(),
         ])
             ->recordActions([
-                // Langsung dari daftar tanpa membuka detail; bila scan belum masuk, modalnya meminta scan sekaligus.
+                // Langsung dari daftar tanpa membuka detail: fisik diterima (ke Scanning), lalu unggah scan untuk menyelesaikan.
                 MarkReceivedAction::make()->icon('heroicon-o-inbox-arrow-down')->color('success')->iconButton()->tooltip('Fisik diterima'),
+                CompleteWithScanAction::make()->icon('heroicon-o-document-arrow-up')->color('success')->iconButton()->tooltip('Unggah scan & selesaikan'),
                 Action::make('open')->label('Buka')->icon('heroicon-o-eye')->color('gray')->iconButton()->tooltip('Buka pengajuan')->url(fn (DocumentRequest $record): string => DocumentRequestResource::getUrl('edit', ['record' => $record]))
                     ->hidden(fn (DocumentRequest $record): bool => $record->trashed()),
                 TrashActions::viewTrashed('pengajuan'),
@@ -119,7 +123,7 @@ class DocumentRequestsTable
         }
 
         return $record->status === 'signing' && $record->signed_uploaded_at === null && ($record->daysSinceDraft() ?? 0) > DocumentRequest::SCAN_REMINDER_DAYS
-            ? 'Belum unggah scan > 7 hari'
+            ? 'Belum unggah soft file > '.DocumentRequest::SCAN_REMINDER_DAYS.' hari'
             : null;
     }
 

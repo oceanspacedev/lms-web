@@ -14,7 +14,7 @@
         <button type="button" data-copy-button>Salin tautan</button>
     </div>
     <small class="copy-feedback" role="status" aria-live="polite" data-copy-feedback></small>
-    <small id="status-link-note">Tautan ini juga dikirim ke WhatsApp pengaju. Siapa pun yang memegang tautan ini dapat melihat status, mengunggah scan, menulis alasan keterlambatan, dan mengubah pengajuan bila perlu direvisi. Jadi jangan dibagikan ke orang lain.</small>
+    <small id="status-link-note">Tautan ini juga dikirim ke WhatsApp pengaju. Siapa pun yang memegang tautan ini dapat melihat status, mengunggah dan mengunduh dokumen, menulis alasan keterlambatan, dan mengubah pengajuan bila perlu direvisi. Jadi jangan dibagikan ke orang lain.</small>
 </section>
 @endif
 @if($lookup && $submission->status === 'revision')
@@ -28,10 +28,15 @@
 @endif
 @if($lookup && in_array($submission->status, ['signing', 'handover'], true))
     @if($submission->status === 'signing')
-        <div class="notice" role="status"><strong>Menunggu scan bertanda tangan</strong><p>Draft sudah siap. Pengaju perlu mengunduh draft, menandatanganinya, lalu mengunggah scan-nya lewat tautan status yang dikirim ke WhatsApp pengaju. Halaman ini hanya untuk melihat status.</p></div>
+        <div class="notice" role="status"><strong>Menunggu soft file bertanda tangan</strong><p>Draft sudah diserahkan. Pengaju perlu mengunduh draft, menandatanganinya, lalu mengunggah soft file-nya lewat tautan status yang dikirim ke WhatsApp pengaju. Halaman ini hanya untuk melihat status.</p></div>
     @else
-        <div class="notice" role="status"><strong>Menunggu dokumen asli</strong><p>Scan sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal. Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.</p></div>
+        <div class="notice" role="status"><strong>Menunggu dokumen asli</strong><p>Soft file sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal. Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.</p></div>
     @endif
+@endif
+@if($submission->status === 'drafting')
+    <div class="notice" role="status"><strong>Draft sedang disusun</strong><p>Tim legal sedang menyusun draft dokumen. Pengaju dikabari lewat WhatsApp saat draft siap diunduh.</p></div>
+@elseif($submission->status === 'scanning')
+    <div class="notice" role="status"><strong>Dokumen asli sedang discan</strong><p>Dokumen asli sudah diterima tim legal dan sedang discan. Pengaju dikabari lewat WhatsApp saat scan bisa diunduh{{ $lookup ? ' lewat tautan status' : ' di halaman ini' }}.</p></div>
 @endif
 <section class="form-section receipt">
     <div class="receipt-heading"><span>Pengajuan #{{ $submission->id }}</span><span class="status {{ $submission->status }}">{{ \App\Models\DocumentRequest::statusLabel($submission->status) }}</span></div>
@@ -49,14 +54,15 @@
         $acceptAttribute = implode(',', array_map(fn ($extension) => '.'.$extension, config('lms.allowed_extensions')));
         $canSign = ! $lookup && in_array($submission->status, ['signing', 'handover'], true);
     @endphp
-    @if(! $lookup && $submission->status === 'archived' && ($submission->draft_path || $submission->signed_path))
-        {{-- Setelah selesai, pengaju tetap bisa mengunduh draft dan dokumen bertanda tangan untuk arsipnya sendiri. --}}
-        <div class="notice success" role="region" aria-labelledby="request-files-heading">
+    @if(! $lookup && in_array($submission->status, ['scanning', 'archived'], true) && ($submission->scan_path || $submission->draft_path || $submission->signed_path))
+        {{-- Setelah fisik diterima, pengaju tetap bisa mengunduh draft dan soft file-nya; setelah selesai, juga scan dokumen fisik dari tim legal. --}}
+        <div @class(['notice', 'success' => $submission->status === 'archived']) role="region" aria-labelledby="request-files-heading">
             <strong id="request-files-heading">Dokumen pengajuan</strong>
-            <p>Pengajuan sudah selesai. File berikut tetap bisa diunduh lewat tautan status ini.</p>
+            <p>{{ $submission->status === 'archived' ? 'Pengajuan sudah selesai. File berikut tetap bisa diunduh lewat tautan status ini.' : 'File berikut bisa diunduh lewat tautan status ini. Scan dokumen asli menyusul setelah tim legal selesai men-scan.' }}</p>
             <p>
+                @if($submission->scan_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'scan']) }}"><strong>Unduh scan dokumen asli (bertanda tangan &amp; cap)</strong></a>@if($submission->scan_name) <small>({{ $submission->scan_name }})</small>@endif<br>@endif
                 @if($submission->draft_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'draft']) }}">Unduh draft dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif<br>@endif
-                @if($submission->signed_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh dokumen bertanda tangan</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif @endif
+                @if($submission->signed_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh soft file bertanda tangan yang Anda unggah</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif @endif
             </p>
         </div>
     @endif
@@ -67,8 +73,8 @@
                 <ol>
                     <li>@if($draftLink)<a class="text-link" href="{{ $draftLink }}">Unduh draft dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif, lalu cetak.@else Siapkan draft dokumen dari tim legal, lalu cetak. Hubungi tim legal bila belum menerimanya.@endif</li>
                     <li>Tanda tangani, dan beri cap bila perlu.</li>
-                    <li>Scan atau foto dokumen yang sudah ditandatangani, lalu unggah di bawah ini.</li>
-                    <li>Serahkan dokumen asli ke tim legal paling lambat {{ \App\Models\DocumentRequest::HANDOVER_DAYS }} hari setelah scan diunggah.</li>
+                    <li>Scan atau foto dokumen yang sudah ditandatangani, lalu unggah soft file-nya di bawah ini{!! $submission->signedUploadDueDate() ? ' paling lambat <strong>'.e($submission->signedUploadDueDate()->translatedFormat('d M Y')).'</strong>' : '' !!}.</li>
+                    <li>Serahkan dokumen asli ke tim legal paling lambat {{ \App\Models\DocumentRequest::HANDOVER_DAYS }} hari setelah soft file diunggah. Tim legal akan men-scan dokumen asli, dan scan itu bisa diunduh di halaman ini setelah pengajuan selesai.</li>
                 </ol>
             </div>
         @else
@@ -104,17 +110,17 @@
             @endif
             <p>
                 @if($draftLink)<a class="text-link" href="{{ $draftLink }}">Unduh draft dokumen</a>@if($submission->draft_name) <small>({{ $submission->draft_name }})</small>@endif<br>@endif
-                @if($submission->signed_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh scan yang sudah diunggah</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif @endif
+                @if($submission->signed_path)<a class="text-link" href="{{ route('requests.public.file', ['token' => $submission->public_token, 'kind' => 'signed']) }}">Unduh soft file yang sudah diunggah</a>@if($submission->signed_name) <small>({{ $submission->signed_name }})</small>@endif @endif
             </p>
         @endif
         <form method="post" enctype="multipart/form-data" action="{{ route('requests.public.scan', ['token' => $submission->public_token]) }}">
             @csrf
             <div class="field">
-                <label for="signed-scan">{{ $submission->status === 'handover' ? 'Ganti scan (bila salah unggah)' : 'Unggah scan dokumen bertanda tangan' }}</label>
+                <label for="signed-scan">{{ $submission->status === 'handover' ? 'Ganti soft file (bila salah unggah)' : 'Unggah soft file dokumen bertanda tangan' }}</label>
                 <input id="signed-scan" type="file" name="scan" accept="{{ $acceptAttribute }}" data-max-kb="{{ config('lms.max_upload_size_kb') }}" required>
                 <small>Jenis berkas: {{ implode(', ', config('lms.allowed_extensions')) }}. Ukuran maksimal {{ number_format(config('lms.max_upload_size_kb') / 1024, 0) }} MB.</small>
             </div>
-            <button type="submit" @class(['secondary' => $submission->status === 'handover'])>{{ $submission->status === 'handover' ? 'Ganti scan' : 'Unggah scan' }}</button>
+            <button type="submit" @class(['secondary' => $submission->status === 'handover'])>{{ $submission->status === 'handover' ? 'Ganti soft file' : 'Unggah soft file' }}</button>
         </form>
     @endif
     <ol class="progress" aria-label="Tahap pengajuan">

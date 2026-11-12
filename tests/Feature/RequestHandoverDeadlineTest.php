@@ -58,6 +58,7 @@ class RequestHandoverDeadlineTest extends TestCase
         $withReason = DocumentRequest::factory()->handover(9)->create();
         DocumentRequestLateReason::factory()->create(['document_request_id' => $withReason->id]);
         DocumentRequest::factory()->signing(9)->create();
+        DocumentRequest::factory()->signing(15)->create();
         DocumentRequest::factory()->cancelled()->create(['signed_uploaded_at' => now()->subDays(20), 'draft_issued_at' => now()->subDays(20)]);
 
         $this->assertSame(1, DocumentRequest::handoverOnTime()->count());

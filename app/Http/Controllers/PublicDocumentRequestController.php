@@ -70,20 +70,20 @@ class PublicDocumentRequestController extends Controller
         return $this->handleSubmission($request, $waghub, DocumentRequest::where('public_token', $token)->firstOrFail());
     }
 
-    /** Pemohon mengunggah scan bertanda tangan lewat tautan status; tautan bertoken menjadi otorisasinya. */
+    /** Pemohon mengunggah soft file bertanda tangan lewat tautan status; tautan bertoken menjadi otorisasinya. */
     public function uploadScan(Request $request, string $token): RedirectResponse
     {
         return $this->handleSigningAction($request, $token, ['signing', 'handover'], function (DocumentRequest $submission) use ($request): string {
             $file = $request->file('scan');
             if (! $file instanceof UploadedFile || ! $file->isValid()) {
-                throw ValidationException::withMessages(['scan' => 'Pilih berkas scan dokumen bertanda tangan terlebih dahulu.']);
+                throw ValidationException::withMessages(['scan' => 'Pilih soft file dokumen bertanda tangan terlebih dahulu.']);
             }
             $submission->uploadSigned($file, null);
             $due = $submission->refresh()->handoverDueDate()?->translatedFormat('d M Y');
 
             return $submission->isHandoverLate()
-                ? 'Scan diterima. Batas penyerahan dokumen asli sudah lewat, segera serahkan ke tim legal.'
-                : 'Scan diterima. Serahkan dokumen asli ke tim legal paling lambat '.$due.'.';
+                ? 'Soft file diterima. Batas penyerahan dokumen asli sudah lewat, segera serahkan ke tim legal.'
+                : 'Soft file diterima. Serahkan dokumen asli ke tim legal paling lambat '.$due.'.';
         });
     }
 

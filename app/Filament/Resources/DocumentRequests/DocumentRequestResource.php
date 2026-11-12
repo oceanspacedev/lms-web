@@ -79,11 +79,11 @@ class DocumentRequestResource extends Resource
         return $query->where(function (Builder $query) use ($user, $notOwnRequest, $assignedToMeOrNobody): void {
             $query->whereRaw('1 = 0');
             if ($user->can('Review:DocumentRequest')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'submitted')->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
+                $query->orWhere(fn (Builder $query): Builder => $query->whereIn('document_requests.status', ['submitted', 'drafting'])->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
             }
             if ($user->can('Review:DocumentRequest') && $user->can('Create:Document')) {
-                // Dokumen fisik ditunggu tim legal: semua Staff Legal yang boleh mengarsipkan dapat menandainya diterima.
-                $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.status', 'handover')->where($notOwnRequest));
+                // Dokumen fisik ditunggu tim legal atau menunggu discan: semua Staff Legal yang boleh mengarsipkan dapat menindaklanjutinya.
+                $query->orWhere(fn (Builder $query): Builder => $query->whereIn('document_requests.status', ['handover', 'scanning'])->where($notOwnRequest));
             }
             $query->orWhere(fn (Builder $query): Builder => $query->where('document_requests.requester_id', $user->id)->whereIn('document_requests.status', ['signing', 'handover']));
             if ($user->can('Update:DocumentRequest')) {

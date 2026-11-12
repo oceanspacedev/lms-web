@@ -162,10 +162,15 @@ class DocumentRequestForm
                     ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last(fn (array $entry): bool => ! isset($entry['event']))['note'] ?? null)->columnSpanFull()->wrap(),
                 TextEntry::make('next_step')->label('Langkah berikutnya')->columnSpanFull()->wrap()->icon(fn (DocumentRequest $record): string => $record->isHandoverLate() ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-clock')
                     ->color(fn (DocumentRequest $record): ?string => $record->isHandoverLate() ? 'danger' : null)
-                    ->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['signing', 'handover'], true))
-                    ->state(fn (DocumentRequest $record): string => $record->status === 'signing'
-                        ? ($record->draft_path ? 'Menunggu pengaju menandatangani draft dan mengunggah scan. Draft ada di bagian "Tanda tangan & dokumen fisik" di bawah.' : 'Draft belum diunggah. Keluarkan draft agar pengaju bisa menandatanganinya.')
-                        : 'Menunggu dokumen asli diserahkan ke tim legal paling lambat '.self::formatDate($record->handoverDueDate()).' ('.mb_strtolower($record->handoverRemainingLabel()).').'),
+                    ->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['drafting', 'signing', 'handover', 'scanning'], true))
+                    ->state(fn (DocumentRequest $record): string => match ($record->status) {
+                        'drafting' => 'Tim legal sedang menyusun draft. Klik Keluarkan Draft bila draft sudah siap.',
+                        'signing' => $record->draft_path
+                            ? 'Menunggu pengaju menandatangani draft dan mengunggah soft file bertanda tangan paling lambat '.self::formatDate($record->signedUploadDueDate()).'. Draft ada di bagian "Tanda tangan & dokumen fisik" di bawah.'
+                            : 'Draft belum diunggah. Keluarkan draft agar pengaju bisa menandatanganinya.',
+                        'scanning' => 'Dokumen asli sudah diterima. Scan dokumennya, lalu klik "Unggah Scan & Selesaikan".',
+                        default => 'Menunggu dokumen asli diserahkan ke tim legal paling lambat '.self::formatDate($record->handoverDueDate()).' ('.mb_strtolower($record->handoverRemainingLabel()).').',
+                    }),
             ]),
             Section::make('Pengaju')->key('applicant_summary')->compact()->visible(fn (?DocumentRequest $record): bool => self::isReadOnly($record))->schema([
                 TextEntry::make('applicant_name')->label('Nama')->state(fn (DocumentRequest $record): string => $record->applicantDisplayName())->wrap(),
@@ -219,16 +224,21 @@ class DocumentRequestForm
                 }),
             ])->disabled(fn (?DocumentRequest $record): bool => $record && ! $record->editableBy(auth()->user())),
             Section::make('Tanda tangan & dokumen fisik')->key('signing_handover')->compact()->columnSpanFull()->columns(['default' => 1, 'sm' => 2])
-                ->visible(fn (?DocumentRequest $record): bool => $record !== null && in_array($record->status, ['signing', 'handover', 'archived', 'cancelled'], true))->schema([
+                ->visible(fn (?DocumentRequest $record): bool => $record !== null && in_array($record->status, ['signing', 'handover', 'scanning', 'archived', 'cancelled'], true))->schema([
                     TextEntry::make('late_reason_notice')->hiddenLabel()->columnSpanFull()->color('danger')->icon('heroicon-o-exclamation-triangle')->weight('semibold')->wrap()
                         ->state('Batas penyerahan dokumen fisik sudah lewat. Anda wajib menulis alasan keterlambatan lewat tombol "Tulis Alasan Keterlambatan".')
                         ->visible(fn (DocumentRequest $record): bool => $record->isHandoverLate() && $record->requester_id !== null && $record->requester_id === auth()->id()),
                     TextEntry::make('draft_link')->label('Draft')->state(fn (DocumentRequest $record): ?string => $record->draft_name ?? 'Unduh draft')->icon('heroicon-o-arrow-down-tray')
                         ->url(fn (DocumentRequest $record): string => route('requests.file', ['documentRequest' => $record, 'kind' => 'draft']), shouldOpenInNewTab: true)->visible(fn (DocumentRequest $record): bool => filled($record->draft_path)),
-                    TextEntry::make('signed_link')->label('Scan bertanda tangan')->state(fn (DocumentRequest $record): ?string => $record->signed_name ?? 'Unduh scan')->icon('heroicon-o-arrow-down-tray')
+                    TextEntry::make('signed_link')->label('Soft file bertanda tangan (pengaju)')->state(fn (DocumentRequest $record): ?string => $record->signed_name ?? 'Unduh soft file')->icon('heroicon-o-arrow-down-tray')
                         ->url(fn (DocumentRequest $record): string => route('requests.file', ['documentRequest' => $record, 'kind' => 'signed']), shouldOpenInNewTab: true)->visible(fn (DocumentRequest $record): bool => filled($record->signed_path)),
+                    TextEntry::make('scan_link')->label('Scan dokumen fisik (legal)')->state(fn (DocumentRequest $record): ?string => $record->scan_name ?? 'Unduh scan')->icon('heroicon-o-arrow-down-tray')
+                        ->url(fn (DocumentRequest $record): string => route('requests.file', ['documentRequest' => $record, 'kind' => 'scan']), shouldOpenInNewTab: true)->visible(fn (DocumentRequest $record): bool => filled($record->scan_path)),
                     TextEntry::make('draft_issued_label')->label('Draft keluar')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->draft_issued_at?->timezone(config('lms.reminder_timezone'))))->visible(fn (DocumentRequest $record): bool => $record->draft_issued_at !== null),
-                    TextEntry::make('signed_uploaded_label')->label('Scan diunggah')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->signed_uploaded_at?->timezone(config('lms.reminder_timezone'))))->visible(fn (DocumentRequest $record): bool => $record->signed_uploaded_at !== null),
+                    TextEntry::make('signed_upload_due_label')->label('Batas unggah soft file')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->signedUploadDueDate()))
+                        ->color(fn (DocumentRequest $record): ?string => ($record->daysSinceDraft() ?? 0) > DocumentRequest::SCAN_REMINDER_DAYS ? 'danger' : null)
+                        ->visible(fn (DocumentRequest $record): bool => $record->status === 'signing' && $record->signed_path === null && $record->draft_issued_at !== null),
+                    TextEntry::make('signed_uploaded_label')->label('Soft file diunggah')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->signed_uploaded_at?->timezone(config('lms.reminder_timezone'))))->visible(fn (DocumentRequest $record): bool => $record->signed_uploaded_at !== null),
                     TextEntry::make('handover_due_label')->label('Batas dokumen fisik')->state(fn (DocumentRequest $record): ?string => self::formatDate($record->handoverDueDate()))->visible(fn (DocumentRequest $record): bool => $record->handoverDueDate() !== null),
                     TextEntry::make('handover_badge')->label('Sisa waktu')->badge()
                         ->state(fn (DocumentRequest $record): string => $record->handoverRemainingLabel())

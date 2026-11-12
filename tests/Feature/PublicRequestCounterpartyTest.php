@@ -68,14 +68,16 @@ class PublicRequestCounterpartyTest extends TestCase
         return DocumentRequest::latest('id')->firstOrFail();
     }
 
-    /** Mengeluarkan draf, mengunggah scan bertanda tangan, lalu menandai fisik diterima seperti yang dilakukan Staff Legal. */
+    /** Mengeluarkan draf, mengunggah soft file bertanda tangan, menandai fisik diterima, lalu mengunggah scan seperti yang dilakukan Staff Legal. */
     private function archive(DocumentRequest $request, ?int $companyId = null): Document
     {
         $pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
         $request->issueDraft(UploadedFile::fake()->create('draf.pdf', 10, 'application/pdf'), $this->reviewer);
         $request->uploadSigned(UploadedFile::fake()->createWithContent('final-ttd.pdf', $pdf), null);
 
-        return $request->markReceived('PKS/2026/001', '2026-10-09', null, $this->reviewer, $companyId);
+        $request->markReceived($this->reviewer);
+
+        return $request->completeWithScan(UploadedFile::fake()->createWithContent('scan-asli.pdf', $pdf), $this->reviewer, null, $companyId, 'PKS/2026/001', '2026-10-09');
     }
 
     public function test_form_shows_an_optional_counterparty_field_in_the_document_section(): void
