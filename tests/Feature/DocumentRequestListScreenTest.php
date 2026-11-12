@@ -277,7 +277,7 @@ class DocumentRequestListScreenTest extends TestCase
             $expected = collect($requests)->filter(fn (DocumentRequest $request): bool => in_array($request->id, $visible, true)
                 && ($policy->revise($user, $request) || $policy->update($user, $request)
                     || ($policy->uploadSigned($user, $request) && $request->requester_id === $user->id)
-                    || ($policy->markReceived($user, $request) && $request->status === 'handover' && $request->requester_id !== $user->id)))
+                    || (($policy->markReceived($user, $request) && $request->status === 'handover' || $policy->completeWithScan($user, $request)) && $request->requester_id !== $user->id)))
                 ->map(fn (DocumentRequest $request): int => $request->id)->sort()->values()->all();
 
             $this->assertSame($expected, $this->actionableIds(), "Peran {$role}: tab 'Perlu tindakan saya' harus sama dengan kebijakan");

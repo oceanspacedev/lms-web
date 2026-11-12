@@ -14,7 +14,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -103,10 +102,10 @@ class FinalReviewFixesTest extends TestCase
         $html = Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->html();
 
         $this->assertStringContainsString('Draft dokumen diganti', $html);
-        $this->assertStringContainsString('Scan diganti', $html);
+        $this->assertStringContainsString('Soft file bertanda tangan diganti', $html);
         $this->assertStringContainsString('Alasan keterlambatan dari pengaju', $html);
-        $this->assertSame(1, substr_count($html, 'Draft dokumen diterbitkan, menunggu tanda tangan'));
-        $this->assertSame(1, substr_count($html, 'Scan diunggah, menunggu dokumen fisik'));
+        $this->assertSame(1, substr_count($html, 'Draft dokumen diserahkan, menunggu tanda tangan'));
+        $this->assertSame(1, substr_count($html, 'Soft file bertanda tangan diunggah, menunggu dokumen fisik'));
     }
 
     public function test_received_on_day_seven_is_not_late(): void
@@ -115,10 +114,10 @@ class FinalReviewFixesTest extends TestCase
         $request = $this->handover($this->requester(), $legal, 7);
         Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
 
-        $request->markReceived('PKS/007', null, null, $legal);
+        $request->markReceived($legal);
 
         $request->refresh();
-        $this->assertSame('archived', $request->status);
+        $this->assertSame('scanning', $request->status);
         $this->assertNull(collect($request->history)->last()['note']);
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->assertDontSee('terlambat');
@@ -130,10 +129,10 @@ class FinalReviewFixesTest extends TestCase
         $request = $this->handover($this->requester(), $legal, 10);
         Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
 
-        $request->markReceived('PKS/010', null, null, $legal);
+        $request->markReceived($legal);
 
         $request->refresh();
-        $this->assertSame('archived', $request->status);
+        $this->assertSame('scanning', $request->status);
         $this->assertSame('Diterima terlambat 3 hari', collect($request->history)->last()['note']);
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
@@ -141,7 +140,7 @@ class FinalReviewFixesTest extends TestCase
             ->assertSee('Diterima terlambat 3 hari');
     }
 
-    public function test_received_from_signing_without_scan_is_refused_even_long_after_the_draft(): void
+    public function test_received_from_signing_without_soft_file_is_not_counted_late(): void
     {
         $legal = $this->legal();
         $request = DocumentRequest::factory()->signing(30)->create([
@@ -149,9 +148,10 @@ class FinalReviewFixesTest extends TestCase
             'document_type_id' => DocumentType::factory()->withoutExpiry()->create()->id,
         ]);
 
-        $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.');
-        $request->markReceived('PKS/011', null, null, $legal);
+        $request->markReceived($legal);
+
+        $this->assertSame('scanning', $request->status);
+        $this->assertNull(collect($request->history)->last()['note']);
     }
 
     public function test_cancelled_requests_do_not_block_deactivation_or_get_reassigned(): void
@@ -301,7 +301,7 @@ class FinalReviewFixesTest extends TestCase
         Livewire::test(EditDocumentRequest::class, ['record' => $late->getRouteKey()])
             ->assertSee('Langkah berikutnya')->assertSee('(terlambat 3 hari)');
         Livewire::test(EditDocumentRequest::class, ['record' => $signing->getRouteKey()])
-            ->assertSee('Menunggu pengaju menandatangani draft dan mengunggah scan.');
+            ->assertSee('Menunggu pengaju menandatangani draft dan mengunggah soft file bertanda tangan paling lambat');
     }
 
     public function test_legal_actionable_tab_lists_physical_documents_still_awaited(): void

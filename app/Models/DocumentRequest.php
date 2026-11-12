@@ -45,47 +45,57 @@ class DocumentRequest extends Model
         return '#'.$this->getKey().' · '.$this->title;
     }
 
-    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+    /**
+     * Alur: Diperiksa → Proses Drafting → (draft keluar) Menunggu Tanda Tangan → (soft file bertanda tangan masuk) Menunggu Dokumen Fisik
+     * → (fisik diterima legal) Scanning → (scan dokumen fisik diunggah legal) Selesai.
+     */
+    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'drafting' => 'Proses Drafting', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'scanning' => 'Scanning', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
 
     /** Label status tahap persetujuan lama; hanya untuk membaca data lama, tidak lagi menjadi status yang sah. */
     private const LEGACY_STATUS_LABELS = ['review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan'];
 
     /** Status setelah draf keluar yang boleh dilihat semua Staff Legal. */
-    public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'archived', 'cancelled'];
+    public const LEGAL_VISIBLE_STATUSES = ['signing', 'handover', 'scanning', 'archived', 'cancelled'];
 
-    /** Batas hari menyerahkan dokumen fisik setelah scan pertama; pengingat lanjutan di hari ke-7, 14, 21. */
+    /** Batas hari menyerahkan dokumen fisik setelah soft file bertanda tangan pertama; pengingat lanjutan di hari ke-7, 14, 21. */
     public const HANDOVER_DAYS = 7;
 
-    /** Tahap pengingat (hari setelah scan): lewat batas, terlambat 1 minggu, terlambat 2 minggu (ikut ke koordinator). */
+    /** Tahap pengingat (hari setelah soft file masuk): lewat batas, terlambat 1 minggu, terlambat 2 minggu (ikut ke koordinator). */
     public const LATE_REMINDER_DAYS = [7, 14, 21];
 
     /** Mulai tahap ini koordinator ikut dikabari: tahap terakhir pengingat (terlambat 2 minggu). */
     public const ESCALATION_DAYS = 21;
 
-    public const SCAN_REMINDER_DAYS = 7;
+    /** Batas hari mengunggah soft file bertanda tangan sejak draft pertama keluar; lewat batas, pengaju diingatkan sekali. */
+    public const SCAN_REMINDER_DAYS = 14;
 
     public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
 
-    /** Status yang boleh dibatalkan tim legal: revisi yang ditinggal pengaju, atau setelah draft keluar. */
-    public const CANCELLABLE_STATUSES = ['revision', 'signing', 'handover'];
+    /** Status yang boleh dibatalkan tim legal: revisi yang ditinggal pengaju, saat drafting, atau setelah draft keluar sampai fisik diterima. */
+    public const CANCELLABLE_STATUSES = ['drafting', 'revision', 'signing', 'handover'];
 
     /** Badge langkah yang belum beres, tampil di samping status (lihat pendingBadges()). */
-    public const BADGE_NO_SCAN = 'Belum scan';
+    public const BADGE_NO_SCAN = 'Belum unggah soft file';
 
     public const BADGE_NOT_RECEIVED = 'Fisik belum diterima';
+
+    public const BADGE_NO_PHYSICAL_SCAN = 'Scan belum diunggah';
 
     /** Status saat pengajuan menunggu tindakan staf. */
     public const WAITING_STATUSES = ['submitted'];
 
-    public const PROGRESS_STEPS = ['submitted' => 'Diperiksa', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'archived' => 'Selesai'];
+    /** Tahap di halaman status pengaju (sudut pandang pengaju); tahap tanda tangan dan penyerahan fisik digabung menjadi "Diserahkan". */
+    public const PROGRESS_STEPS = ['submitted' => 'Memeriksa', 'drafting' => 'Proses Drafting', 'signing' => 'Diserahkan', 'scanning' => 'Scanning', 'archived' => 'Selesai'];
 
     public const TIMELINE_LABELS = [
         'submitted' => 'Pengajuan diterima', 'review' => 'Diteruskan untuk persetujuan', 'approved' => 'Disetujui, menunggu tanda tangan',
-        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen fisik diterima dan diarsipkan',
-        'signing' => 'Draft dokumen diterbitkan, menunggu tanda tangan', 'handover' => 'Scan diunggah, menunggu dokumen fisik', 'cancelled' => 'Dibatalkan',
+        'drafting' => 'Pengajuan diproses, draft sedang disusun',
+        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen sudah diarsipkan',
+        'signing' => 'Draft dokumen diserahkan, menunggu tanda tangan', 'handover' => 'Soft file bertanda tangan diunggah, menunggu dokumen fisik',
+        'scanning' => 'Dokumen fisik diterima, sedang discan', 'cancelled' => 'Dibatalkan',
     ];
 
-    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draft dokumen diganti', 'signed_replaced' => 'Scan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
+    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draft dokumen diganti', 'signed_replaced' => 'Soft file bertanda tangan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
 
     protected $attributes = ['details' => '{}', 'attachments' => '{}', 'requirements' => '{}', 'history' => '[]', 'status' => 'draft'];
 
@@ -190,7 +200,13 @@ class DocumentRequest extends Model
         return $this->hasMany(DocumentRequestLateReason::class)->orderBy('created_at');
     }
 
-    /** Tenggat penyerahan dokumen fisik: 7 hari kalender (WIB) setelah scan pertama diunggah, atau null bila belum ada scan. */
+    /** Tenggat unggah soft file bertanda tangan: 14 hari kalender (WIB) setelah draft pertama keluar, atau null bila draft belum keluar. */
+    public function signedUploadDueDate(): ?CarbonImmutable
+    {
+        return $this->jakartaDate($this->draft_issued_at)?->addDays(self::SCAN_REMINDER_DAYS);
+    }
+
+    /** Tenggat penyerahan dokumen fisik: 7 hari kalender (WIB) setelah soft file bertanda tangan pertama diunggah, atau null bila belum ada. */
     public function handoverDueDate(): ?CarbonImmutable
     {
         return $this->jakartaDate($this->signed_uploaded_at)?->addDays(self::HANDOVER_DAYS);
@@ -252,10 +268,10 @@ class DocumentRequest extends Model
         return $query->where('status', 'handover')->where('signed_uploaded_at', '<', self::lateBoundary());
     }
 
-    /** Pengajuan menunggu scan tanda tangan, draf terbit lebih dari 7 hari lalu. */
+    /** Pengajuan menunggu soft file bertanda tangan, draf terbit lebih dari 14 hari lalu. */
     public function scopeScanOverdue(Builder $query): Builder
     {
-        return $query->where('status', 'signing')->whereNull('signed_uploaded_at')->where('draft_issued_at', '<', self::lateBoundary());
+        return $query->where('status', 'signing')->whereNull('signed_uploaded_at')->where('draft_issued_at', '<', self::lateBoundary(self::SCAN_REMINDER_DAYS));
     }
 
     /** Pengajuan terlambat yang belum punya alasan keterlambatan. */
@@ -265,12 +281,12 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Batas awal hari WIB (dalam UTC) tujuh hari lalu; unggahan sebelum batas ini sudah terlambat.
+     * Batas awal hari WIB (dalam UTC) `$days` hari lalu; waktu sebelum batas ini sudah melewati tenggat.
      * Perbandingan SQL mengasumsikan timestamp tersimpan dalam UTC (`config('app.timezone') === 'UTC'`).
      */
-    private static function lateBoundary(): string
+    private static function lateBoundary(int $days = self::HANDOVER_DAYS): string
     {
-        return CarbonImmutable::now(config('lms.reminder_timezone'))->startOfDay()->subDays(self::HANDOVER_DAYS)->utc()->toDateTimeString();
+        return CarbonImmutable::now(config('lms.reminder_timezone'))->startOfDay()->subDays($days)->utc()->toDateTimeString();
     }
 
     private function jakartaDate(mixed $at): ?CarbonImmutable
@@ -314,9 +330,9 @@ class DocumentRequest extends Model
     public function progressSteps(): array
     {
         $stage = match ($this->status) {
-            'cancelled' => $this->lastStageBeforeCancellation(),
-            'approved' => 'signing',
-            'handover', 'signing', 'archived' => $this->status,
+            'cancelled', 'rejected' => $this->lastStageBeforeCancellation(),
+            'approved', 'signing', 'handover' => 'signing',
+            'drafting', 'scanning', 'archived' => $this->status,
             default => 'submitted',
         };
         $position = array_search($stage, array_keys(self::PROGRESS_STEPS), true);
@@ -336,7 +352,7 @@ class DocumentRequest extends Model
         return $steps;
     }
 
-    /** Tahap terakhir yang dicapai sebelum pembatalan, dibaca dari riwayat status. */
+    /** Tahap terakhir yang dicapai sebelum pembatalan atau penolakan, dibaca dari riwayat status. */
     private function lastStageBeforeCancellation(): string
     {
         $stage = 'submitted';
@@ -345,10 +361,8 @@ class DocumentRequest extends Model
                 continue;
             }
             $status = $event['status'] ?? null;
-            if ($status === 'approved') {
-                $status = 'signing';
-            }
-            if (in_array($status, ['signing', 'handover'], true)) {
+            $status = in_array($status, ['approved', 'handover'], true) ? 'signing' : $status;
+            if (in_array($status, ['drafting', 'signing', 'scanning'], true)) {
                 $stage = $status;
             }
         }
@@ -394,7 +408,7 @@ class DocumentRequest extends Model
                         'approved' => 'Penyetuju',
                         'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Pemeriksa',
                         'handover' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim legal',
-                        'signing', 'archived', 'cancelled' => 'Tim legal',
+                        'drafting', 'signing', 'scanning', 'archived', 'cancelled' => 'Tim legal',
                         default => 'Tim pemeriksa',
                     },
                     'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
@@ -678,7 +692,8 @@ class DocumentRequest extends Model
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             $allowed = match ($next) {
                 'submitted' => $request->editableBy($user),
-                'revision', 'rejected' => $request->status === 'submitted' && $request->requester_id !== $user->id,
+                'drafting' => $request->status === 'submitted' && $request->requester_id !== $user->id,
+                'revision', 'rejected' => in_array($request->status, ['submitted', 'drafting'], true) && $request->requester_id !== $user->id,
                 'cancelled' => in_array($request->status, self::CANCELLABLE_STATUSES, true),
                 default => false,
             };
@@ -686,7 +701,7 @@ class DocumentRequest extends Model
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
             }
             $ability = match ($next) {
-                'submitted' => 'submit', 'revision', 'rejected' => 'revise', 'cancelled' => 'cancel',
+                'submitted' => 'submit', 'drafting' => 'startDrafting', 'revision', 'rejected' => 'revise', 'cancelled' => 'cancel',
             };
             Gate::forUser($user)->authorize($ability, $request);
             if ($next === 'submitted') {
@@ -704,13 +719,13 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Keluarkan draf: dari Diperiksa ke Menunggu Tanda Tangan. Selama scan belum diunggah, draf boleh diganti;
-     * penggantian tidak mengubah `draft_issued_at` sehingga hitungan pengingat scan tidak mengulang.
+     * Keluarkan draf: dari Diperiksa atau Proses Drafting ke Menunggu Tanda Tangan. Selama soft file bertanda tangan belum diunggah,
+     * draf boleh diganti; penggantian tidak mengubah `draft_issued_at` sehingga batas 14 hari tidak mengulang.
      */
     public function issueDraft(UploadedFile $file, User $user): void
     {
         $this->saveFlowFile($file, 'draft', function (self $request) use ($user): void {
-            $allowed = ($request->status === 'submitted' && $request->requester_id !== $user->id)
+            $allowed = (in_array($request->status, ['submitted', 'drafting'], true) && $request->requester_id !== $user->id)
                 || ($request->status === 'signing' && $request->signed_path === null);
             if (! $allowed) {
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
@@ -718,7 +733,7 @@ class DocumentRequest extends Model
             Gate::forUser($user)->authorize('issueDraft', $request);
         }, function (self $request) use ($user): void {
             $request->draft_issued_at ??= now();
-            if ($request->status === 'submitted') {
+            if (in_array($request->status, ['submitted', 'drafting'], true)) {
                 $request->status = 'signing';
                 $request->recordEvent('signing', $user);
             } elseif ($request->getOriginal('draft_path') === null) {
@@ -788,17 +803,73 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Fisik diterima: arsipkan scan bertanda tangan sebagai dokumen lalu tandai pengajuan Selesai.
-     * Bila scan belum masuk, `$signedScan` disimpan dulu sebagai scan pengajuan dalam transaksi yang sama (tanpa pesan "menunggu dokumen fisik").
-     * Nomor dokumen boleh kosong (dilengkapi nanti di menu Dokumen); tanggal terbit dan berakhir diambil dari pengajuan bila tidak diberikan.
+     * Fisik diterima: dokumen asli sudah kembali ke tim legal, pengajuan masuk tahap Scanning. Pengingat keterlambatan berhenti.
+     * Soft file bertanda tangan dari pengaju tidak wajib; fisik boleh diterima walau pengaju belum mengunggahnya.
+     * Pengaju tidak dikabari di tahap ini; pesan menyusul saat scan diunggah dan pengajuan selesai.
      */
-    public function markReceived(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId = null, ?UploadedFile $signedScan = null): Document
+    public function markReceived(User $user): void
+    {
+        DB::transaction(function () use ($user): void {
+            $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($request->status, ['signing', 'handover'], true)) {
+                throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
+            }
+            Gate::forUser($user)->authorize('markReceived', $request);
+            $request->physical_received_at = now();
+            $request->status = 'scanning';
+            $daysLate = $request->daysLateAtReceipt();
+            $request->recordEvent('scanning', $user, $daysLate > 0 ? "Diterima terlambat {$daysLate} hari" : null);
+            $request->save();
+            app(DocumentRequestNotifier::class)->enqueue($request);
+        });
+        $this->refresh();
+    }
+
+    /**
+     * Unggah scan dokumen fisik dan selesaikan: scan disimpan di pengajuan (bisa diunduh pengaju), diarsipkan sebagai dokumen,
+     * lalu pengajuan ditandai Selesai dan pengaju dikabari. Nomor dokumen boleh kosong (dilengkapi nanti di menu Dokumen);
+     * tanggal terbit dan berakhir diambil dari pengajuan bila tidak diberikan.
+     */
+    public function completeWithScan(UploadedFile $scan, User $user, ?string $expiryDate = null, ?int $companyId = null, ?string $number = null, ?string $issuedDate = null): Document
     {
         /** @var list<array{0: string, 1: string}> $storedFiles */
         $storedFiles = [];
 
         try {
-            return $this->markReceivedInTransaction($number, $issuedDate, $expiryDate, $user, $companyId, $signedScan, $storedFiles);
+            return DB::transaction(function () use ($scan, $user, $expiryDate, $companyId, $number, $issuedDate, &$storedFiles): Document {
+                $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+                if ($request->status !== 'scanning') {
+                    throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
+                }
+                Gate::forUser($user)->authorize('completeWithScan', $request);
+                Validator::make(['scan' => $scan], ['scan' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]], [], ['scan' => 'Scan dokumen fisik'])->validate();
+                $number = filled($number) ? $number : null;
+                Validator::make(['number' => $number], ['number' => ['nullable', 'string', 'max:255']])->validate();
+                $issuedDate ??= $request->start_date?->toDateString();
+                $expiryDate ??= $request->expiry_date?->toDateString();
+                $ownCompanyId = $request->company_id;
+                $companyId = $ownCompanyId ?? $companyId;
+                Validator::make(['company_id' => $companyId], ['company_id' => ['required', ActiveReference::rule('companies', $ownCompanyId, ['is_active' => true])]])->validate();
+                $request->company_id = $companyId;
+
+                $path = $request->storeFlowFile($scan, 'scan');
+                $storedFiles[] = ['local', $path];
+                $request->scan_path = $path;
+                $request->scan_name = basename(str_replace('\\', '/', $scan->getClientOriginalName()));
+                $file = new UploadedFile(Storage::disk('local')->path($path), $request->scan_name, null, null, true);
+
+                // Badan usaha dan jenis dokumen yang sudah terpasang pada pengajuan tetap sah walau kini nonaktif atau di tempat sampah.
+                $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id ?? $request->reviewer_id ?? $user->id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
+                $storedFiles[] = [$document->currentVersion->disk, $document->currentVersion->file_path];
+                $request->document_id = $document->id;
+                $request->status = 'archived';
+                $request->recordEvent('archived', $user);
+                $request->save();
+                app(DocumentRequestNotifier::class)->enqueue($request);
+                $this->refresh();
+
+                return $document;
+            });
         } catch (Throwable $exception) {
             // File sudah tersimpan di disk sebelum DB di-rollback; hapus agar tidak tertinggal.
             foreach ($storedFiles as [$disk, $path]) {
@@ -813,84 +884,10 @@ class DocumentRequest extends Model
         }
     }
 
-    /** @param list<array{0: string, 1: string}> $storedFiles */
-    private function markReceivedInTransaction(?string $number, ?string $issuedDate, ?string $expiryDate, User $user, ?int $companyId, ?UploadedFile $signedScan, array &$storedFiles): Document
-    {
-        return DB::transaction(function () use ($number, $issuedDate, $expiryDate, $user, $companyId, $signedScan, &$storedFiles): Document {
-            $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
-            if (! in_array($request->status, ['signing', 'handover'], true)) {
-                throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
-            }
-            Gate::forUser($user)->authorize('markReceived', $request);
-            if ($signedScan !== null && ! $request->hasSignedScan()) {
-                $request->takeSignedScanForReceipt($signedScan, $user, $storedFiles);
-            }
-            $file = $request->status === 'handover' ? $request->signedScanFile() : null;
-            if ($file === null) {
-                throw ValidationException::withMessages(['status' => 'Unggah scan bertanda tangan dulu sebelum menandai fisik diterima.']);
-            }
-            $number = filled($number) ? $number : null;
-            Validator::make(['number' => $number], ['number' => ['nullable', 'string', 'max:255']])->validate();
-            $issuedDate ??= $request->start_date?->toDateString();
-            $expiryDate ??= $request->expiry_date?->toDateString();
-            $ownCompanyId = $request->company_id;
-            $companyId = $ownCompanyId ?? $companyId;
-            Validator::make(['company_id' => $companyId], ['company_id' => ['required', ActiveReference::rule('companies', $ownCompanyId, ['is_active' => true])]])->validate();
-            $request->company_id = $companyId;
-            // Badan usaha dan jenis dokumen yang sudah terpasang pada pengajuan tetap sah walau kini nonaktif atau di tempat sampah.
-            $document = Document::archive(['company_id' => $request->company_id, 'document_type_id' => $request->document_type_id, 'pic_user_id' => $request->pic_user_id ?? $request->reviewer_id ?? $user->id, 'title' => $request->title, 'document_number' => $number, 'counterparty' => $request->counterpartyName(), 'issued_date' => $issuedDate, 'expiry_date' => $expiryDate, 'notes' => 'Pengajuan #'.$request->id], $file, $user, ['company_id' => $ownCompanyId, 'document_type_id' => $request->document_type_id]);
-            $storedFiles[] = [$document->currentVersion->disk, $document->currentVersion->file_path];
-            $request->document_id = $document->id;
-            $request->physical_received_at = now();
-            $request->status = 'archived';
-            $daysLate = $request->daysLateAtReceipt();
-            $request->recordEvent('archived', $user, $daysLate > 0 ? "Diterima terlambat {$daysLate} hari" : null);
-            $request->save();
-            app(DocumentRequestNotifier::class)->enqueue($request);
-            $this->refresh();
-
-            return $document;
-        });
-    }
-
     /**
-     * Simpan scan yang diunggah bersama Fisik Diterima, seperti uploadSigned tetapi tanpa pesan WhatsApp (pesan Selesai menyusul).
-     *
-     * @param  list<array{0: string, 1: string}>  $storedFiles
-     */
-    private function takeSignedScanForReceipt(UploadedFile $file, User $user, array &$storedFiles): void
-    {
-        Gate::forUser($user)->authorize('uploadSigned', $this);
-        Validator::make(['signed_scan' => $file], ['signed_scan' => ['required', File::types(config('lms.allowed_extensions'))->max(config('lms.max_upload_size_kb')), 'extensions:'.implode(',', config('lms.allowed_extensions'))]], [], ['signed_scan' => 'Scan dokumen bertanda tangan'])->validate();
-        $path = $this->storeFlowFile($file, 'signed');
-        $storedFiles[] = ['local', $path];
-        $this->signed_path = $path;
-        $this->signed_name = basename(str_replace('\\', '/', $file->getClientOriginalName()));
-        $this->signed_uploaded_at ??= now();
-        $this->status = 'handover';
-        $this->recordEvent('handover', $user);
-    }
-
-    /** Scan bertanda tangan yang tersimpan, sebagai berkas unggahan agar bisa diarsipkan; null bila belum ada. */
-    private function signedScanFile(): ?UploadedFile
-    {
-        $disk = Storage::disk('local');
-        if ($this->signed_path === null || ! $disk->exists($this->signed_path)) {
-            return null;
-        }
-
-        return new UploadedFile($disk->path($this->signed_path), $this->signed_name ?? basename($this->signed_path), null, null, true);
-    }
-
-    /** Scan bertanda tangan sudah masuk; bila belum, Fisik Diterima meminta scan diunggah sekaligus. */
-    public function hasSignedScan(): bool
-    {
-        return $this->status === 'handover' && filled($this->signed_path);
-    }
-
-    /**
-     * Badge tambahan di samping status agar langkah yang belum beres terlihat dari daftar: "Belum scan" saat menunggu tanda tangan,
-     * "Fisik belum diterima" saat menunggu dokumen fisik. Kosong untuk status lain dan untuk pengajuan di tempat sampah.
+     * Badge tambahan di samping status agar langkah yang belum beres terlihat dari daftar: "Belum unggah soft file" saat menunggu
+     * tanda tangan, "Fisik belum diterima" saat menunggu dokumen fisik, "Scan belum diunggah" saat Scanning.
+     * Kosong untuk status lain dan untuk pengajuan di tempat sampah.
      *
      * @return list<string>
      */
@@ -903,6 +900,7 @@ class DocumentRequest extends Model
         return match ($this->status) {
             'signing' => blank($this->signed_path) ? [self::BADGE_NO_SCAN] : [],
             'handover' => [self::BADGE_NOT_RECEIVED],
+            'scanning' => [self::BADGE_NO_PHYSICAL_SCAN],
             default => [],
         };
     }
@@ -921,7 +919,7 @@ class DocumentRequest extends Model
     public function statusBadgeColor(string $badge): string
     {
         return match ($badge) {
-            self::BADGE_NO_SCAN => 'warning',
+            self::BADGE_NO_SCAN, self::BADGE_NO_PHYSICAL_SCAN => 'warning',
             self::BADGE_NOT_RECEIVED => $this->isHandoverLate() ? 'danger' : 'warning',
             default => match ($this->status) {
                 'archived' => 'success', 'rejected', 'cancelled' => 'danger', 'revision' => 'warning', 'draft' => 'gray', default => 'info',
@@ -969,9 +967,10 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Simpan draf (`draft`) atau scan bertanda tangan (`signed`) di `lms/requests/{jenis-dokumen}/`.
+     * Simpan draf (`draft`), soft file bertanda tangan dari pengaju (`signed`), atau scan dokumen fisik dari legal (`scan`)
+     * di `lms/requests/{jenis-dokumen}/`.
      *
-     * @param  'draft'|'signed'  $kind
+     * @param  'draft'|'signed'|'scan'  $kind
      */
     private function storeFlowFile(UploadedFile $file, string $kind): string
     {
@@ -981,7 +980,9 @@ class DocumentRequest extends Model
         $filename = StorageFileName::available($disk, $directory, StorageFileName::build([
             StorageFileName::companyName(Company::withTrashed()->find($this->company_id)) ?? $this->other_business_name,
             $type,
-            $kind === 'draft' ? 'draft' : 'ttd',
+            match ($kind) {
+                'draft' => 'draft', 'scan' => 'scan fisik', default => 'ttd',
+            },
             "pengajuan{$this->id}",
         ], now(), $file->getClientOriginalExtension()));
 

@@ -532,7 +532,7 @@ class TrashActions
         }
         $sentences[] = match ($model) {
             Document::class => 'Semua versi beserta filenya, riwayat aktivitas, dan log pengingat ikut dihapus.',
-            DocumentRequest::class => 'Berkas pengajuan (lampiran, draft, dan scan) ikut dihapus. Dokumen arsip hasil pengajuan tidak ikut terhapus.',
+            DocumentRequest::class => 'Berkas pengajuan (lampiran, draft, soft file, dan scan) ikut dihapus. Dokumen arsip hasil pengajuan tidak ikut terhapus.',
             default => '',
         };
 

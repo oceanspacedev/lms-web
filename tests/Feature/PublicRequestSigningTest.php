@@ -45,21 +45,68 @@ class PublicRequestSigningTest extends TestCase
         return UploadedFile::fake()->create('scan.pdf', 50, 'application/pdf');
     }
 
-    public function test_finished_request_still_lets_the_applicant_download_draft_and_signed_scan(): void
+    public function test_finished_request_lets_the_applicant_download_legal_scan_draft_and_soft_file(): void
     {
         Storage::disk('local')->put('lms/requests/perjanjian/signed.pdf', 'ttd');
-        $this->request('archived', ['signed_path' => 'lms/requests/perjanjian/signed.pdf', 'signed_name' => 'kontrak-ttd.pdf', 'signed_uploaded_at' => now()->subDay(), 'physical_received_at' => now()]);
+        Storage::disk('local')->put('lms/requests/perjanjian/scan.pdf', 'scan legal');
+        $this->request('archived', [
+            'signed_path' => 'lms/requests/perjanjian/signed.pdf', 'signed_name' => 'kontrak-ttd.pdf', 'signed_uploaded_at' => now()->subDay(), 'physical_received_at' => now(),
+            'scan_path' => 'lms/requests/perjanjian/scan.pdf', 'scan_name' => 'kontrak-asli-cap.pdf',
+        ]);
+        $scan = route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'scan']);
         $draft = route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'draft']);
         $signed = route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'signed']);
 
         $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
             ->assertSee('Dokumen pengajuan')
-            ->assertSee($draft, false)->assertSee('Unduh draft dokumen')
-            ->assertSee($signed, false)->assertSee('Unduh dokumen bertanda tangan')->assertSee('kontrak-ttd.pdf')
+            ->assertSeeInOrder([$scan, $draft, $signed], false)
+            ->assertSee('Unduh scan dokumen asli (bertanda tangan &amp; cap)', false)->assertSee('kontrak-asli-cap.pdf')
+            ->assertSee('Unduh draft dokumen')
+            ->assertSee('Unduh soft file bertanda tangan yang Anda unggah')->assertSee('kontrak-ttd.pdf')
             ->assertDontSee('<form method="post" enctype="multipart/form-data"', false);
 
+        $this->get($scan)->assertOk()->assertDownload('kontrak-asli-cap.pdf');
         $this->get($draft)->assertOk()->assertDownload('draft.pdf');
         $this->get($signed)->assertOk()->assertDownload('kontrak-ttd.pdf');
+    }
+
+    public function test_request_finished_before_legal_scans_still_offers_its_soft_file(): void
+    {
+        Storage::disk('local')->put('lms/requests/perjanjian/signed.pdf', 'ttd');
+        $this->request('archived', ['signed_path' => 'lms/requests/perjanjian/signed.pdf', 'signed_name' => 'kontrak-ttd.pdf', 'physical_received_at' => now()]);
+
+        $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
+            ->assertSee('Unduh soft file bertanda tangan yang Anda unggah')->assertDontSee('Unduh scan dokumen asli');
+        $this->get(route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'scan']))->assertNotFound();
+    }
+
+    public function test_scanning_page_says_the_scan_follows_and_offers_existing_files(): void
+    {
+        $this->request('scanning', ['physical_received_at' => now()]);
+
+        $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
+            ->assertSee('Dokumen asli sedang discan')->assertSee('di halaman ini')
+            ->assertSee('Unduh draft dokumen')->assertDontSee('Unduh scan dokumen asli')
+            ->assertDontSee('<form method="post" enctype="multipart/form-data"', false);
+    }
+
+    public function test_progress_follows_the_applicant_view_in_five_steps(): void
+    {
+        $cases = [
+            'submitted' => ['Memeriksa' => 'current', 'Proses Drafting' => 'pending'],
+            'drafting' => ['Memeriksa' => 'done', 'Proses Drafting' => 'current', 'Diserahkan' => 'pending'],
+            'signing' => ['Proses Drafting' => 'done', 'Diserahkan' => 'current', 'Scanning' => 'pending'],
+            'handover' => ['Diserahkan' => 'current', 'Scanning' => 'pending'],
+            'scanning' => ['Diserahkan' => 'done', 'Scanning' => 'current', 'Selesai' => 'pending'],
+            'archived' => ['Scanning' => 'done', 'Selesai' => 'done'],
+        ];
+        foreach ($cases as $status => $expected) {
+            $steps = collect(DocumentRequest::factory()->make(['status' => $status])->progressSteps())->pluck('state', 'label');
+            $this->assertSame(['Memeriksa', 'Proses Drafting', 'Diserahkan', 'Scanning', 'Selesai'], $steps->keys()->all());
+            foreach ($expected as $label => $state) {
+                $this->assertSame($state, $steps[$label], "{$status}: {$label}");
+            }
+        }
     }
 
     public function test_lookup_page_never_offers_file_downloads(): void
@@ -77,7 +124,7 @@ class PublicRequestSigningTest extends TestCase
 
         $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
             ->assertSee(route('requests.public.file', ['token' => self::TOKEN, 'kind' => 'draft']), false)
-            ->assertSee('Unduh draft dokumen')->assertSee('Langkah selanjutnya')
+            ->assertSee('Unduh draft dokumen')->assertSee('Langkah selanjutnya')->assertSee('unggah soft file-nya di bawah ini paling lambat <strong>02 Nov 2026</strong>', false)
             ->assertSee(route('requests.public.scan', ['token' => self::TOKEN]), false)
             ->assertSee('enctype="multipart/form-data"', false)
             ->assertDontSee('Terlambat');
@@ -181,9 +228,9 @@ class PublicRequestSigningTest extends TestCase
             ->assertDontSee(route('requests.public.reason', ['token' => self::TOKEN]), false)
             ->assertDontSee(self::TOKEN)
             ->assertSee('Menunggu dokumen asli')
-            ->assertSee('Scan sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal.')
+            ->assertSee('Soft file sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal.')
             ->assertSee('Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.')
-            ->assertDontSee('mengunggah scan');
+            ->assertDontSee('mengunggah soft file');
     }
 
     public function test_lookup_page_tells_what_to_do_while_waiting_for_signed_scan(): void
@@ -191,8 +238,8 @@ class PublicRequestSigningTest extends TestCase
         $submission = $this->request('signing');
 
         $this->post(route('requests.public.lookup.submit'), ['submission_id' => (string) $submission->id, 'requester_phone' => '081234567890'])->assertOk()
-            ->assertSee('Menunggu scan bertanda tangan')
-            ->assertSee('Draft sudah siap. Pengaju perlu mengunduh draft, menandatanganinya, lalu mengunggah scan-nya lewat tautan status yang dikirim ke WhatsApp pengaju.')
+            ->assertSee('Menunggu soft file bertanda tangan')
+            ->assertSee('Draft sudah diserahkan. Pengaju perlu mengunduh draft, menandatanganinya, lalu mengunggah soft file-nya lewat tautan status yang dikirim ke WhatsApp pengaju.')
             ->assertSee('Halaman ini hanya untuk melihat status.')
             ->assertDontSee('<form', false);
     }
@@ -203,7 +250,7 @@ class PublicRequestSigningTest extends TestCase
         $status = route('requests.public.status', ['token' => self::TOKEN]);
 
         $this->followingRedirects()->post(route('requests.public.scan', ['token' => self::TOKEN]), ['scan' => $this->pdf()])
-            ->assertSee('Scan diterima. Serahkan dokumen asli ke tim legal paling lambat 27 Okt 2026.')
+            ->assertSee('Soft file diterima. Serahkan dokumen asli ke tim legal paling lambat 27 Okt 2026.')
             ->assertDontSee('Berhasil disimpan.');
 
         $submission->forceFill(['signed_uploaded_at' => now()->subDays(10)])->save();
@@ -218,7 +265,7 @@ class PublicRequestSigningTest extends TestCase
 
         $html = $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
             ->assertDontSee('sebelum batas ini')
-            ->assertSee('Ganti scan (bila salah unggah)')
+            ->assertSee('Ganti soft file (bila salah unggah)')
             ->getContent();
 
         $this->assertLessThan(strpos($html, 'id="signed-scan"'), strpos($html, 'id="late-reason"'));

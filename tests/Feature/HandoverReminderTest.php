@@ -183,21 +183,21 @@ class HandoverReminderTest extends TestCase
         $this->assertSame(1, DocumentRequestNotification::count());
     }
 
-    public function test_scan_reminder_once_after_seven_days_without_scan(): void
+    public function test_soft_file_reminder_once_after_fourteen_days_without_upload(): void
     {
-        $fresh = DocumentRequest::factory()->signing(7)->create(['requester_phone' => '081111111111', 'history' => [['status' => 'signing', 'at' => now()->toIso8601String()]]]);
+        $fresh = DocumentRequest::factory()->signing(14)->create(['requester_phone' => '081111111111', 'history' => [['status' => 'signing', 'at' => now()->toIso8601String()]]]);
         $this->assertSame(0, $this->send());
 
-        $overdue = DocumentRequest::factory()->signing(8)->create(['requester_phone' => '081111111111', 'title' => 'Perjanjian Sewa', 'history' => [
-            ['status' => 'submitted', 'at' => now()->subDays(12)->toIso8601String()],
-            ['status' => 'signing', 'at' => now()->subDays(8)->toIso8601String()],
+        $overdue = DocumentRequest::factory()->signing(15)->create(['requester_phone' => '081111111111', 'title' => 'Perjanjian Sewa', 'history' => [
+            ['status' => 'submitted', 'at' => now()->subDays(19)->toIso8601String()],
+            ['status' => 'signing', 'at' => now()->subDays(15)->toIso8601String()],
             ['event' => 'draft_replaced', 'status' => 'signing', 'at' => now()->subDays(3)->toIso8601String()],
         ]]);
         $this->assertSame(1, $this->send());
         $this->assertSame(0, $this->send());
 
         $notification = $overdue->notifications()->sole();
-        $this->assertSame("lms-request-{$overdue->id}-2-scan7-applicant", $notification->event_key);
+        $this->assertSame("lms-request-{$overdue->id}-2-scan14-applicant", $notification->event_key);
         $this->assertSame('applicant', $notification->recipient_kind);
         $this->assertStringContainsString('Perjanjian Sewa', $notification->payload['message']['text']);
         $this->assertSame(0, $fresh->notifications()->count());
@@ -251,6 +251,6 @@ class HandoverReminderTest extends TestCase
     {
         $this->handover(8);
 
-        $this->artisan('lms:send-request-reminders')->expectsOutputToContain('1 pengingat keterlambatan dan unggah scan')->assertSuccessful();
+        $this->artisan('lms:send-request-reminders')->expectsOutputToContain('1 pengingat keterlambatan dan unggah soft file')->assertSuccessful();
     }
 }

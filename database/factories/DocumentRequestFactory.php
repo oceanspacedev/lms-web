@@ -16,16 +16,28 @@ class DocumentRequestFactory extends Factory
         return ['company_id' => Company::factory(), 'document_type_id' => DocumentType::factory(), 'requester_id' => User::factory(), 'pic_user_id' => User::factory(), 'title' => fake()->sentence(3), 'partner_name' => fake()->company(), 'purpose' => 'new', 'has_cost' => false];
     }
 
-    /** Menunggu scan tanda tangan; draf diterbitkan $draftDaysAgo hari lalu. */
+    /** Proses Drafting: tim legal sedang menyusun draft. */
+    public function drafting(): static
+    {
+        return $this->state(fn () => ['status' => 'drafting']);
+    }
+
+    /** Menunggu soft file bertanda tangan; draf diterbitkan $draftDaysAgo hari lalu. */
     public function signing(?int $draftDaysAgo = 0): static
     {
         return $this->state(fn () => ['status' => 'signing', 'draft_path' => 'lms/requests/draft.pdf', 'draft_name' => 'draft.pdf', 'draft_issued_at' => now()->subDays($draftDaysAgo ?? 0)]);
     }
 
-    /** Menunggu dokumen fisik; scan pertama diunggah $signedDaysAgo hari lalu. */
+    /** Menunggu dokumen fisik; soft file bertanda tangan pertama diunggah $signedDaysAgo hari lalu. */
     public function handover(int $signedDaysAgo = 0): static
     {
         return $this->signing($signedDaysAgo)->state(fn () => ['status' => 'handover', 'signed_path' => 'lms/requests/signed.pdf', 'signed_name' => 'signed.pdf', 'signed_uploaded_at' => now()->subDays($signedDaysAgo)]);
+    }
+
+    /** Scanning: dokumen fisik sudah diterima tim legal, scan belum diunggah. */
+    public function scanning(): static
+    {
+        return $this->handover(1)->state(fn () => ['status' => 'scanning', 'physical_received_at' => now()]);
     }
 
     public function cancelled(): static

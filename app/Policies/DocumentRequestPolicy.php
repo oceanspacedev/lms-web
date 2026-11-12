@@ -43,17 +43,23 @@ class DocumentRequestPolicy
         return $this->update($user, $request);
     }
 
-    /** Revisi atau tolak pengajuan yang sedang diperiksa. */
-    public function revise(User $user, DocumentRequest $request): bool
+    /** Tandai pengajuan sedang diproses (Proses Drafting): pemeriksa yang ditunjuk sedang menyusun draft. */
+    public function startDrafting(User $user, DocumentRequest $request): bool
     {
         return $user->can('Review:DocumentRequest') && $request->status === 'submitted' && $this->isAssignedReviewer($user, $request);
     }
 
-    /** Keluarkan draf pertama (pemeriksa yang ditunjuk), atau ganti draf selama scan belum diunggah (semua Staff Legal). */
+    /** Revisi atau tolak pengajuan yang sedang diperiksa atau sedang di-drafting. */
+    public function revise(User $user, DocumentRequest $request): bool
+    {
+        return $user->can('Review:DocumentRequest') && in_array($request->status, ['submitted', 'drafting'], true) && $this->isAssignedReviewer($user, $request);
+    }
+
+    /** Keluarkan draf pertama (pemeriksa yang ditunjuk), atau ganti draf selama soft file bertanda tangan belum diunggah (semua Staff Legal). */
     public function issueDraft(User $user, DocumentRequest $request): bool
     {
         return $user->can('Review:DocumentRequest') && (
-            ($request->status === 'submitted' && $this->isAssignedReviewer($user, $request)) ||
+            (in_array($request->status, ['submitted', 'drafting'], true) && $this->isAssignedReviewer($user, $request)) ||
             ($request->status === 'signing' && $request->signed_path === null)
         );
     }
@@ -69,9 +75,16 @@ class DocumentRequestPolicy
         return ($request->requester_id === $user->id || $user->can('Review:DocumentRequest')) && $request->isHandoverLate();
     }
 
+    /** Fisik diterima: semua Staff Legal yang boleh mengarsipkan dokumen. */
     public function markReceived(User $user, DocumentRequest $request): bool
     {
         return $user->can('Review:DocumentRequest') && $user->can('Create:Document') && in_array($request->status, ['signing', 'handover'], true);
+    }
+
+    /** Unggah scan dokumen fisik dan selesaikan pengajuan (tahap Scanning); scan masuk arsip Dokumen. */
+    public function completeWithScan(User $user, DocumentRequest $request): bool
+    {
+        return $user->can('Review:DocumentRequest') && $user->can('Create:Document') && $request->status === 'scanning';
     }
 
     public function cancel(User $user, DocumentRequest $request): bool

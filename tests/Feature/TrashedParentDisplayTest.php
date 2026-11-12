@@ -102,7 +102,9 @@ class TrashedParentDisplayTest extends TestCase
     {
         Storage::disk('local')->put($request->signed_path, '%PDF-1.4 scan');
 
-        return $request->markReceived('PKS/2026/900', null, null, auth()->user());
+        $request->markReceived(auth()->user());
+
+        return $request->completeWithScan(UploadedFile::fake()->createWithContent('scan.pdf', '%PDF-1.4 scan'), auth()->user(), null, null, 'PKS/2026/900');
     }
 
     public function test_document_with_trashed_company_still_shows_company_name_with_marker(): void

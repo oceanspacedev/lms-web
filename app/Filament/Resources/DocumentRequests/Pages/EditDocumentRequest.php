@@ -5,6 +5,7 @@ namespace App\Filament\Resources\DocumentRequests\Pages;
 use App\Filament\Concerns\HasBackToListAction;
 use App\Filament\Concerns\ShowsTrashedRecordReadOnly;
 use App\Filament\Concerns\TrashActions;
+use App\Filament\Resources\DocumentRequests\Actions\CompleteWithScanAction;
 use App\Filament\Resources\DocumentRequests\Actions\MarkReceivedAction;
 use App\Filament\Resources\DocumentRequests\DocumentRequestResource;
 use App\Filament\Resources\Documents\DocumentResource;
@@ -87,21 +88,28 @@ class EditDocumentRequest extends EditRecord
                 ->action(fn (array $data) => $this->decide('revision', $data['note'])),
             Action::make('reject')->label('Tolak')->color('danger')->visible(fn (): bool => $policy->revise(auth()->user(), $this->record))->schema([Textarea::make('note')->label('Alasan')->required()->maxLength(4000)->rows(3)])
                 ->action(fn (array $data) => $this->decide('rejected', $data['note'])),
+            Action::make('startDrafting')->label('Proses Drafting')->icon('heroicon-o-pencil-square')->requiresConfirmation()
+                ->modalHeading('Proses pengajuan ini?')
+                ->modalDescription('Pengajuan ditandai sedang diproses: tim legal menyusun draft. Pengaju melihat tahap "Proses Drafting" dan dikabari lewat WhatsApp. Setelah draft siap, klik Keluarkan Draft.')
+                ->modalSubmitActionLabel('Ya, proses')
+                ->visible(fn (): bool => $this->record->status === 'submitted' && auth()->user()->can('startDrafting', $this->record))
+                ->action(fn () => $this->decide('drafting')),
             Action::make('issueDraft')->label(fn (): string => $this->record->draft_path ? 'Ganti Draft' : 'Keluarkan Draft')->modalWidth('lg')
-                ->visible(fn (): bool => in_array($this->record->status, ['submitted', 'signing'], true) && auth()->user()->can('issueDraft', $this->record))
+                ->color(fn (): string => $this->record->status === 'submitted' ? 'gray' : 'primary')
+                ->visible(fn (): bool => in_array($this->record->status, ['submitted', 'drafting', 'signing'], true) && auth()->user()->can('issueDraft', $this->record))
                 ->schema([$this->flowFileUpload('Draft dokumen')])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->issueDraft($data['file'], auth()->user()),
                     ['file'], 'Draft dikirim ke pengaju', 'Draft belum disimpan',
-                    fn (): string => 'Pengaju dikabari lewat WhatsApp untuk menandatangani dan mengunggah scan.',
+                    fn (): string => 'Pengaju dikabari lewat WhatsApp untuk menandatangani dan mengunggah soft file bertanda tangan.',
                 )),
-            Action::make('uploadSigned')->label(fn (): string => $this->record->signed_path ? 'Ganti Scan' : 'Unggah Scan Bertanda Tangan')->modalWidth('lg')
+            Action::make('uploadSigned')->label(fn (): string => $this->record->signed_path ? 'Ganti Soft File TTD' : 'Unggah Soft File TTD')->modalWidth('lg')
                 ->color(fn (): string => $this->record->signed_path ? 'gray' : 'primary')
                 ->visible(fn (): bool => in_array($this->record->status, ['signing', 'handover'], true) && auth()->user()->can('uploadSigned', $this->record))
-                ->schema([$this->flowFileUpload('Scan dokumen bertanda tangan')])
+                ->schema([$this->flowFileUpload('Soft file dokumen bertanda tangan')])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->uploadSigned($data['file'], auth()->user()),
-                    ['file'], 'Scan disimpan', 'Scan belum disimpan',
+                    ['file'], 'Soft file disimpan', 'Soft file belum disimpan',
                     fn (): ?string => ($due = $this->record->handoverDueDate()) ? 'Dokumen asli harus diterima tim legal paling lambat '.$due->translatedFormat('d M Y').'.' : null,
                 )),
             Action::make('addLateReason')->label(fn (): string => $this->record->requester_id === auth()->id() ? 'Tulis Alasan Keterlambatan' : 'Catat Alasan Keterlambatan')->color('warning')->modalWidth('lg')
@@ -113,6 +121,7 @@ class EditDocumentRequest extends EditRecord
                     ['reason'], 'Alasan dicatat', 'Alasan belum dicatat',
                 )),
             MarkReceivedAction::make()->after(fn () => $this->refreshFormData(['status', 'history'])),
+            CompleteWithScanAction::make()->after(fn () => $this->refreshFormData(['status', 'history'])),
         ];
 
         return [

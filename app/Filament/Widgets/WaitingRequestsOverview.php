@@ -67,7 +67,7 @@ class WaitingRequestsOverview extends StatsOverviewWidget
                 ->color($waitingLong > 0 ? 'warning' : 'gray')
                 ->url($stageUrl('to_review', $waitingLong > 0 ? ['waiting_long' => ['isActive' => true]] : [])),
             Stat::make(self::STAGES['signing'], $signing)
-                ->description($scanOverdue > 0 ? "{$scanOverdue} belum unggah scan lebih dari 7 hari" : 'Tidak ada scan yang tertunda lebih dari 7 hari')
+                ->description($scanOverdue > 0 ? "{$scanOverdue} belum unggah soft file lebih dari ".DocumentRequest::SCAN_REMINDER_DAYS.' hari' : 'Tidak ada soft file yang tertunda lebih dari '.DocumentRequest::SCAN_REMINDER_DAYS.' hari')
                 ->color($scanOverdue > 0 ? 'warning' : 'gray')
                 ->url($stageUrl($scanOverdue > 0 ? 'scan_overdue' : 'signing')),
             // Semua yang fisiknya belum diterima, termasuk yang terlambat; kartu Terlambat merinci yang lewat batas.
