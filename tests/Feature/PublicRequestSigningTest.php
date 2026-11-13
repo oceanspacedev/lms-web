@@ -90,19 +90,33 @@ class PublicRequestSigningTest extends TestCase
             ->assertDontSee('<form method="post" enctype="multipart/form-data"', false);
     }
 
-    public function test_progress_follows_the_applicant_view_in_five_steps(): void
+    public function test_reviewing_page_tells_the_applicant_legal_is_checking_without_naming_staff(): void
     {
+        $this->request('reviewing', ['draft_path' => null, 'draft_name' => null, 'draft_issued_at' => null, 'history' => [
+            ['status' => 'submitted', 'user' => 'Pengaju Publik', 'user_id' => null, 'at' => now()->subDay()->toIso8601String(), 'note' => null],
+            ['status' => 'reviewing', 'user' => 'Nama Staf Rahasia', 'user_id' => 1, 'at' => now()->toIso8601String(), 'note' => null],
+        ]]);
+
+        $response = $this->get(route('requests.public.status', ['token' => self::TOKEN]))->assertOk()
+            ->assertSee('Pengajuan sedang diperiksa')->assertSee('Sedang Diperiksa')
+            ->assertSeeInOrder(['Diserahkan', 'Diproses', 'Selesai'])
+            ->assertSeeInOrder(['Tim Legal memeriksa pengajuan dokumen', 'Pengaju melakukan pengajuan pembuatan dokumen'])
+            ->assertDontSee('Nama Staf Rahasia')
+            ->assertDontSee('<form method="post" enctype="multipart/form-data"', false);
+        $this->assertMatchesRegularExpression('/<li class="progress-step current"\s+aria-current="step"\s*>\s*<span class="progress-dot" aria-hidden="true"><\/span>\s*<span>Diproses/', $response->getContent());
+    }
+
+    public function test_progress_follows_the_applicant_view_in_three_steps(): void
+    {
+        $processing = ['Diserahkan' => 'done', 'Diproses' => 'current', 'Selesai' => 'pending'];
         $cases = [
-            'submitted' => ['Memeriksa' => 'current', 'Proses Drafting' => 'pending'],
-            'drafting' => ['Memeriksa' => 'done', 'Proses Drafting' => 'current', 'Diserahkan' => 'pending'],
-            'signing' => ['Proses Drafting' => 'done', 'Diserahkan' => 'current', 'Scanning' => 'pending'],
-            'handover' => ['Diserahkan' => 'current', 'Scanning' => 'pending'],
-            'scanning' => ['Diserahkan' => 'done', 'Scanning' => 'current', 'Selesai' => 'pending'],
-            'archived' => ['Scanning' => 'done', 'Selesai' => 'done'],
+            'submitted' => ['Diserahkan' => 'current', 'Diproses' => 'pending', 'Selesai' => 'pending'],
+            'reviewing' => $processing, 'drafting' => $processing, 'signing' => $processing, 'handover' => $processing, 'scanning' => $processing,
+            'archived' => ['Diserahkan' => 'done', 'Diproses' => 'done', 'Selesai' => 'done'],
         ];
         foreach ($cases as $status => $expected) {
             $steps = collect(DocumentRequest::factory()->make(['status' => $status])->progressSteps())->pluck('state', 'label');
-            $this->assertSame(['Memeriksa', 'Proses Drafting', 'Diserahkan', 'Scanning', 'Selesai'], $steps->keys()->all());
+            $this->assertSame(['Diserahkan', 'Diproses', 'Selesai'], $steps->keys()->all());
             foreach ($expected as $label => $state) {
                 $this->assertSame($state, $steps[$label], "{$status}: {$label}");
             }
@@ -230,7 +244,7 @@ class PublicRequestSigningTest extends TestCase
             ->assertSee('Menunggu dokumen asli')
             ->assertSee('Soft file sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal.')
             ->assertSee('Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.')
-            ->assertDontSee('mengunggah soft file');
+            ->assertDontSee('Menunggu soft file bertanda tangan');
     }
 
     public function test_lookup_page_tells_what_to_do_while_waiting_for_signed_scan(): void

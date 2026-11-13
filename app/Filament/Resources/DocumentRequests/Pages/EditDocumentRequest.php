@@ -88,15 +88,22 @@ class EditDocumentRequest extends EditRecord
                 ->action(fn (array $data) => $this->decide('revision', $data['note'])),
             Action::make('reject')->label('Tolak')->color('danger')->visible(fn (): bool => $policy->revise(auth()->user(), $this->record))->schema([Textarea::make('note')->label('Alasan')->required()->maxLength(4000)->rows(3)])
                 ->action(fn (array $data) => $this->decide('rejected', $data['note'])),
+            Action::make('startReview')->label('Periksa')->icon('heroicon-o-magnifying-glass')->requiresConfirmation()
+                ->modalHeading('Mulai periksa pengajuan ini?')
+                ->modalDescription('Pengajuan ditandai sedang diperiksa tim legal. Riwayat pengaju mencatat "Tim Legal memeriksa pengajuan dokumen" dan pengaju dikabari lewat WhatsApp. Setelah lengkap, klik Proses Drafting.')
+                ->modalSubmitActionLabel('Ya, periksa')
+                ->visible(fn (): bool => $this->record->status === 'submitted' && auth()->user()->can('startReview', $this->record))
+                ->action(fn () => $this->decide('reviewing')),
             Action::make('startDrafting')->label('Proses Drafting')->icon('heroicon-o-pencil-square')->requiresConfirmation()
-                ->modalHeading('Proses pengajuan ini?')
-                ->modalDescription('Pengajuan ditandai sedang diproses: tim legal menyusun draft. Pengaju melihat tahap "Proses Drafting" dan dikabari lewat WhatsApp. Setelah draft siap, klik Keluarkan Draft.')
+                ->modalHeading('Mulai susun draft?')
+                ->modalDescription('Pengajuan ditandai sedang dibuatkan draft. Riwayat pengaju mencatat "Tim Legal sedang melakukan pembuatan draft" dan pengaju dikabari lewat WhatsApp. Setelah draft siap, klik Keluarkan Draft.')
                 ->modalSubmitActionLabel('Ya, proses')
-                ->visible(fn (): bool => $this->record->status === 'submitted' && auth()->user()->can('startDrafting', $this->record))
+                ->color(fn (): string => $this->record->status === 'submitted' ? 'gray' : 'primary')
+                ->visible(fn (): bool => in_array($this->record->status, ['submitted', 'reviewing'], true) && auth()->user()->can('startDrafting', $this->record))
                 ->action(fn () => $this->decide('drafting')),
             Action::make('issueDraft')->label(fn (): string => $this->record->draft_path ? 'Ganti Draft' : 'Keluarkan Draft')->modalWidth('lg')
-                ->color(fn (): string => $this->record->status === 'submitted' ? 'gray' : 'primary')
-                ->visible(fn (): bool => in_array($this->record->status, ['submitted', 'drafting', 'signing'], true) && auth()->user()->can('issueDraft', $this->record))
+                ->color(fn (): string => in_array($this->record->status, ['submitted', 'reviewing'], true) ? 'gray' : 'primary')
+                ->visible(fn (): bool => in_array($this->record->status, [...DocumentRequest::REVIEW_STATUSES, 'signing'], true) && auth()->user()->can('issueDraft', $this->record))
                 ->schema([$this->flowFileUpload('Draft dokumen')])
                 ->action(fn (array $data) => $this->runFlowAction(
                     fn () => $this->record->issueDraft($data['file'], auth()->user()),

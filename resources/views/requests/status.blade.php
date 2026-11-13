@@ -33,7 +33,9 @@
         <div class="notice" role="status"><strong>Menunggu dokumen asli</strong><p>Soft file sudah diterima. Pengaju perlu menyerahkan dokumen asli bertanda tangan ke tim Legal. Bila terlambat, alasannya bisa ditulis lewat tautan status yang dikirim ke WhatsApp pengaju.</p></div>
     @endif
 @endif
-@if($submission->status === 'drafting')
+@if($submission->status === 'reviewing')
+    <div class="notice" role="status"><strong>Pengajuan sedang diperiksa</strong><p>Tim legal sedang memeriksa pengajuan. Pengaju dikabari lewat WhatsApp saat draft mulai disusun atau bila ada yang perlu diperbaiki.</p></div>
+@elseif($submission->status === 'drafting')
     <div class="notice" role="status"><strong>Draft sedang disusun</strong><p>Tim legal sedang menyusun draft dokumen. Pengaju dikabari lewat WhatsApp saat draft siap diunduh.</p></div>
 @elseif($submission->status === 'scanning')
     <div class="notice" role="status"><strong>Dokumen asli sedang discan</strong><p>Dokumen asli sudah diterima tim legal dan sedang discan. Pengaju dikabari lewat WhatsApp saat scan bisa diunduh{{ $lookup ? ' lewat tautan status' : ' di halaman ini' }}.</p></div>
@@ -135,7 +137,7 @@
     <ol class="timeline">
         @foreach($submission->publicTimeline() as $entry)
             <li class="timeline-item {{ $entry['tone'] }}">
-                <div class="timeline-title"><strong>{{ $entry['label'] }}</strong><span>{{ $entry['actor'] }}</span></div>
+                <div class="timeline-title"><strong>{{ $entry['label'] }}</strong></div>
                 @if($entry['at'])<time datetime="{{ $entry['at']->toIso8601String() }}">{{ $entry['at']->translatedFormat('d M Y H:i') }} WIB</time>@endif
                 @if($entry['note'] && ! $lookup)<p>{{ $entry['note'] }}</p>@endif
             </li>

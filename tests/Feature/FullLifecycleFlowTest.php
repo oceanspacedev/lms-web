@@ -131,7 +131,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->assertCount(1, $this->messagesTo('6281200000001'));
         $this->assertStringContainsString('Kerja Sama Distribusi 2026', $this->messagesTo('6281355550000')[0]['text']);
         $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()
-            ->assertSee('Pengajuan diterima')->assertSee('aria-current="step"', false)->assertDontSee($this->reviewer->name);
+            ->assertSee('Pengaju melakukan pengajuan pembuatan dokumen')->assertSee('aria-current="step"', false)->assertDontSee($this->reviewer->name);
 
         // 3. Tidak ada yang bertindak selama 2 hari: pemeriksa diingatkan, tanpa duplikat saat command diulang.
         $this->travelTo(now()->addDays(2));
@@ -140,7 +140,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->deliver();
         $reminder = collect($this->messagesTo('6281200000001'))->last();
         $this->assertStringContainsString('Menunggu 2 hari', $reminder['text']);
-        $this->assertStringContainsString('Tahap: Diperiksa', $reminder['text']);
+        $this->assertStringContainsString('Tahap: Menunggu Diperiksa', $reminder['text']);
 
         // 4. Pemeriksa meminta revisi; pengaju diberi tahu beserta catatannya.
         $this->actingAs($this->reviewer);
@@ -189,7 +189,7 @@ class FullLifecycleFlowTest extends TestCase
         $this->assertSame(1, $document->currentVersion->version_number);
         Storage::disk('s3')->assertExists($document->currentVersion->file_path);
         $this->deliver();
-        $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()->assertSee('Selesai, dokumen sudah diarsipkan')->assertSee('Unduh scan dokumen asli')->assertDontSee('aria-current="step"', false);
+        $this->get(route('requests.public.status', ['token' => $this->token]))->assertOk()->assertSee('Tim Legal mengarsipkan dokumen, pengajuan selesai')->assertSee('Unduh scan dokumen asli')->assertDontSee('aria-current="step"', false);
 
         // 8. Dokumen sampai ke tim legal dan masuk daftar.
         $this->actingAs($this->legal);

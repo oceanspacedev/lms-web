@@ -16,6 +16,12 @@ class DocumentRequestFactory extends Factory
         return ['company_id' => Company::factory(), 'document_type_id' => DocumentType::factory(), 'requester_id' => User::factory(), 'pic_user_id' => User::factory(), 'title' => fake()->sentence(3), 'partner_name' => fake()->company(), 'purpose' => 'new', 'has_cost' => false];
     }
 
+    /** Sedang Diperiksa: tim legal sudah mengklik Periksa. */
+    public function reviewing(): static
+    {
+        return $this->state(fn () => ['status' => 'reviewing']);
+    }
+
     /** Proses Drafting: tim legal sedang menyusun draft. */
     public function drafting(): static
     {

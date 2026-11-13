@@ -274,6 +274,58 @@ class RequestSigningFlowTest extends TestCase
         $this->assertSame(['Direktur sedang dinas.', 'Kurir terlambat mengambil berkas.'], $notes);
     }
 
+    public function test_start_review_moves_submitted_to_reviewing_and_every_review_step_can_follow(): void
+    {
+        $legal = $this->legal();
+        $requester = $this->requester();
+        $request = $this->request($requester, $legal);
+
+        $this->assertFalse($requester->can('startReview', $request));
+        $this->assertFalse($this->legal('Budi Legal')->can('startReview', $request));
+        $request->transition('reviewing', $legal);
+
+        $this->assertSame('reviewing', $request->status);
+        $this->assertSame('reviewing', collect($request->history)->last()['status']);
+        $this->assertSame('Tim Legal memeriksa pengajuan dokumen', $request->publicTimeline()[0]['label']);
+        $this->assertFalse($legal->can('startReview', $request));
+        $this->assertTrue($legal->can('startDrafting', $request));
+        $this->assertTrue($legal->can('revise', $request));
+        $this->assertTrue($legal->can('issueDraft', $request));
+        $this->assertFalse($legal->can('cancel', $request));
+        try {
+            $request->transition('reviewing', $legal);
+            $this->fail('Pengajuan yang sedang diperiksa tidak boleh diklik Periksa lagi.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('status', $exception->errors());
+        }
+
+        $request->transition('drafting', $legal);
+        $this->assertSame('drafting', $request->status);
+    }
+
+    public function test_request_being_reviewed_can_be_sent_back_for_revision(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal);
+        $request->transition('reviewing', $legal);
+        $request->transition('revision', $legal, 'Lengkapi lampiran');
+
+        $this->assertSame('revision', $request->status);
+        $this->assertSame('Tim Legal meminta revisi pengajuan', $request->publicTimeline()[0]['label']);
+    }
+
+    public function test_draft_can_be_issued_straight_from_a_request_being_reviewed(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal);
+        $request->transition('reviewing', $legal);
+        $request->issueDraft($this->pdf('draft.pdf'), $legal);
+
+        $this->assertSame('signing', $request->status);
+        $this->assertNotNull($request->draft_issued_at);
+        $this->assertSame('Tim Legal menyerahkan draft dokumen, menunggu tanda tangan pengaju', $request->publicTimeline()[0]['label']);
+    }
+
     public function test_start_drafting_moves_submitted_to_drafting_and_draft_can_follow(): void
     {
         $legal = $this->legal();

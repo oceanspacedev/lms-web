@@ -115,7 +115,7 @@ class ReminderTemplate extends Model
 
     public const REQUEST_REMINDER_EXAMPLE_VALUES = [
         'nomor_pengajuan' => '123', 'judul' => 'PKS Sewa Gudang Cikarang', 'pengaju' => 'Budi', 'perusahaan' => 'PT Bahari Logistik Nusantara',
-        'jenis_dokumen' => 'Kontrak', 'status' => 'Diperiksa', 'hari_menunggu' => '3', 'tautan' => 'https://contoh.test/admin/document-requests/123/edit',
+        'jenis_dokumen' => 'Kontrak', 'status' => 'Menunggu Diperiksa', 'hari_menunggu' => '3', 'tautan' => 'https://contoh.test/admin/document-requests/123/edit',
     ];
 
     public const OVERDUE_VARIABLE_LABELS = ['dokumen' => 'Nama Dokumen', 'nomor' => 'Nomor Dokumen', 'perusahaan' => 'Nama Badan Usaha', 'jenis_dokumen' => 'Jenis Dokumen', 'tanggal_berakhir' => 'Tanggal Berakhir', 'hari_terlambat' => 'Hari Terlambat', 'pic' => 'Nama PIC'];
@@ -128,6 +128,7 @@ class ReminderTemplate extends Model
     public const REQUEST_TEMPLATE_LABELS = [
         'pic' => 'Pengajuan baru',
         'submitted' => 'Pengajuan diterima',
+        'reviewing' => 'Sedang diperiksa',
         'revision' => 'Perlu revisi',
         'rejected' => 'Ditolak',
         'drafting' => 'Proses drafting',
@@ -147,10 +148,11 @@ class ReminderTemplate extends Model
     /** Penjelasan singkat tiap jenis pesan pengajuan: siapa penerimanya dan kapan dikirim. */
     public const REQUEST_TEMPLATE_HINTS = [
         'pic' => 'Ke PIC pengajuan (diatur di Jenis Dokumen), saat ada pengajuan baru masuk.',
-        'submitted' => 'Ke pengaju, saat pengajuannya diterima dan mulai diperiksa.',
+        'submitted' => 'Ke pengaju, saat pengajuannya diterima dan menunggu diperiksa.',
+        'reviewing' => 'Ke pengaju, saat tim legal mengklik Periksa dan mulai memeriksa pengajuannya.',
         'revision' => 'Ke pengaju, saat tim legal meminta perbaikan. Catatan revisi ikut dikirim.',
         'rejected' => 'Ke pengaju, saat pengajuan ditolak. Alasan penolakan ikut dikirim.',
-        'drafting' => 'Ke pengaju, saat tim legal mulai memproses pengajuan dan menyusun draft.',
+        'drafting' => 'Ke pengaju, saat tim legal mulai menyusun draft dokumen.',
         'signing' => 'Ke pengaju, saat draft dokumen siap ditandatangani.',
         'draft_replaced' => 'Ke pengaju, saat tim legal mengganti draft yang sudah dikirim.',
         'scan_reminder' => 'Ke pengaju, sekali, bila 14 hari setelah draft keluar soft file bertanda tangan belum diunggah.',
@@ -172,7 +174,8 @@ class ReminderTemplate extends Model
 
     public const DEFAULT_REQUEST_TEMPLATES = [
         'pic' => "Pengajuan baru #{nomor_pengajuan}\n{judul}\nPengaju: {pengaju}\n{tautan}",
-        'submitted' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan diterima dan sedang diperiksa.{baris_catatan}\n{tautan}",
+        'submitted' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan diterima dan menunggu diperiksa tim legal.{baris_catatan}\n{tautan}",
+        'reviewing' => "Pengajuan #{nomor_pengajuan}\n{judul}\nTim legal sedang memeriksa pengajuan.\n{tautan}",
         'revision' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan perlu direvisi.{baris_catatan}\n{tautan}",
         'rejected' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan ditolak.{baris_catatan}\n{tautan}",
         'drafting' => "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan sedang diproses. Tim legal sedang menyusun draft dokumen.\n{tautan}",
@@ -216,7 +219,7 @@ class ReminderTemplate extends Model
     {
         $status = self::REQUEST_TEMPLATE_EXAMPLE_STATUSES[$event] ?? $event;
 
-        return [...self::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$status] ?? 'Diperiksa'];
+        return [...self::REQUEST_EXAMPLE_VALUES, 'status' => DocumentRequest::STATUSES[$status] ?? 'Menunggu Diperiksa'];
     }
 
     public function requestTemplate(string $event): ?string

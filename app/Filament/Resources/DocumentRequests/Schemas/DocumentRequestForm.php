@@ -130,14 +130,15 @@ class DocumentRequestForm
                 'label' => match (true) {
                     $kind !== null && isset(DocumentRequest::TIMELINE_EVENT_LABELS[$kind]) => $record->timelineEventLabel($event),
                     $status === 'draft' => 'Draf dibuat',
-                    $status === 'submitted' && $previous === 'revision' => 'Revisi dikirim',
-                    default => DocumentRequest::TIMELINE_LABELS[$status] ?? DocumentRequest::statusLabel($status),
+                    default => $record->timelineStatusLabel($event, $previous) ?? DocumentRequest::statusLabel($status),
                 },
                 'actor' => filled($event['user'] ?? null) ? (string) $event['user'] : '—',
                 'at' => filled($event['at'] ?? null) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
                 'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
             ];
-            $previous = $status;
+            if ($kind === null) {
+                $previous = $status;
+            }
         }
 
         return array_reverse($entries);
@@ -162,8 +163,10 @@ class DocumentRequestForm
                     ->state(fn (DocumentRequest $record): ?string => collect($record->history)->last(fn (array $entry): bool => ! isset($entry['event']))['note'] ?? null)->columnSpanFull()->wrap(),
                 TextEntry::make('next_step')->label('Langkah berikutnya')->columnSpanFull()->wrap()->icon(fn (DocumentRequest $record): string => $record->isHandoverLate() ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-clock')
                     ->color(fn (DocumentRequest $record): ?string => $record->isHandoverLate() ? 'danger' : null)
-                    ->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['drafting', 'signing', 'handover', 'scanning'], true))
+                    ->visible(fn (DocumentRequest $record): bool => in_array($record->status, ['submitted', 'reviewing', 'drafting', 'signing', 'handover', 'scanning'], true))
                     ->state(fn (DocumentRequest $record): string => match ($record->status) {
+                        'submitted' => 'Pengajuan baru masuk. Klik Periksa saat mulai memeriksanya.',
+                        'reviewing' => 'Tim legal sedang memeriksa pengajuan. Klik Proses Drafting saat mulai menyusun draft, atau Revisi/Tolak bila belum sesuai.',
                         'drafting' => 'Tim legal sedang menyusun draft. Klik Keluarkan Draft bila draft sudah siap.',
                         'signing' => $record->draft_path
                             ? 'Menunggu pengaju menandatangani draft dan mengunggah soft file bertanda tangan paling lambat '.self::formatDate($record->signedUploadDueDate()).'. Draft ada di bagian "Tanda tangan & dokumen fisik" di bawah.'

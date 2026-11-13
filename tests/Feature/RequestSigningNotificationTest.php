@@ -193,10 +193,38 @@ class RequestSigningNotificationTest extends TestCase
         $this->assertSame('archived', $archived->fresh()->status);
     }
 
+    public function test_starting_review_notifies_only_the_applicant_with_the_reviewing_message(): void
+    {
+        $legal = $this->legal('Lina Legal', '081200000002');
+        $request = $this->request($legal);
+
+        $request->transition('reviewing', $legal);
+
+        $this->assertSame(['Tim legal sedang memeriksa pengajuan.'], $this->texts($request, 'applicant')->map(fn (string $text): string => explode("\n", $text)[2])->all());
+        $this->assertStringContainsString(route('requests.public.status', ['token' => $request->public_token]), $this->texts($request, 'applicant')->sole());
+        $this->assertSame(0, $request->notifications()->where('recipient_kind', '!=', 'applicant')->count());
+    }
+
+    public function test_stored_old_default_submitted_message_is_updated_and_custom_text_is_kept(): void
+    {
+        $old = "Pengajuan #{nomor_pengajuan}\n{judul}\nPengajuan diterima dan sedang diperiksa.{baris_catatan}\n{tautan}";
+        $setting = ReminderTemplate::factory()->create();
+        $migration = require database_path('migrations/2026_11_13_215052_update_submitted_request_template_wording.php');
+
+        ReminderTemplate::whereKey($setting->id)->toBase()->update(['request_templates' => json_encode(['submitted' => $old, 'revision' => 'Revisi khusus'])]);
+        $migration->up();
+        $migration->up();
+        $this->assertSame(['submitted' => ReminderTemplate::DEFAULT_REQUEST_TEMPLATES['submitted'], 'revision' => 'Revisi khusus'], $setting->refresh()->request_templates);
+
+        ReminderTemplate::whereKey($setting->id)->toBase()->update(['request_templates' => json_encode(['submitted' => 'Pesan khusus admin'])]);
+        $migration->up();
+        $this->assertSame(['submitted' => 'Pesan khusus admin'], $setting->refresh()->request_templates);
+    }
+
     public function test_template_labels_and_variables_cover_new_stages(): void
     {
         $this->assertSame(
-            ['pic', 'submitted', 'revision', 'rejected', 'drafting', 'signing', 'draft_replaced', 'scan_reminder', 'handover', 'handover_staff', 'late_7', 'late_14', 'late_21', 'late_staff', 'archived', 'cancelled'],
+            ['pic', 'submitted', 'reviewing', 'revision', 'rejected', 'drafting', 'signing', 'draft_replaced', 'scan_reminder', 'handover', 'handover_staff', 'late_7', 'late_14', 'late_21', 'late_staff', 'archived', 'cancelled'],
             array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS),
         );
         $this->assertSame(array_keys(ReminderTemplate::REQUEST_TEMPLATE_LABELS), array_keys(ReminderTemplate::DEFAULT_REQUEST_TEMPLATES));

@@ -101,11 +101,11 @@ class FinalReviewFixesTest extends TestCase
         $this->actingAs($legal);
         $html = Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])->html();
 
-        $this->assertStringContainsString('Draft dokumen diganti', $html);
-        $this->assertStringContainsString('Soft file bertanda tangan diganti', $html);
-        $this->assertStringContainsString('Alasan keterlambatan dari pengaju', $html);
-        $this->assertSame(1, substr_count($html, 'Draft dokumen diserahkan, menunggu tanda tangan'));
-        $this->assertSame(1, substr_count($html, 'Soft file bertanda tangan diunggah, menunggu dokumen fisik'));
+        $this->assertStringContainsString('Tim Legal mengganti draft dokumen', $html);
+        $this->assertStringContainsString('Pengaju mengganti soft file bertanda tangan', $html);
+        $this->assertStringContainsString('Pengaju menyampaikan alasan keterlambatan', $html);
+        $this->assertSame(1, substr_count($html, 'Tim Legal menyerahkan draft dokumen, menunggu tanda tangan pengaju'));
+        $this->assertSame(1, substr_count($html, 'Pengaju mengunggah soft file bertanda tangan, menunggu dokumen fisik'));
     }
 
     public function test_received_on_day_seven_is_not_late(): void
@@ -213,10 +213,11 @@ class FinalReviewFixesTest extends TestCase
             $this->entry('handover', '2026-11-03T01:00:00Z', 99, 'signed_replaced'),
             $this->entry('handover', '2026-11-04T01:00:00Z', null, 'signed_replaced'),
         ]]);
-        $this->assertSame(['Pengaju', 'Tim legal', 'Pengaju', 'Pengaju'], array_column($request->publicTimeline(), 'actor'));
+        $this->assertSame(['Pengaju', 'Tim Legal', 'Pengaju', 'Pengaju'], array_column($request->publicTimeline(), 'actor'));
 
         $legalUpload = DocumentRequest::factory()->make(['status' => 'handover', 'requester_id' => 7, 'history' => [$this->entry('handover', '2026-11-01T01:00:00Z', 99)]]);
-        $this->assertSame('Tim legal', $legalUpload->publicTimeline()[0]['actor']);
+        $this->assertSame('Tim Legal', $legalUpload->publicTimeline()[0]['actor']);
+        $this->assertSame('Tim Legal mengunggah soft file bertanda tangan, menunggu dokumen fisik', $legalUpload->publicTimeline()[0]['label']);
         $publicUpload = DocumentRequest::factory()->make(['status' => 'handover', 'requester_id' => null, 'history' => [$this->entry('handover', '2026-11-01T01:00:00Z', null)]]);
         $this->assertSame('Pengaju', $publicUpload->publicTimeline()[0]['actor']);
     }
@@ -265,8 +266,8 @@ class FinalReviewFixesTest extends TestCase
         $late->refresh();
         $this->assertSame($legal->id, $late->lateReasons()->sole()->user_id);
         $this->assertSame(0, DocumentRequest::query()->lateWithoutReason()->count());
-        $this->assertSame('Alasan keterlambatan dicatat tim legal', $late->publicTimeline()[0]['label']);
-        $this->assertSame('Tim legal', $late->publicTimeline()[0]['actor']);
+        $this->assertSame('Tim Legal mencatat alasan keterlambatan pengaju', $late->publicTimeline()[0]['label']);
+        $this->assertSame('Tim Legal', $late->publicTimeline()[0]['actor']);
 
         $onTime = $this->handover($this->requester(), $legal, 2);
         Livewire::test(EditDocumentRequest::class, ['record' => $onTime->getRouteKey()])->assertActionHidden('addLateReason');

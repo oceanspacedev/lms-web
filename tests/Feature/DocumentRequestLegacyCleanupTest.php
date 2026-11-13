@@ -17,7 +17,7 @@ class DocumentRequestLegacyCleanupTest extends TestCase
 
     public function test_statuses_no_longer_list_the_removed_approval_stage(): void
     {
-        $this->assertSame(['draft', 'submitted', 'drafting', 'revision', 'signing', 'handover', 'scanning', 'rejected', 'archived', 'cancelled'], array_keys(DocumentRequest::STATUSES));
+        $this->assertSame(['draft', 'submitted', 'reviewing', 'drafting', 'revision', 'signing', 'handover', 'scanning', 'rejected', 'archived', 'cancelled'], array_keys(DocumentRequest::STATUSES));
     }
 
     public function test_status_label_falls_back_for_legacy_and_unknown_statuses(): void
@@ -35,9 +35,9 @@ class DocumentRequestLegacyCleanupTest extends TestCase
             ['status' => 'approved', 'at' => '2026-10-03T01:00:00Z'], ['status' => 'cancelled', 'at' => '2026-10-04T01:00:00Z'],
         ]]);
 
-        $this->assertSame(['done', 'done', 'stopped', 'pending', 'pending'], array_column($request->progressSteps(), 'state'));
-        $this->assertSame('Dibatalkan', $request->publicTimeline()[0]['label']);
-        $this->assertSame('Disetujui, menunggu tanda tangan', $request->publicTimeline()[1]['label']);
+        $this->assertSame(['done', 'stopped', 'pending'], array_column($request->progressSteps(), 'state'));
+        $this->assertSame('Tim Legal membatalkan pengajuan', $request->publicTimeline()[0]['label']);
+        $this->assertSame('Penyetuju menyetujui pengajuan, menunggu tanda tangan', $request->publicTimeline()[1]['label']);
     }
 
     public function test_legal_visible_statuses_have_a_single_definition(): void

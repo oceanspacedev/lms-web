@@ -60,11 +60,12 @@ class DocumentRequestsTable
         ])->filters([
             SelectFilter::make('status')->label('Status')->options(DocumentRequest::STATUSES),
             SelectFilter::make('stage')->label('Tahap')->options([
-                'to_review' => 'Perlu diperiksa', 'drafting' => 'Proses drafting', 'signing' => 'Menunggu tanda tangan', 'scan_overdue' => 'Belum unggah soft file > 14 hari',
+                'to_review' => 'Perlu diperiksa', 'reviewing' => 'Sedang diperiksa', 'drafting' => 'Proses drafting', 'signing' => 'Menunggu tanda tangan', 'scan_overdue' => 'Belum unggah soft file > 14 hari',
                 'handover' => 'Menunggu dokumen fisik (semua)', 'handover_on_time' => 'Menunggu fisik (belum lewat batas)', 'late' => 'Terlambat', 'late_no_reason' => 'Terlambat, belum ada alasan',
                 'scanning' => 'Scanning (scan belum diunggah)', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan',
             ])->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                 'to_review' => $query->where('status', 'submitted'),
+                'reviewing' => $query->where('status', 'reviewing'),
                 'drafting' => $query->where('status', 'drafting'),
                 'scanning' => $query->where('status', 'scanning'),
                 'signing' => $query->where('status', 'signing'),

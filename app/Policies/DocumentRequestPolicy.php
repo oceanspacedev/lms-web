@@ -43,23 +43,29 @@ class DocumentRequestPolicy
         return $this->update($user, $request);
     }
 
-    /** Tandai pengajuan sedang diproses (Proses Drafting): pemeriksa yang ditunjuk sedang menyusun draft. */
-    public function startDrafting(User $user, DocumentRequest $request): bool
+    /** Tandai pengajuan mulai diperiksa (Periksa): pemeriksa yang ditunjuk mengambil pengajuan yang baru masuk. */
+    public function startReview(User $user, DocumentRequest $request): bool
     {
         return $user->can('Review:DocumentRequest') && $request->status === 'submitted' && $this->isAssignedReviewer($user, $request);
     }
 
-    /** Revisi atau tolak pengajuan yang sedang diperiksa atau sedang di-drafting. */
+    /** Tandai draft sedang disusun (Proses Drafting): pemeriksa yang ditunjuk, dari pengajuan yang menunggu atau sedang diperiksa. */
+    public function startDrafting(User $user, DocumentRequest $request): bool
+    {
+        return $user->can('Review:DocumentRequest') && in_array($request->status, ['submitted', 'reviewing'], true) && $this->isAssignedReviewer($user, $request);
+    }
+
+    /** Revisi atau tolak pengajuan yang menunggu diperiksa, sedang diperiksa, atau sedang di-drafting. */
     public function revise(User $user, DocumentRequest $request): bool
     {
-        return $user->can('Review:DocumentRequest') && in_array($request->status, ['submitted', 'drafting'], true) && $this->isAssignedReviewer($user, $request);
+        return $user->can('Review:DocumentRequest') && in_array($request->status, DocumentRequest::REVIEW_STATUSES, true) && $this->isAssignedReviewer($user, $request);
     }
 
     /** Keluarkan draf pertama (pemeriksa yang ditunjuk), atau ganti draf selama soft file bertanda tangan belum diunggah (semua Staff Legal). */
     public function issueDraft(User $user, DocumentRequest $request): bool
     {
         return $user->can('Review:DocumentRequest') && (
-            (in_array($request->status, ['submitted', 'drafting'], true) && $this->isAssignedReviewer($user, $request)) ||
+            (in_array($request->status, DocumentRequest::REVIEW_STATUSES, true) && $this->isAssignedReviewer($user, $request)) ||
             ($request->status === 'signing' && $request->signed_path === null)
         );
     }
