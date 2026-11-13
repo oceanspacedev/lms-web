@@ -72,7 +72,7 @@ dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; font-varian
 @media(max-width: 480px) { main { padding: 16px 12px 32px; } .page-heading, .receipt { padding: 20px; } .field { padding: 14px 18px; } h1 { font-size: 26px; } }
 @media(prefers-reduced-motion: reduce) { input, textarea { transition: none; } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.progress { list-style: none; margin: 24px 0 8px; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; font-size: 13px; }
+.progress { list-style: none; margin: 24px 0 8px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 13px; }
 .progress-step { display: grid; justify-items: center; gap: 8px; text-align: center; color: var(--muted); border-top: 3px solid var(--line); padding-top: 10px; }
 .progress-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
 .progress-step.done { border-top-color: #146337; color: #146337; }
@@ -89,7 +89,6 @@ dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; font-varian
 .timeline-item p { margin: 0; white-space: pre-line; }
 .timeline-item.warning .timeline-title strong { color: #8a5300; }
 .timeline-item.danger .timeline-title strong { color: #b3261e; }
-@media(max-width: 480px) { .progress { grid-template-columns: 1fr 1fr; } }
 .link-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px 22px; margin-bottom: 12px; }
 .link-card > label { display: block; font-size: 15px; margin-bottom: 8px; }
 .link-card small { display: block; margin-top: 8px; }

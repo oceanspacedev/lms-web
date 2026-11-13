@@ -79,7 +79,7 @@ class DocumentRequestResource extends Resource
         return $query->where(function (Builder $query) use ($user, $notOwnRequest, $assignedToMeOrNobody): void {
             $query->whereRaw('1 = 0');
             if ($user->can('Review:DocumentRequest')) {
-                $query->orWhere(fn (Builder $query): Builder => $query->whereIn('document_requests.status', ['submitted', 'drafting'])->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
+                $query->orWhere(fn (Builder $query): Builder => $query->whereIn('document_requests.status', DocumentRequest::REVIEW_STATUSES)->where($notOwnRequest)->where($assignedToMeOrNobody('document_requests.reviewer_id')));
             }
             if ($user->can('Review:DocumentRequest') && $user->can('Create:Document')) {
                 // Dokumen fisik ditunggu tim legal atau menunggu discan: semua Staff Legal yang boleh mengarsipkan dapat menindaklanjutinya.

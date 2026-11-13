@@ -112,7 +112,7 @@ class WhatsAppTemplateSettingsTest extends TestCase
         $this->assertSame('PIC '.$request->pic->name.': '.$request->title.', dari '.$request->applicantName().'. '.route('filament.admin.resources.document-requests.edit', ['record' => $request]),
             $request->notifications()->where('recipient_kind', 'pic')->sole()->payload['message']['text']);
         $applicantText = $request->notifications()->where('recipient_kind', 'applicant')->sole()->payload['message']['text'];
-        $this->assertStringContainsString('Pengajuan diterima dan sedang diperiksa.', $applicantText);
+        $this->assertStringContainsString('Pengajuan diterima dan menunggu diperiksa tim legal.', $applicantText);
         $this->assertStringNotContainsString('Catatan:', $applicantText);
     }
 

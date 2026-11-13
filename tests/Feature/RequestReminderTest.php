@@ -67,7 +67,7 @@ class RequestReminderTest extends TestCase
         $text = $notification->payload['message']['text'];
         $this->assertStringContainsString('Kontrak Vendor', $text);
         $this->assertStringContainsString('Menunggu 2 hari', $text);
-        $this->assertStringContainsString('Tahap: Diperiksa', $text);
+        $this->assertStringContainsString('Tahap: Menunggu Diperiksa', $text);
         $this->assertStringContainsString(route('filament.admin.resources.document-requests.edit', ['record' => $request->id]), $text);
     }
 
@@ -134,7 +134,7 @@ class RequestReminderTest extends TestCase
         $setting = ReminderTemplate::factory()->create(['request_reminder_body' => 'LEGAL #{nomor_pengajuan} {judul} {hari_menunggu} hari {status}']);
         $this->request(waitingDays: 3, attributes: ['reviewer_id' => $this->user()->id]);
         $this->sendReminders();
-        $this->assertSame('LEGAL #'.DocumentRequest::first()->id.' Kontrak Vendor 3 hari Diperiksa', DocumentRequestNotification::sole()->payload['message']['text']);
+        $this->assertSame('LEGAL #'.DocumentRequest::first()->id.' Kontrak Vendor 3 hari Menunggu Diperiksa', DocumentRequestNotification::sole()->payload['message']['text']);
 
         $this->expectException(ValidationException::class);
         $setting->update(['request_reminder_body' => 'Halo {pic}']);

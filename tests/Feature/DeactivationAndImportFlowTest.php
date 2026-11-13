@@ -547,7 +547,7 @@ class DeactivationAndImportFlowTest extends TestCase
         $this->assertCount(1, $stale);
         $this->assertStringContainsString('Kontrak Vendor Katering', $stale[0]['text']);
         $this->assertStringContainsString('Menunggu 2 hari', $stale[0]['text']);
-        $this->assertStringContainsString('Tahap: Diperiksa', $stale[0]['text']);
+        $this->assertStringContainsString('Tahap: Menunggu Diperiksa', $stale[0]['text']);
         $this->assertCount($leaverMessagesBefore, $this->messagesTo('6281200000001'));
 
         // 7. Pemeriksa pengganti benar-benar bisa memeriksa dan mengeluarkan draf.

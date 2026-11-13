@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 class DocumentRequestTrashHandler implements TrashHandler
 {
     /** Status pengajuan yang masih berjalan dan punya pengingat ke pengaju atau staf. */
-    private const RUNNING_STATUSES = ['submitted', 'drafting', 'signing', 'handover', 'scanning'];
+    private const RUNNING_STATUSES = ['submitted', 'reviewing', 'drafting', 'signing', 'handover', 'scanning'];
 
     /** Folder berkas pengajuan di disk `local`; path di luar folder ini tidak pernah dihapus. */
     private const FILE_DIRECTORY = 'lms/requests/';

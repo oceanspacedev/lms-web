@@ -46,10 +46,10 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Alur: Diperiksa → Proses Drafting → (draft keluar) Menunggu Tanda Tangan → (soft file bertanda tangan masuk) Menunggu Dokumen Fisik
+     * Alur: Menunggu Diperiksa → (legal klik Periksa) Sedang Diperiksa → (legal klik Proses Drafting) Proses Drafting → (draft keluar) Menunggu Tanda Tangan → (soft file bertanda tangan masuk) Menunggu Dokumen Fisik
      * → (fisik diterima legal) Scanning → (scan dokumen fisik diunggah legal) Selesai.
      */
-    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Diperiksa', 'drafting' => 'Proses Drafting', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'scanning' => 'Scanning', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+    public const STATUSES = ['draft' => 'Draf', 'submitted' => 'Menunggu Diperiksa', 'reviewing' => 'Sedang Diperiksa', 'drafting' => 'Proses Drafting', 'revision' => 'Perlu Revisi', 'signing' => 'Menunggu Tanda Tangan', 'handover' => 'Menunggu Dokumen Fisik', 'scanning' => 'Scanning', 'rejected' => 'Ditolak', 'archived' => 'Selesai', 'cancelled' => 'Dibatalkan'];
 
     /** Label status tahap persetujuan lama; hanya untuk membaca data lama, tidak lagi menjadi status yang sah. */
     private const LEGACY_STATUS_LABELS = ['review' => 'Menunggu Persetujuan', 'approved' => 'Menunggu Tanda Tangan'];
@@ -71,6 +71,9 @@ class DocumentRequest extends Model
 
     public const PURPOSES = ['new' => 'Baru', 'renewal' => 'Perpanjangan', 'amendment' => 'Adendum'];
 
+    /** Status saat pengajuan sedang diperiksa atau disusun drafnya oleh pemeriksa yang ditunjuk; di sini pemeriksa boleh merevisi, menolak, atau mengeluarkan draf. */
+    public const REVIEW_STATUSES = ['submitted', 'reviewing', 'drafting'];
+
     /** Status yang boleh dibatalkan tim legal: revisi yang ditinggal pengaju, saat drafting, atau setelah draft keluar sampai fisik diterima. */
     public const CANCELLABLE_STATUSES = ['drafting', 'revision', 'signing', 'handover'];
 
@@ -84,18 +87,32 @@ class DocumentRequest extends Model
     /** Status saat pengajuan menunggu tindakan staf. */
     public const WAITING_STATUSES = ['submitted'];
 
-    /** Tahap di halaman status pengaju (sudut pandang pengaju); tahap tanda tangan dan penyerahan fisik digabung menjadi "Diserahkan". */
-    public const PROGRESS_STEPS = ['submitted' => 'Memeriksa', 'drafting' => 'Proses Drafting', 'signing' => 'Diserahkan', 'scanning' => 'Scanning', 'archived' => 'Selesai'];
+    /**
+     * Tahap di halaman status pengaju, diringkas menjadi tiga: pengajuan diserahkan, diproses tim legal (dari Periksa sampai Scanning), selesai.
+     * Rincian tiap langkah ada di riwayat (lihat TIMELINE_LABELS).
+     */
+    public const PROGRESS_STEPS = ['submitted' => 'Diserahkan', 'processing' => 'Diproses', 'archived' => 'Selesai'];
 
+    /** Status yang termasuk tahap "Diproses" di halaman status pengaju; `approved` hanya ada di data lama. */
+    public const PROCESSING_STATUSES = ['reviewing', 'drafting', 'approved', 'signing', 'handover', 'scanning'];
+
+    /** Kalimat riwayat tiap perubahan status, lengkap dengan pelakunya; `review` dan `approved` hanya ada di data lama. */
     public const TIMELINE_LABELS = [
-        'submitted' => 'Pengajuan diterima', 'review' => 'Diteruskan untuk persetujuan', 'approved' => 'Disetujui, menunggu tanda tangan',
-        'drafting' => 'Pengajuan diproses, draft sedang disusun',
-        'revision' => 'Perlu revisi', 'rejected' => 'Ditolak', 'archived' => 'Selesai, dokumen sudah diarsipkan',
-        'signing' => 'Draft dokumen diserahkan, menunggu tanda tangan', 'handover' => 'Soft file bertanda tangan diunggah, menunggu dokumen fisik',
-        'scanning' => 'Dokumen fisik diterima, sedang discan', 'cancelled' => 'Dibatalkan',
+        'submitted' => 'Pengaju melakukan pengajuan pembuatan dokumen',
+        'reviewing' => 'Tim Legal memeriksa pengajuan dokumen',
+        'drafting' => 'Tim Legal sedang melakukan pembuatan draft',
+        'revision' => 'Tim Legal meminta revisi pengajuan',
+        'rejected' => 'Tim Legal menolak pengajuan',
+        'signing' => 'Tim Legal menyerahkan draft dokumen, menunggu tanda tangan pengaju',
+        'handover' => 'Pengaju mengunggah soft file bertanda tangan, menunggu dokumen fisik',
+        'scanning' => 'Tim Legal menerima dokumen fisik dan sedang melakukan scan',
+        'archived' => 'Tim Legal mengarsipkan dokumen, pengajuan selesai',
+        'cancelled' => 'Tim Legal membatalkan pengajuan',
+        'review' => 'Pemeriksa meneruskan pengajuan untuk persetujuan',
+        'approved' => 'Penyetuju menyetujui pengajuan, menunggu tanda tangan',
     ];
 
-    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Draft dokumen diganti', 'signed_replaced' => 'Soft file bertanda tangan diganti', 'late_reason' => 'Alasan keterlambatan dari pengaju'];
+    public const TIMELINE_EVENT_LABELS = ['draft_replaced' => 'Tim Legal mengganti draft dokumen', 'signed_replaced' => 'Pengaju mengganti soft file bertanda tangan', 'late_reason' => 'Pengaju menyampaikan alasan keterlambatan'];
 
     protected $attributes = ['details' => '{}', 'attachments' => '{}', 'requirements' => '{}', 'history' => '[]', 'status' => 'draft'];
 
@@ -329,10 +346,10 @@ class DocumentRequest extends Model
      */
     public function progressSteps(): array
     {
-        $stage = match ($this->status) {
-            'cancelled', 'rejected' => $this->lastStageBeforeCancellation(),
-            'approved', 'signing', 'handover' => 'signing',
-            'drafting', 'scanning', 'archived' => $this->status,
+        $stage = match (true) {
+            in_array($this->status, ['cancelled', 'rejected'], true) => $this->lastStageBeforeCancellation(),
+            in_array($this->status, self::PROCESSING_STATUSES, true) => 'processing',
+            $this->status === 'archived' => 'archived',
             default => 'submitted',
         };
         $position = array_search($stage, array_keys(self::PROGRESS_STEPS), true);
@@ -352,26 +369,20 @@ class DocumentRequest extends Model
         return $steps;
     }
 
-    /** Tahap terakhir yang dicapai sebelum pembatalan atau penolakan, dibaca dari riwayat status. */
+    /** Tahap terakhir yang dicapai sebelum pembatalan atau penolakan, dibaca dari riwayat status: "Diproses" bila tim legal sudah mulai memprosesnya. */
     private function lastStageBeforeCancellation(): string
     {
-        $stage = 'submitted';
         foreach ($this->history as $event) {
-            if (isset($event['event'])) {
-                continue;
-            }
-            $status = $event['status'] ?? null;
-            $status = in_array($status, ['approved', 'handover'], true) ? 'signing' : $status;
-            if (in_array($status, ['drafting', 'signing', 'scanning'], true)) {
-                $stage = $status;
+            if (! isset($event['event']) && in_array($event['status'] ?? null, self::PROCESSING_STATUSES, true)) {
+                return 'processing';
             }
         }
 
-        return $stage;
+        return 'submitted';
     }
 
     /**
-     * Riwayat untuk pengaju, terbaru di atas. Hanya peran, tidak memuat nama staf.
+     * Riwayat untuk pengaju, terbaru di atas. Kalimatnya menyebut peran pelaku (Pengaju, Tim Legal), tidak pernah nama staf.
      *
      * @return list<array{label: string, actor: string, at: ?CarbonImmutable, note: ?string, tone: 'normal'|'warning'|'danger'}>
      */
@@ -381,47 +392,72 @@ class DocumentRequest extends Model
         $previous = null;
         foreach ($this->history as $event) {
             $kind = $event['event'] ?? null;
-            if ($kind !== null) {
-                if (isset(self::TIMELINE_EVENT_LABELS[$kind])) {
-                    $byApplicant = $this->isApplicantUpload($event);
-                    $entries[] = [
-                        'label' => $this->timelineEventLabel($event),
-                        'actor' => match ($kind) {
-                            'signed_replaced', 'late_reason' => $byApplicant ? 'Pengaju' : 'Tim legal',
-                            default => 'Tim legal',
-                        },
-                        'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
-                        'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
-                        'tone' => $kind === 'late_reason' ? 'warning' : 'normal',
-                    ];
-                }
-
-                continue;
-            }
             $status = $event['status'] ?? null;
-            if ($status !== 'draft' && isset(self::TIMELINE_LABELS[$status])) {
+            $label = $kind !== null ? $this->timelineEventLabel($event) : ($status === 'draft' ? null : $this->timelineStatusLabel($event, $previous));
+            if ($label !== null) {
                 $entries[] = [
-                    'label' => $status === 'submitted' && $previous === 'revision' ? 'Revisi dikirim' : self::TIMELINE_LABELS[$status],
-                    'actor' => match ($status) {
-                        'submitted' => 'Pengaju',
-                        'review' => 'Pemeriksa',
-                        'approved' => 'Penyetuju',
-                        'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Pemeriksa',
-                        'handover' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim legal',
-                        'drafting', 'signing', 'scanning', 'archived', 'cancelled' => 'Tim legal',
-                        default => 'Tim pemeriksa',
-                    },
+                    'label' => $label,
+                    'actor' => $this->timelineActor($event, $previous),
                     'at' => isset($event['at']) ? CarbonImmutable::parse($event['at'])->timezone(config('lms.reminder_timezone')) : null,
                     'note' => filled($event['note'] ?? null) ? (string) $event['note'] : null,
-                    'tone' => match ($status) {
-                        'revision' => 'warning', 'rejected', 'cancelled' => 'danger', default => 'normal',
+                    'tone' => match (true) {
+                        $kind === 'late_reason' => 'warning',
+                        $kind !== null => 'normal',
+                        $status === 'revision' => 'warning',
+                        in_array($status, ['rejected', 'cancelled'], true) => 'danger',
+                        default => 'normal',
                     },
                 ];
             }
-            $previous = $status;
+            if ($kind === null) {
+                $previous = $status;
+            }
         }
 
         return array_reverse($entries);
+    }
+
+    /**
+     * Kalimat riwayat untuk satu perubahan status, atau null bila statusnya tidak dikenal. `$previous` adalah status sebelumnya:
+     * pengajuan ulang setelah revisi, soft file yang diunggah tim legal, dan keputusan penyetuju di data lama punya kalimat sendiri.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    public function timelineStatusLabel(array $event, ?string $previous = null): ?string
+    {
+        $status = $event['status'] ?? null;
+        if (! is_string($status) || ! isset(self::TIMELINE_LABELS[$status])) {
+            return null;
+        }
+
+        return match (true) {
+            $status === 'submitted' && $previous === 'revision' => 'Pengaju mengirim revisi pengajuan',
+            $status === 'handover' && ! $this->isApplicantUpload($event) => 'Tim Legal mengunggah soft file bertanda tangan, menunggu dokumen fisik',
+            in_array($status, ['revision', 'rejected'], true) && $previous === 'review' => str_replace('Tim Legal', 'Penyetuju', self::TIMELINE_LABELS[$status]),
+            default => self::TIMELINE_LABELS[$status],
+        };
+    }
+
+    /**
+     * Peran pelaku satu entri riwayat (bukan nama orang).
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function timelineActor(array $event, ?string $previous): string
+    {
+        $kind = $event['event'] ?? null;
+        if ($kind !== null) {
+            return in_array($kind, ['signed_replaced', 'late_reason'], true) && $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim Legal';
+        }
+
+        return match ($event['status'] ?? null) {
+            'submitted' => 'Pengaju',
+            'review' => 'Pemeriksa',
+            'approved' => 'Penyetuju',
+            'revision', 'rejected' => $previous === 'review' ? 'Penyetuju' : 'Tim Legal',
+            'handover' => $this->isApplicantUpload($event) ? 'Pengaju' : 'Tim Legal',
+            default => 'Tim Legal',
+        };
     }
 
     /**
@@ -437,8 +473,8 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Label kegiatan tanpa perubahan status (ganti draft/scan, alasan terlambat), atau null bila bukan kegiatan yang ditampilkan.
-     * Alasan terlambat yang dicatat tim legal atas nama pengaju diberi label tersendiri.
+     * Kalimat kegiatan tanpa perubahan status (ganti draft/soft file, alasan terlambat), atau null bila bukan kegiatan yang ditampilkan.
+     * Soft file yang diganti tim legal dan alasan terlambat yang dicatat tim legal atas nama pengaju punya kalimat tersendiri.
      *
      * @param  array<string, mixed>  $event
      */
@@ -449,7 +485,11 @@ class DocumentRequest extends Model
             return null;
         }
 
-        return $kind === 'late_reason' && ! $this->isApplicantUpload($event) ? 'Alasan keterlambatan dicatat tim legal' : self::TIMELINE_EVENT_LABELS[$kind];
+        return match (true) {
+            $kind === 'signed_replaced' && ! $this->isApplicantUpload($event) => 'Tim Legal mengganti soft file bertanda tangan',
+            $kind === 'late_reason' && ! $this->isApplicantUpload($event) => 'Tim Legal mencatat alasan keterlambatan pengaju',
+            default => self::TIMELINE_EVENT_LABELS[$kind],
+        };
     }
 
     public function notifications(): HasMany
@@ -683,7 +723,7 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Pindahkan status: kirim pengajuan (`submitted`), revisi atau tolak saat diperiksa, atau batalkan saat revisi atau setelah draft keluar (`cancelled`).
+     * Pindahkan status: kirim pengajuan (`submitted`), mulai memeriksa (`reviewing`), mulai menyusun draft (`drafting`), revisi atau tolak saat diperiksa, atau batalkan saat revisi atau setelah draft keluar (`cancelled`).
      * Pembatalan tidak menghapus draf maupun scan; keduanya tetap ada sebagai catatan.
      */
     public function transition(string $next, User $user, ?string $note = null): void
@@ -692,8 +732,9 @@ class DocumentRequest extends Model
             $request = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
             $allowed = match ($next) {
                 'submitted' => $request->editableBy($user),
-                'drafting' => $request->status === 'submitted' && $request->requester_id !== $user->id,
-                'revision', 'rejected' => in_array($request->status, ['submitted', 'drafting'], true) && $request->requester_id !== $user->id,
+                'reviewing' => $request->status === 'submitted' && $request->requester_id !== $user->id,
+                'drafting' => in_array($request->status, ['submitted', 'reviewing'], true) && $request->requester_id !== $user->id,
+                'revision', 'rejected' => in_array($request->status, self::REVIEW_STATUSES, true) && $request->requester_id !== $user->id,
                 'cancelled' => in_array($request->status, self::CANCELLABLE_STATUSES, true),
                 default => false,
             };
@@ -701,7 +742,7 @@ class DocumentRequest extends Model
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
             }
             $ability = match ($next) {
-                'submitted' => 'submit', 'drafting' => 'startDrafting', 'revision', 'rejected' => 'revise', 'cancelled' => 'cancel',
+                'submitted' => 'submit', 'reviewing' => 'startReview', 'drafting' => 'startDrafting', 'revision', 'rejected' => 'revise', 'cancelled' => 'cancel',
             };
             Gate::forUser($user)->authorize($ability, $request);
             if ($next === 'submitted') {
@@ -719,13 +760,13 @@ class DocumentRequest extends Model
     }
 
     /**
-     * Keluarkan draf: dari Diperiksa atau Proses Drafting ke Menunggu Tanda Tangan. Selama soft file bertanda tangan belum diunggah,
+     * Keluarkan draf: dari Menunggu Diperiksa, Sedang Diperiksa, atau Proses Drafting ke Menunggu Tanda Tangan. Selama soft file bertanda tangan belum diunggah,
      * draf boleh diganti; penggantian tidak mengubah `draft_issued_at` sehingga batas 14 hari tidak mengulang.
      */
     public function issueDraft(UploadedFile $file, User $user): void
     {
         $this->saveFlowFile($file, 'draft', function (self $request) use ($user): void {
-            $allowed = (in_array($request->status, ['submitted', 'drafting'], true) && $request->requester_id !== $user->id)
+            $allowed = (in_array($request->status, self::REVIEW_STATUSES, true) && $request->requester_id !== $user->id)
                 || ($request->status === 'signing' && $request->signed_path === null);
             if (! $allowed) {
                 throw ValidationException::withMessages(['status' => 'Tahap pengajuan tidak sesuai.']);
@@ -733,7 +774,7 @@ class DocumentRequest extends Model
             Gate::forUser($user)->authorize('issueDraft', $request);
         }, function (self $request) use ($user): void {
             $request->draft_issued_at ??= now();
-            if (in_array($request->status, ['submitted', 'drafting'], true)) {
+            if (in_array($request->status, self::REVIEW_STATUSES, true)) {
                 $request->status = 'signing';
                 $request->recordEvent('signing', $user);
             } elseif ($request->getOriginal('draft_path') === null) {

@@ -6,7 +6,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title', 'Pengajuan Dokumen') · {{ config('app.name') }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ asset('images/logo.svg') }}">
-    <link rel="stylesheet" href="{{ asset('css/request-form.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/request-form.css') }}?v={{ filemtime(public_path('css/request-form.css')) }}">
     <script src="{{ asset('js/request-form.js') }}" defer></script>
 </head>
 <body>

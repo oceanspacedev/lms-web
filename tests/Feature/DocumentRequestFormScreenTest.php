@@ -237,7 +237,7 @@ class DocumentRequestFormScreenTest extends TestCase
 
         $page = Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
             ->assertSee('Riwayat')
-            ->assertSeeInOrder(['Perlu revisi', 'Pengajuan diterima', 'Draf dibuat'])
+            ->assertSeeInOrder(['Tim Legal meminta revisi pengajuan', 'Pengaju melakukan pengajuan pembuatan dokumen', 'Draf dibuat'])
             ->assertSee('Rina Pemeriksa')->assertSee('Budi Pengaju')
             // 16:05 UTC = 23:05 WIB, 02:45 UTC = 09:45 WIB, 01:30 UTC = 08:30 WIB.
             ->assertSeeInOrder(['03 Okt 2026 23:05 WIB', '02 Okt 2026 09:45 WIB', '01 Okt 2026 08:30 WIB'])
@@ -261,7 +261,7 @@ class DocumentRequestFormScreenTest extends TestCase
         ]);
 
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
-            ->assertSeeInOrder(['Revisi dikirim', 'Perlu revisi', 'Pengajuan diterima']);
+            ->assertSeeInOrder(['Pengaju mengirim revisi pengajuan', 'Tim Legal meminta revisi pengajuan', 'Pengaju melakukan pengajuan pembuatan dokumen']);
     }
 
     public function test_history_section_is_also_shown_when_the_request_is_editable(): void

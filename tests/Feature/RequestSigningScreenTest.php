@@ -101,6 +101,7 @@ class RequestSigningScreenTest extends TestCase
 
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
+            ->assertActionVisible('startReview')
             ->assertActionVisible('startDrafting')
             ->assertActionVisible('issueDraft')
             ->assertActionVisible('revise')
@@ -176,6 +177,35 @@ class RequestSigningScreenTest extends TestCase
         Livewire::test(EditDocumentRequest::class, ['record' => $onTime->getRouteKey()])->assertActionHidden('addLateReason');
     }
 
+    public function test_start_review_action_marks_the_request_as_being_reviewed_then_drafting_follows(): void
+    {
+        $legal = $this->legal();
+        $request = $this->request($this->requester(), $legal, 'submitted');
+
+        $this->actingAs($legal);
+        Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
+            ->assertSee('Klik Periksa saat mulai memeriksanya')
+            ->mountAction('startReview')
+            ->assertMountedActionModalSee('Mulai periksa pengajuan ini?')
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertActionHidden('startReview')
+            ->assertActionVisible('startDrafting')
+            ->assertActionVisible('issueDraft')
+            ->assertActionVisible('revise')
+            ->assertActionVisible('reject')
+            ->assertActionHidden('cancel')
+            ->assertSee('Sedang Diperiksa')
+            ->assertSee('Tim Legal memeriksa pengajuan dokumen')
+            ->callAction('startDrafting')
+            ->assertHasNoActionErrors()
+            ->assertActionHidden('startDrafting')
+            ->assertSee('Tim Legal sedang melakukan pembuatan draft');
+
+        $this->assertSame('drafting', $request->refresh()->status);
+        $this->assertSame(['reviewing', 'drafting'], array_slice(array_column($request->history, 'status'), -2));
+    }
+
     public function test_start_drafting_action_marks_the_request_as_being_drafted(): void
     {
         $legal = $this->legal();
@@ -184,7 +214,7 @@ class RequestSigningScreenTest extends TestCase
         $this->actingAs($legal);
         Livewire::test(EditDocumentRequest::class, ['record' => $request->getRouteKey()])
             ->mountAction('startDrafting')
-            ->assertMountedActionModalSee('Proses pengajuan ini?')
+            ->assertMountedActionModalSee('Mulai susun draft?')
             ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertActionHidden('startDrafting')
